@@ -1,0 +1,303 @@
+import React from 'react';
+import { StyleSheet, View, Text, Switch, ScrollView, Platform, TouchableOpacity } from 'react-native';
+import Slider from '@react-native-community/slider';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { AnimatedBackground } from '@/components/AnimatedBackground';
+import { BackButton } from '@/components/BackButton';
+import { GlassCard } from '@/components/GlassCard';
+import { GameColors } from '@/theme/colors';
+import { Typography } from '@/theme/typography';
+import { useUserStore } from '@/store/userStore';
+import { useAudioStore } from '@/store/audioStore';
+import { useAdStore } from '@/store/adStore';
+import { useRTL } from '@/hooks/useRTL';
+import type { Language } from '@/types';
+
+export default function SettingsScreen() {
+  const insets = useSafeAreaInsets();
+  const { textAlign } = useRTL();
+  const { settings, updateSettings } = useUserStore();
+  const { isMusicEnabled, isSoundEnabled, volume, isMuted, toggleMusic, toggleSound, setVolume, toggleMute } = useAudioStore();
+  const { adsRemoved, removeAds } = useAdStore();
+
+  const topPad = Platform.OS === 'web' ? 67 : insets.top;
+  const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
+
+  const toggle = (action: () => void) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    action();
+  };
+
+  const langs: { code: Language; label: string; flag: string }[] = [
+    { code: 'en', label: 'English', flag: '🇺🇸' },
+    { code: 'fa', label: 'فارسی', flag: '🇮🇷' },
+  ];
+
+  return (
+    <AnimatedBackground>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.container, { paddingTop: topPad + 16, paddingBottom: botPad + 24 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <BackButton />
+          <Text style={[styles.title, { textAlign }]}>Settings</Text>
+          <View style={styles.placeholder} />
+        </View>
+
+        {/* Audio */}
+        <Text style={[styles.sectionLabel, { textAlign }]}>Audio</Text>
+        <GlassCard style={styles.card} padding={0}>
+          <SettingRow
+            icon="musical-notes-outline"
+            label="Music"
+            right={
+              <Switch
+                value={isMusicEnabled}
+                onValueChange={() => toggle(toggleMusic)}
+                trackColor={{ false: GameColors.border, true: GameColors.accentGold }}
+                thumbColor={GameColors.textWhite}
+              />
+            }
+          />
+          <Separator />
+          <SettingRow
+            icon="volume-high-outline"
+            label="Sound Effects"
+            right={
+              <Switch
+                value={isSoundEnabled}
+                onValueChange={() => toggle(toggleSound)}
+                trackColor={{ false: GameColors.border, true: GameColors.accentGold }}
+                thumbColor={GameColors.textWhite}
+              />
+            }
+          />
+          <Separator />
+          <SettingRow
+            icon="mic-off-outline"
+            label="Mute All"
+            right={
+              <Switch
+                value={isMuted}
+                onValueChange={() => toggle(toggleMute)}
+                trackColor={{ false: GameColors.border, true: GameColors.accentRed }}
+                thumbColor={GameColors.textWhite}
+              />
+            }
+          />
+          <Separator />
+          <View style={styles.sliderRow}>
+            <Ionicons name="volume-low-outline" size={18} color={GameColors.textSecondary} />
+            <View style={styles.sliderTrack}>
+              <Slider
+                style={{ flex: 1 }}
+                minimumValue={0}
+                maximumValue={1}
+                value={volume}
+                onValueChange={setVolume}
+                minimumTrackTintColor={GameColors.accentGold}
+                maximumTrackTintColor={GameColors.border}
+                thumbTintColor={GameColors.accentGold}
+              />
+            </View>
+            <Ionicons name="volume-high-outline" size={18} color={GameColors.textSecondary} />
+          </View>
+        </GlassCard>
+
+        {/* Language */}
+        <Text style={[styles.sectionLabel, { textAlign }]}>Language</Text>
+        <GlassCard style={styles.card} padding={12}>
+          <View style={styles.langRow}>
+            {langs.map((lang) => {
+              const active = settings.language === lang.code;
+              return (
+                <TouchableOpacity
+                  key={lang.code}
+                  style={[styles.langBtn, active && styles.langBtnActive]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    updateSettings({ language: lang.code });
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.langFlag}>{lang.flag}</Text>
+                  <Text style={[styles.langLabel, active && styles.langLabelActive]}>
+                    {lang.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </GlassCard>
+
+        {/* Gameplay */}
+        <Text style={[styles.sectionLabel, { textAlign }]}>Gameplay</Text>
+        <GlassCard style={styles.card} padding={0}>
+          <SettingRow
+            icon="phone-portrait-outline"
+            label="Vibration"
+            right={
+              <Switch
+                value={settings.vibration}
+                onValueChange={(v) => { toggle(() => updateSettings({ vibration: v })); }}
+                trackColor={{ false: GameColors.border, true: GameColors.accentGold }}
+                thumbColor={GameColors.textWhite}
+              />
+            }
+          />
+          <Separator />
+          <SettingRow
+            icon="notifications-outline"
+            label="Notifications"
+            right={
+              <Switch
+                value={settings.notifications}
+                onValueChange={(v) => { toggle(() => updateSettings({ notifications: v })); }}
+                trackColor={{ false: GameColors.border, true: GameColors.accentGold }}
+                thumbColor={GameColors.textWhite}
+              />
+            }
+          />
+        </GlassCard>
+
+        {/* Ads */}
+        {!adsRemoved && (
+          <>
+            <Text style={[styles.sectionLabel, { textAlign }]}>Premium</Text>
+            <TouchableOpacity
+              style={styles.removeAdsBtn}
+              onPress={() => {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                removeAds();
+              }}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="star-outline" size={22} color={GameColors.backgroundPrimary} />
+              <Text style={styles.removeAdsText}>Remove Ads</Text>
+            </TouchableOpacity>
+          </>
+        )}
+        {adsRemoved && (
+          <View style={styles.adFreeRow}>
+            <Ionicons name="checkmark-circle" size={20} color={GameColors.accentGreen} />
+            <Text style={styles.adFreeText}>Ad-Free Experience Active</Text>
+          </View>
+        )}
+      </ScrollView>
+    </AnimatedBackground>
+  );
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────
+
+const SettingRow: React.FC<{
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  right: React.ReactNode;
+}> = ({ icon, label, right }) => (
+  <View style={styles.settingRow}>
+    <Ionicons name={icon} size={20} color={GameColors.textSecondary} />
+    <Text style={styles.rowLabel}>{label}</Text>
+    {right}
+  </View>
+);
+
+const Separator = () => <View style={styles.sep} />;
+
+const styles = StyleSheet.create({
+  scroll: { flex: 1 },
+  container: { paddingHorizontal: 20, gap: 12 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  placeholder: { width: 44 },
+  title: {
+    ...Typography.semibold,
+    color: GameColors.textWhite,
+    fontFamily: 'Inter_700Bold',
+  },
+  sectionLabel: {
+    ...Typography.small,
+    color: GameColors.textSecondary,
+    fontFamily: 'Inter_600SemiBold',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginTop: 8,
+  },
+  card: { overflow: 'hidden' },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 14,
+  },
+  rowLabel: { ...Typography.caption, color: GameColors.textWhite, flex: 1 },
+  sep: { height: 1, backgroundColor: GameColors.border, marginHorizontal: 16 },
+  sliderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  sliderTrack: { flex: 1 },
+  langRow: { flexDirection: 'row', gap: 10 },
+  langBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: GameColors.border,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  langBtnActive: {
+    borderColor: GameColors.accentGold,
+    backgroundColor: 'rgba(255,215,0,0.12)',
+  },
+  langFlag: { fontSize: 18 },
+  langLabel: { ...Typography.caption, color: GameColors.textSecondary, fontFamily: 'Inter_500Medium' },
+  langLabelActive: { color: GameColors.accentGold, fontFamily: 'Inter_600SemiBold' },
+  removeAdsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    borderRadius: 14,
+    backgroundColor: GameColors.accentGold,
+    shadowColor: GameColors.accentGold,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 6,
+    marginTop: 4,
+  },
+  removeAdsText: {
+    ...Typography.body,
+    color: GameColors.backgroundPrimary,
+    fontFamily: 'Inter_700Bold',
+    fontWeight: '700',
+  },
+  adFreeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  adFreeText: { ...Typography.caption, color: GameColors.accentGreen, fontFamily: 'Inter_500Medium' },
+});

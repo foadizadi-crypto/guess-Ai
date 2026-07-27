@@ -1,0 +1,193 @@
+PHASE 0 — FOUNDATION
+Create the complete project foundation.
+Do NOT implement gameplay yet.
+TECHNOLOGY STACK
+Use:
+React Native
+Expo
+TypeScript
+Expo Router
+React Navigation
+Zustand
+React Native Reanimated
+React Native Gesture Handler
+React Native Skia
+Expo Blur
+Expo AV
+Expo Secure Store
+Expo FileSystem
+React Native SVG
+React Query
+Axios
+PROJECT STRUCTURE
+Create:
+app/
+components/
+screens/
+navigation/
+hooks/
+services/
+store/
+theme/
+constants/
+utils/
+assets/
+assets/images
+assets/icons
+assets/audio
+assets/fonts
+api/
+types/
+animations/
+GLOBAL STATE
+Create Zustand stores.
+GameStore
+Responsible for:
+current screen
+selected difficulty
+selected category
+timer
+score
+blur amount
+game session
+UserStore
+Responsible for
+username
+coins
+xp
+level
+avatars
+best score
+daily reward
+settings
+statistics
+AudioStore
+Responsible for
+music
+sound effects
+volume
+mute
+AdStore
+Prepare placeholder methods
+showBanner()
+showInterstitial()
+showRewarded()
+removeAds()
+API Service
+Create
+OpenAIService.ts
+Methods
+generateImage()
+generateQuestions()
+Return mocked data.
+No API key required.
+Navigation
+Use Expo Router.
+Create routes
+Splash
+Onboarding
+Login
+Lobby
+LevelSelect
+CategorySelect
+Game
+Result
+Shop
+Leaderboard
+Profile
+Settings
+Theme
+Create centralized theme.
+Use strict color palette.
+Background Primary
+#0D0221
+Background Secondary
+#1A0B2E
+Accent Gold
+#FFD700
+Accent Red
+#FF1744
+Accent Green
+#00E676
+Accent Orange
+#FF6B35
+Text White
+#FFFFFF
+Text Secondary
+#B0B0B0
+Card
+#1E1E2E
+Glow
+30% Gold
+Typography
+Create typography.ts
+Title
+48
+Header
+36
+Body
+24
+Caption
+18
+Reusable Components
+Create
+PrimaryButton
+SecondaryButton
+BackButton
+LoadingOverlay
+CoinDisplay
+AvatarFrame
+ProgressBar
+FloatingText
+GlassCard
+AnimatedBackground
+GradientButton
+Animations
+Use Reanimated.
+No instant transitions.
+Every interaction must animate.
+Buttons
+Scale
+Glow
+Shadow
+Screen transition
+Fade
+Zoom
+300ms
+Coin gain
+Pop animation
+Floating text
+Slide Up
+Fade Out
+RTL
+Support Persian.
+Every text component must support RTL.
+Assets
+Generate placeholder assets.
+Coin
+Avatar
+Shop
+Leaderboard
+Settings
+Play
+Star
+Lock
+Trophy
+Persistence
+Use
+Expo Secure Store
+and
+AsyncStorage
+Automatically create save data.
+Validate corrupted save files.
+Rules
+Use TypeScript everywhere.
+No any types.
+Strict typing.
+No hardcoded colors.
+No duplicated components.
+Run successfully.
+Zero TypeScript errors.
+Zero ESLint warnings.
+Do not start gameplay.
+Only complete the foundation.

@@ -1,0 +1,277 @@
+Continue the existing Expo project.
+Implement Phase 2: Core Gameplay.
+Do not start monetization yet.
+LEVEL SELECT SCREEN
+Create:
+screens/LevelSelect.tsx
+UI:
+Dark purple background.
+Floating particles.
+Title:
+"Select Difficulty"
+Cards:
+EASY
+Green glow
+50% Blur
+2 Hints
+1x Score
+Always unlocked
+MEDIUM
+Orange glow
+80% Blur
+1 Hint
+2x Score
+Unlock:
+Level 3
+or
+5 games played
+HARD
+Red glow
+100% Blur
+No hints
+3x Score
+Unlock:
+Level 5
+or
+10 games played
+Cards:
+Glassmorphism style.
+Animated scale on press.
+Glow animation.
+Locked state:
+Blurred card
+Lock icon
+Disabled.
+On select:
+Update GameStore:
+difficulty
+Navigate:
+CategorySelect
+CATEGORY SELECT SCREEN
+Create:
+screens/CategorySelect.tsx
+Categories:
+Animals
+Nature
+Food
+Landmarks
+Movies
+Sports
+Technology
+Art
+Vehicles
+Celebrities
+History
+Space
+UI:
+2 column grid.
+Animated cards.
+Each card:
+Icon
+Category name
+Best score
+On select:
+Save category.
+Show confirmation modal:
+"Start Game?"
+Confirm:
+Navigate Game.
+GAME SCREEN
+Create:
+screens/Game.tsx
+MOST IMPORTANT SCREEN.
+Layout:
+Portrait mobile.
+Dark theme.
+TOP BAR
+Contains:
+Pause Button
+Timer
+Question Counter
+Timer:
+120 seconds.
+Colors:
+120-60 seconds:
+White
+60-30:
+Yellow
+Below 30:
+Red pulse.
+Progress:
+20 question segments.
+IMAGE AREA
+Use:
+react-native-skia
+Create blur effect.
+Image:
+Placeholder initially.
+Blur values:
+Easy:
+50%
+Medium:
+80%
+Hard:
+100%
+When answer is correct:
+Animate blur reduction.
+Use:
+React Native Reanimated.
+Clarity label:
+0%
+Updates dynamically.
+QUESTION CARD
+Glass card.
+Question text.
+Maximum 3 lines.
+RTL support.
+Right aligned.
+ANSWER AREA
+2x2 grid.
+Four animated buttons:
+A
+B
+C
+D
+Button interaction:
+Press scale:
+0.95
+Haptic feedback.
+Sound effect.
+GAME LOGIC
+Create:
+gameEngine.ts
+Features:
+Timer countdown.
+Question loading.
+Answer validation.
+Score calculation.
+Progress.
+Correct Answer:
+Actions:
+Button green animation.
+Sound:
+correct
+Particles:
+green sparkle
+Score:
++10
+multiplied by:
+difficulty
+avatar ability
+Increase clarity:
++5%
+Floating text:
++10 XP
+Wait:
+1 second
+Next question.
+Wrong Answer:
+Actions:
+Button red.
+Correct answer highlight.
+Sound:
+wrong
+Screen shake animation.
+Timer:
+-5 seconds
+Clarity:
++2%
+Floating:
+-5s
+Wait:
+1.5 seconds
+Next question.
+Question Count:
+20 questions.
+End:
+Question 20
+or
+Timer reaches zero
+Navigate:
+Result Screen
+PAUSE SYSTEM
+Create modal:
+PauseMenu.tsx
+Contains:
+Resume
+Restart
+Exit Lobby
+Overlay:
+80% black.
+AVATAR ABILITIES
+Integrate with GameStore.
+Time Master:
++5 seconds
+XP Sage:
+2x XP
+Visionary:
++10% clarity
+Blur Buster:
+Start clarity +20%
+Ad Shield:
+Skip ads
+AI Oracle:
+Disable one wrong answer.
+API SERVICE
+Create:
+services/OpenAIService.ts
+For now:
+NO API KEY.
+Use mock data.
+generateQuestions()
+returns:
+20 questions.
+Structure:
+{
+question,
+options:[4],
+correctIndex,
+funFact
+}
+generateImage()
+returns placeholder image.
+RESULT SCREEN
+Create:
+screens/Result.tsx
+Background:
+Confetti animation.
+Title:
+VICTORY
+or
+TIME'S UP
+Stats card:
+Final Score
+Correct Answers
+Accuracy
+XP Earned
+Coins Earned
+Animations:
+Count up numbers.
+Slide cards.
+Fade buttons.
+Buttons:
+Play Again
+Share
+Home
+Rewarded Ad Placeholder:
+Double Coins.
+TEST FLOW
+Must work:
+Lobby
+↓
+Play
+↓
+Easy
+↓
+Animals
+↓
+Answer 20 questions
+↓
+Result
+↓
+Lobby
+Rules:
+No crashes.
+No TypeScript errors.
+No unfinished screens.
+Test before continuing.
