@@ -1,0 +1,1 @@
+- [Imported workspace layout](imported-workspace-layout.md) — Imported archives may nest packages one level deeper than their lockfile paths; normalize workspace and TypeScript references before verification.

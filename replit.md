@@ -9,7 +9,7 @@ BlurQuiz is an Expo mobile game where players identify images through increasing
 - `pnpm --filter @workspace/api-server run dev` — run the API server (uses `$PORT`)
 - `pnpm --filter @workspace/mobile run typecheck` — typecheck the mobile app
 - `pnpm --filter @workspace/api-server run typecheck` — typecheck the API server
-- `pnpm run typecheck` — typecheck the full workspace (currently includes two pre-existing mockup-sandbox React ref type errors)
+- `pnpm run typecheck` — typecheck the full workspace
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
@@ -51,7 +51,7 @@ The current imported project contains the BlurQuiz foundation and Phase 2 core g
 
 - Use `pnpm`, not npm or yarn; the root preinstall script rejects other package managers.
 - Expo's compatibility check reports version warnings for `@react-native-community/slider`, `expo-file-system`, and `expo-secure-store`; the current bundle still builds successfully.
-- The mockup sandbox currently has duplicate React type versions that produce ref errors during the full workspace typecheck; mobile and API checks pass independently.
+- The mockup sandbox uses a separate React type version from the Expo app; the two affected UI refs are explicitly bridged in the component wrappers so package and workspace checks pass.
 
 ## Pointers
 

@@ -1,4 +1,16 @@
 {
+  "files": [],
+  "references": [
+    {
+      "path": "./lib/lib/api-client-react"
+    },
+    {
+      "path": "./lib/lib/api-zod"
+    },
+    {
+      "path": "./lib/lib/db"
+    }
+  ],
   "compilerOptions": {
     "incremental": true,
     "isolatedModules": true,
