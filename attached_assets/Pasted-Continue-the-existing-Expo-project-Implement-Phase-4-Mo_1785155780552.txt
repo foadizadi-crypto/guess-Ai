@@ -1,0 +1,512 @@
+Continue the existing Expo project.
+
+Implement Phase 4:
+Monetization, Final Polish, and Android Production Build.
+
+Do not break existing features.
+
+---
+
+# ADMOB INTEGRATION
+
+Create:
+
+services/AdService.ts
+
+Use:
+
+react-native-google-mobile-ads
+
+Create abstraction layer.
+
+Methods:
+
+showBanner()
+
+showInterstitial()
+
+showRewarded()
+
+hideAds()
+
+---
+
+BANNER ADS
+
+Location:
+
+Lobby bottom.
+
+Rules:
+
+Hide when:
+
+UserStore.hasRemovedAds === true
+
+Hide when:
+
+Ad Shield avatar active.
+
+---
+
+INTERSTITIAL ADS
+
+Show:
+
+After Result screen.
+
+Frequency:
+
+Maximum once every 3 minutes.
+
+Do not interrupt gameplay.
+
+---
+
+REWARDED ADS
+
+Locations:
+
+Lobby:
+
+"Watch Ad +50 Coins"
+
+Result:
+
+"Double Coins"
+
+Game:
+
+"Revive +30 Seconds"
+
+On reward:
+
+Add coins.
+
+Update UserStore.
+
+Show FloatingText.
+
+Play coin sound.
+
+---
+
+# IN APP PURCHASES
+
+Create:
+
+services/IAPService.ts
+
+Use:
+
+react-native-iap
+
+Products:
+
+coins_100
+
+coins_500
+
+coins_1200
+
+coins_2500
+
+coins_5000
+
+Remove Ads:
+
+remove_ads
+
+Rules:
+
+Coin packs:
+
+Consumable.
+
+Remove Ads:
+
+Non-consumable.
+
+Verify purchase.
+
+Persist ownership.
+
+For development:
+
+Create mock purchase mode.
+
+---
+
+# AUDIO SYSTEM
+
+Use:
+
+expo-av
+
+Create:
+
+AudioService.ts
+
+Support:
+
+Background music:
+
+menu_music
+
+game_music
+
+Sound Effects:
+
+correct
+
+wrong
+
+button_click
+
+coin
+
+timer_tick
+
+level_up
+
+Features:
+
+Volume control.
+
+Mute.
+
+Music toggle.
+
+Sound toggle.
+
+---
+
+# VISUAL POLISH
+
+All screens:
+
+Professional animation.
+
+Use:
+
+React Native Reanimated.
+
+---
+
+Screen transitions:
+
+Fade.
+
+Scale.
+
+Slide.
+
+Duration:
+
+300ms.
+
+---
+
+Buttons:
+
+Press:
+
+Scale 0.95
+
+Release:
+
+Return 1.0
+
+Add:
+
+Shadow.
+
+Glow.
+
+---
+
+Cards:
+
+Glassmorphism.
+
+Animated border glow.
+
+---
+
+Correct Answer:
+
+Green flash overlay.
+
+Particles.
+
+Success animation.
+
+---
+
+Wrong Answer:
+
+Red flash.
+
+Shake animation.
+
+---
+
+Coins:
+
+Pop animation.
+
+Gold particles.
+
+---
+
+Timer:
+
+Last 10 seconds:
+
+Red pulse.
+
+Tick sound.
+
+---
+
+# SETTINGS SCREEN
+
+Create:
+
+screens/Settings.tsx
+
+Options:
+
+Music toggle
+
+Sound toggle
+
+Language
+
+Privacy
+
+Terms
+
+Restore Purchase
+
+---
+
+# ANDROID CONFIGURATION
+
+Prepare Expo Android build.
+
+Use:
+
+EAS Build.
+
+Create:
+
+app.json
+
+Configure:
+
+Package name:
+
+com.aiblur.quiz
+
+Orientation:
+
+portrait
+
+Version:
+
+1.0.0
+
+Minimum Android SDK:
+
+24
+
+Target SDK:
+
+34
+
+Permissions:
+
+INTERNET
+
+ACCESS_NETWORK_STATE
+
+---
+
+APP ICON
+
+Create:
+
+icon.png
+
+adaptive-icon.png
+
+Sizes:
+
+192x192
+
+432x432
+
+---
+
+SPLASH SCREEN
+
+Create custom splash.
+
+Use AI Blur Quiz branding.
+
+---
+
+# SECURITY
+
+Never store API keys inside mobile app.
+
+Use backend API.
+
+Validate all saved data.
+
+Handle corrupted storage.
+
+Rate limit API calls.
+
+---
+
+# PERFORMANCE OPTIMIZATION
+
+Target:
+
+60 FPS.
+
+Optimize:
+
+Images.
+
+Animations.
+
+Lists.
+
+Memory.
+
+Use:
+
+FlatList
+
+Memoization
+
+Lazy loading
+
+---
+
+# FINAL QA TEST
+
+Complete full user journey:
+
+Launch App
+
+↓
+
+Splash
+
+↓
+
+Onboarding
+
+↓
+
+Login
+
+↓
+
+Lobby
+
+↓
+
+Play
+
+↓
+
+Difficulty Select
+
+↓
+
+Category Select
+
+↓
+
+Game
+
+↓
+
+Result
+
+↓
+
+Shop
+
+↓
+
+Buy Avatar
+
+↓
+
+Equip Avatar
+
+↓
+
+Leaderboard
+
+↓
+
+Profile
+
+↓
+
+Settings
+
+Fix:
+
+All crashes.
+
+All warnings.
+
+All TypeScript errors.
+
+---
+
+# FINAL DELIVERABLE
+
+Provide:
+
+Complete React Native Expo project.
+
+README.md containing:
+
+Installation steps.
+
+Development setup.
+
+EAS build commands.
+
+Android release steps.
+
+Environment variables.
+
+API backend configuration.
+
+AdMob setup.
+
+IAP setup.
+
+---
+
+FINAL REQUIREMENTS:
+
+Production-quality code.
+
+Clean architecture.
+
+Reusable components.
+
+No unfinished screens.
+
+Ready for Google Play submission.
