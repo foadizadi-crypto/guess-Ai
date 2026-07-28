@@ -1,15 +1,23 @@
+/**
+ * Ad store — persists adsRemoved state and exposes ad actions wired to AdService.
+ *
+ * Phase 4 wiring:
+ *   • showInterstitial / showRewarded now delegate to adService which handles
+ *     the real AdMob bridge (or mock mode in Expo Go).
+ *   • removeAds is also called by IAPService after a successful purchase so the
+ *     persisted flag survives app restarts.
+ */
+
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { adService } from '@/services/AdService';
 
 // ─── State shape ──────────────────────────────────────────────────────────
 
 interface AdState {
   adsRemoved: boolean;
   isBannerVisible: boolean;
-
-  // ─── Placeholder ad methods ──────────────────────────────────────────────
-  // These will be replaced with real ad SDK calls in a later phase.
 
   showBanner: () => void;
   hideBanner: () => void;
@@ -29,22 +37,18 @@ export const useAdStore = create<AdState>()(
       showBanner: () => {
         if (get().adsRemoved) return;
         set({ isBannerVisible: true });
-        // TODO: integrate ad SDK in later phase
       },
 
       hideBanner: () => set({ isBannerVisible: false }),
 
       showInterstitial: async () => {
         if (get().adsRemoved) return;
-        // TODO: integrate ad SDK in later phase
-        await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        await adService.showInterstitial();
       },
 
       showRewarded: async (): Promise<boolean> => {
-        // TODO: integrate ad SDK in later phase
-        // Returns true when user watched the full ad and earned reward
-        await new Promise<void>((resolve) => setTimeout(resolve, 100));
-        return true;
+        // Rewarded ads are available even if ads are "removed" (it's opt-in)
+        return adService.showRewarded();
       },
 
       removeAds: () => set({ adsRemoved: true, isBannerVisible: false }),

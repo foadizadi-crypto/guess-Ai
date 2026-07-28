@@ -26,6 +26,16 @@ import { CoinDisplay } from '@/components/CoinDisplay';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
+import { iapService, IAP_SKUS } from '@/services/IAPService';
+
+// Maps COIN_PACKAGES id → IAP product SKU
+const COIN_PACK_SKUS: Record<string, string> = {
+  'coins-100':  IAP_SKUS.COINS_100,
+  'coins-500':  IAP_SKUS.COINS_500,
+  'coins-1200': IAP_SKUS.COINS_1200,
+  'coins-2500': IAP_SKUS.COINS_2500,
+  'coins-5000': IAP_SKUS.COINS_5000,
+};
 import { COIN_PACKAGES, DEFAULT_AVATARS, POWER_UPS } from '@/constants';
 import { useAudio } from '@/hooks/useAudio';
 import type { Avatar, PowerUpId } from '@/types';
@@ -43,6 +53,7 @@ export default function ShopScreen() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState(0);
   const [floating, setFloating] = useState<string | null>(null);
+  const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
   const indicator = useSharedValue(0);
   const coinPulse = useSharedValue(1);
   const { playEffect } = useAudio();
@@ -187,15 +198,29 @@ export default function ShopScreen() {
 
         {tab === 2 && (
           <View style={styles.list}>
-            <Text style={styles.sectionHint}>Mock purchase • no payment is processed</Text>
+            <Text style={styles.sectionHint}>
+              {iapService.isMockMode ? 'Mock purchase · no payment processed' : 'Real purchase via App Store / Play Store'}
+            </Text>
             {COIN_PACKAGES.map((pack, index) => (
               <TouchableOpacity
                 key={pack.id}
-                style={[styles.coinCard, index === 2 && styles.popularCard]}
-                onPress={() => {
-                  mockPurchaseCoins(pack.amount);
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  showPurchase(`+${pack.amount} coins`);
+                style={[styles.coinCard, index === 2 && styles.popularCard, purchaseLoading === pack.id && { opacity: 0.6 }]}
+                disabled={!!purchaseLoading}
+                onPress={async () => {
+                  setPurchaseLoading(pack.id);
+                  try {
+                    const ok = await iapService.purchase(COIN_PACK_SKUS[pack.id] ?? pack.id);
+                    if (ok) {
+                      mockPurchaseCoins(pack.amount);
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      playEffect('coin');
+                      showPurchase(`+${pack.amount} coins`);
+                    }
+                  } catch (err) {
+                    if (__DEV__) console.warn('[Shop] purchase error', err);
+                  } finally {
+                    setPurchaseLoading(null);
+                  }
                 }}
               >
                 <View style={styles.coinPackIcon}><Ionicons name="logo-bitcoin" size={25} color={GameColors.accentGold} /></View>

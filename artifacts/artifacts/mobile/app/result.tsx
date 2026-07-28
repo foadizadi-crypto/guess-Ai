@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Share, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
@@ -12,6 +12,8 @@ import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useGameStore } from '@/store/gameStore';
 import { useUserStore } from '@/store/userStore';
+import { useAdStore } from '@/store/adStore';
+import { useAudio } from '@/hooks/useAudio';
 import { ROUTES } from '@/navigation/routes';
 import { useRTL } from '@/hooks/useRTL';
 
@@ -32,6 +34,12 @@ export default function ResultScreen() {
     resetGame,
   } = useGameStore();
   const { updateBestScore, addCoins, addXP, statistics, updateStatistics } = useUserStore();
+  const { adsRemoved, showInterstitial, showRewarded } = useAdStore();
+  const { playEffect } = useAudio();
+
+  const [doubledByAd, setDoubledByAd] = useState(false);
+  const [doubleLoading, setDoubleLoading] = useState(false);
+
   const trophyScale = useSharedValue(0);
   const contentOpacity = useSharedValue(0);
   const contentY = useSharedValue(28);
@@ -41,6 +49,7 @@ export default function ResultScreen() {
   const coinsEarned = Math.max(5, correctAnswers * 2) * (doubleCoinsActive ? 2 : 1);
   const earnedXP = Math.max(10, xpEarned + (isVictory ? 50 : 0));
 
+  // ── Record result + entrance animation ────────────────────────────────────
   useEffect(() => {
     updateBestScore(score);
     addCoins(coinsEarned);
@@ -58,9 +67,37 @@ export default function ResultScreen() {
     trophyScale.value = withSpring(1, { damping: 12, stiffness: 80 });
     contentOpacity.value = withDelay(250, withTiming(1, { duration: 450 }));
     contentY.value = withDelay(250, withTiming(0, { duration: 450 }));
+    // Play appropriate sound
+    if (isVictory) playEffect('level_up');
+    else playEffect('coin');
     // This screen is entered once per finished session; the effect intentionally records the result once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Interstitial after 3.5 s delay ────────────────────────────────────────
+  useEffect(() => {
+    if (adsRemoved) return;
+    const t = setTimeout(() => { showInterstitial(); }, 3500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Double coins via rewarded ad ──────────────────────────────────────────
+  const handleDoubleCoins = useCallback(async () => {
+    if (doubleLoading || doubledByAd) return;
+    setDoubleLoading(true);
+    try {
+      const rewarded = await showRewarded();
+      if (rewarded) {
+        addCoins(coinsEarned); // adds the same amount again → doubled
+        setDoubledByAd(true);
+        playEffect('coin');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } finally {
+      setDoubleLoading(false);
+    }
+  }, [addCoins, coinsEarned, doubleLoading, doubledByAd, playEffect, showRewarded]);
 
   const trophyStyle = useAnimatedStyle(() => ({ transform: [{ scale: trophyScale.value }] }));
   const contentStyle = useAnimatedStyle(() => ({
@@ -121,11 +158,25 @@ export default function ResultScreen() {
               <Stat icon="checkmark-circle-outline" label="Correct" value={`${correctAnswers}/${totalQuestions}`} color={GameColors.accentGreen} />
               <Stat icon="analytics-outline" label="Accuracy" value={`${accuracy}%`} color={GameColors.accentGold} />
               <Stat icon="flash-outline" label="XP Earned" value={`+${earnedXP}`} color="#CE93D8" />
-              <Stat icon="cash-outline" label="Coins" value={`+${coinsEarned}`} color={GameColors.accentOrange} />
+              <Stat
+                icon="cash-outline"
+                label="Coins"
+                value={doubledByAd ? `+${coinsEarned * 2}` : `+${coinsEarned}`}
+                color={GameColors.accentOrange}
+              />
             </View>
           </View>
           <View style={styles.buttons}>
             <GradientButton title="Play Again" onPress={playAgain} testID="play-again-button" />
+            {/* Double-coins rewarded ad (hidden after use or if ads removed) */}
+            {!adsRemoved && !doubledByAd && (
+              <SecondaryButton
+                title={doubleLoading ? 'Loading ad…' : '▶  Watch Ad • Double Coins'}
+                onPress={handleDoubleCoins}
+                borderColor={GameColors.accentOrange}
+                disabled={doubleLoading}
+              />
+            )}
             <View style={styles.secondaryRow}>
               <SecondaryButton title="Share" onPress={shareResult} style={styles.secondaryButton} />
               <SecondaryButton title="Home" onPress={goToLobby} style={styles.secondaryButton} testID="lobby-button" />

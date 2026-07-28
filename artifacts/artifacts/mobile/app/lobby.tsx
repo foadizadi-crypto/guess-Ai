@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { AnimatedGradientBackground } from '@/components/AnimatedGradientBackground';
+import { AdBanner } from '@/components/AdBanner';
 import { CoinDisplay } from '@/components/CoinDisplay';
 import { AvatarFrame } from '@/components/AvatarFrame';
 import { ProgressBar } from '@/components/ProgressBar';
@@ -33,6 +34,7 @@ import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
 import { useAdStore } from '@/store/adStore';
+import { useAudio } from '@/hooks/useAudio';
 import { ROUTES } from '@/navigation/routes';
 import { calculateXPProgress, formatScore, isToday } from '@/utils';
 import { GAME_CONSTANTS } from '@/constants';
@@ -120,6 +122,15 @@ export default function LobbyScreen() {
     bestScore, dailyReward, claimDailyReward,
   } = useUserStore();
   const { adsRemoved, showRewarded, addCoins } = { ...useAdStore(), addCoins: useUserStore((s) => s.addCoins) };
+  const { playEffect, playMusic, stopMusic } = useAudio();
+
+  // Play menu music whenever this screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      playMusic('menu_music');
+      return () => { stopMusic(); };
+    }, [playMusic, stopMusic]),
+  );
 
   const xpProgress = calculateXPProgress(xp);
   const xpInLevel = xp % GAME_CONSTANTS.XP_PER_LEVEL;
@@ -198,6 +209,7 @@ export default function LobbyScreen() {
       const rewarded = await showRewarded();
       if (rewarded) {
         addCoins(50);
+        playEffect('coin');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } finally {
@@ -372,13 +384,8 @@ export default function LobbyScreen() {
             </View>
           </Animated.View>
 
-          {/* ── Banner ad placeholder ────────────────────────────────────── */}
-          {!adsRemoved && (
-            <View style={styles.banner}>
-              <Ionicons name="megaphone-outline" size={16} color={GameColors.textSecondary} />
-              <Text style={styles.bannerText}>Advertisement</Text>
-            </View>
-          )}
+          {/* ── Banner ad ─────────────────────────────────────────────────── */}
+          <AdBanner visible={!adsRemoved} />
         </ScrollView>
 
         {/* ── Floating Watch Ad button (if ads enabled) ─────────────────── */}

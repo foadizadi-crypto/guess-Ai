@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Image,
+  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -15,18 +16,21 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { AnimatedBackground } from '@/components/AnimatedBackground';
 import { BackButton } from '@/components/BackButton';
 import { GlassCard } from '@/components/GlassCard';
+import { GradientButton } from '@/components/GradientButton';
 import { PauseMenu } from '@/components/PauseMenu';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useGameStore } from '@/store/gameStore';
 import { useUserStore } from '@/store/userStore';
+import { useAdStore } from '@/store/adStore';
+import { useAudio } from '@/hooks/useAudio';
 import { openAIService } from '@/services/OpenAIService';
 import { DIFFICULTY_CONFIG, calculateAnswerScore, getAvatarAbility, getTimerColor } from '@/gameEngine';
 import { ROUTES } from '@/navigation/routes';
@@ -44,7 +48,6 @@ export default function GameScreen() {
   const score = useGameStore((s) => s.score);
   const clarity = useGameStore((s) => s.clarity);
   const questionIndex = useGameStore((s) => s.currentQuestionIndex);
-  const correctAnswers = useGameStore((s) => s.correctAnswers);
   const isTimerRunning = useGameStore((s) => s.isTimerRunning);
   const gameSession = useGameStore((s) => s.gameSession);
   const setTimer = useGameStore((s) => s.setTimer);
@@ -58,6 +61,8 @@ export default function GameScreen() {
   const usePowerUp = useUserStore((s) => s.usePowerUp);
   const powerUps = useUserStore((s) => s.powerUps);
   const selectedAvatarId = useUserStore((s) => s.selectedAvatarId);
+  const { adsRemoved, showRewarded } = useAdStore();
+  const { playEffect, playMusic, stopMusic } = useAudio();
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,11 +70,22 @@ export default function GameScreen() {
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [removedOptions, setRemovedOptions] = useState<number[]>([]);
   const [paused, setPaused] = useState(false);
+  const [reviveVisible, setReviveVisible] = useState(false);
+  const [reviveLoading, setReviveLoading] = useState(false);
   const endedRef = useRef(false);
+  const reviveOffered = useRef(false);
   const shakeX = useSharedValue(0);
   const clarityProgress = Math.min(100, Math.max(0, clarity));
   const currentQuestion = questions[questionIndex];
   const config = DIFFICULTY_CONFIG[difficulty];
+
+  // ── Game music ─────────────────────────────────────────────────────────────
+  useFocusEffect(
+    useCallback(() => {
+      playMusic('game_music');
+      return () => { stopMusic(); };
+    }, [playMusic, stopMusic]),
+  );
 
   const finishGame = useCallback(() => {
     if (endedRef.current) return;
@@ -78,6 +94,40 @@ export default function GameScreen() {
     endSession();
     router.replace(ROUTES.RESULT);
   }, [endSession, router, setIsTimerRunning]);
+
+  /** Intercepts timer-zero to offer a rewarded-ad revive before finishing. */
+  const handleTimerEnd = useCallback(() => {
+    if (adsRemoved || reviveOffered.current) {
+      finishGame();
+      return;
+    }
+    reviveOffered.current = true;
+    setIsTimerRunning(false);
+    setReviveVisible(true);
+  }, [adsRemoved, finishGame, setIsTimerRunning]);
+
+  const handleRevive = useCallback(async () => {
+    if (reviveLoading) return;
+    setReviveLoading(true);
+    try {
+      const rewarded = await showRewarded();
+      if (rewarded) {
+        setReviveVisible(false);
+        setTimer(30);
+        setIsTimerRunning(true);
+        playEffect('coin');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        setReviveVisible(false);
+        finishGame();
+      }
+    } catch {
+      setReviveVisible(false);
+      finishGame();
+    } finally {
+      setReviveLoading(false);
+    }
+  }, [finishGame, playEffect, reviveLoading, setIsTimerRunning, setTimer, showRewarded]);
 
   useEffect(() => {
     setRemovedOptions([]);
@@ -92,24 +142,25 @@ export default function GameScreen() {
         setLoading(false);
       }
     });
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [category, difficulty]);
 
   useEffect(() => {
     if (!gameSession) startSession(difficulty, category);
   }, [category, difficulty, gameSession, startSession]);
 
+  // ── Main timer countdown ───────────────────────────────────────────────────
   useEffect(() => {
     if (!isTimerRunning || paused || loading || feedback || endedRef.current) return;
     const interval = setInterval(() => {
       const next = Math.max(0, timer - 1);
       setTimer(next);
-      if (next === 0) finishGame();
+      // Low-time tick sound
+      if (next > 0 && next <= 30) playEffect('timer_tick');
+      if (next === 0) handleTimerEnd();
     }, 1000);
     return () => clearInterval(interval);
-  }, [feedback, finishGame, isTimerRunning, loading, paused, setTimer, timer]);
+  }, [feedback, handleTimerEnd, isTimerRunning, loading, paused, playEffect, setTimer, timer]);
 
   const answerQuestion = useCallback(
     (answerIndex: number) => {
@@ -123,6 +174,7 @@ export default function GameScreen() {
       Haptics.notificationAsync(
         correct ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error,
       );
+      playEffect(correct ? 'correct' : 'wrong');
       if (!correct) {
         shakeX.value = withSequence(
           withTiming(-8, { duration: 50 }),
@@ -150,6 +202,7 @@ export default function GameScreen() {
       feedback,
       finishGame,
       paused,
+      playEffect,
       questionIndex,
       questions.length,
       recordAnswer,
@@ -165,8 +218,10 @@ export default function GameScreen() {
       if (feedback || paused || endedRef.current || !currentQuestion || powerUps[powerUpId] < 1) return;
       if (!usePowerUp(powerUpId)) return;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      playEffect('button_click');
       if (powerUpId === 'extra-time') {
         setTimer(Math.min(180, timer + 15));
+        playEffect('coin');
       } else if (powerUpId === 'fifty-fifty') {
         const wrong = currentQuestion.options
           .map((_, index) => index)
@@ -181,6 +236,7 @@ export default function GameScreen() {
         }
       } else if (powerUpId === 'double-coins') {
         activateDoubleCoins();
+        playEffect('coin');
       }
     },
     [
@@ -190,6 +246,7 @@ export default function GameScreen() {
       feedback,
       finishGame,
       paused,
+      playEffect,
       powerUps,
       questionIndex,
       questions.length,
@@ -201,9 +258,11 @@ export default function GameScreen() {
 
   const restart = useCallback(() => {
     endedRef.current = false;
+    reviveOffered.current = false;
     setPaused(false);
     setSelectedAnswer(null);
     setFeedback(null);
+    setReviveVisible(false);
     startSession(difficulty, category);
   }, [category, difficulty, startSession]);
 
@@ -343,6 +402,7 @@ export default function GameScreen() {
           </>
         )}
       </View>
+
       <PauseMenu
         visible={paused}
         onResume={() => {
@@ -352,6 +412,28 @@ export default function GameScreen() {
         onRestart={restart}
         onExit={exitToLobby}
       />
+
+      {/* ── Revive modal ────────────────────────────────────────────────── */}
+      <Modal visible={reviveVisible} transparent animationType="fade" onRequestClose={() => { setReviveVisible(false); finishGame(); }}>
+        <View style={styles.reviveBackdrop}>
+          <View style={styles.reviveCard}>
+            <View style={styles.reviveIcon}>
+              <Ionicons name="time-outline" size={52} color={GameColors.accentGold} />
+            </View>
+            <Text style={styles.reviveTitle}>Time's Up!</Text>
+            <Text style={styles.reviveBody}>Watch a short ad to get{'\n'}30 more seconds.</Text>
+            <GradientButton
+              title={reviveLoading ? 'Loading ad…' : '▶  Watch Ad  +30s'}
+              onPress={handleRevive}
+              disabled={reviveLoading}
+              style={styles.reviveBtn}
+            />
+            <TouchableOpacity onPress={() => { setReviveVisible(false); finishGame(); }} style={styles.reviveDecline}>
+              <Text style={styles.reviveDeclineText}>No thanks, see results</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </AnimatedBackground>
   );
 }
@@ -394,4 +476,13 @@ const styles = StyleSheet.create({
   answerText: { ...Typography.small, flex: 1, fontFamily: 'Inter_600SemiBold' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
   loadingText: { ...Typography.caption, color: GameColors.textSecondary },
+  // Revive modal
+  reviveBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.88)', alignItems: 'center', justifyContent: 'center', padding: 28 },
+  reviveCard: { width: '100%', borderRadius: 28, padding: 28, alignItems: 'center', backgroundColor: GameColors.card, borderWidth: 1, borderColor: GameColors.cardBorder, gap: 16, shadowColor: GameColors.accentGold, shadowOpacity: 0.25, shadowRadius: 20, elevation: 12 },
+  reviveIcon: { width: 96, height: 96, borderRadius: 48, borderWidth: 2, borderColor: GameColors.accentGold, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,215,0,0.08)' },
+  reviveTitle: { ...Typography.header, color: GameColors.textWhite, fontSize: 26 },
+  reviveBody: { ...Typography.caption, color: GameColors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  reviveBtn: { width: '100%' },
+  reviveDecline: { paddingVertical: 8, paddingHorizontal: 16 },
+  reviveDeclineText: { ...Typography.small, color: GameColors.textSecondary },
 });

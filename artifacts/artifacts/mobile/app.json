@@ -14,10 +14,30 @@
       "backgroundColor": "#0D0221"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.aiblur.quiz",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera is not used by this app.",
+        "NSPhotoLibraryUsageDescription": "Photo library is not used by this app.",
+        "SKAdNetworkItems": [
+          { "SKAdNetworkIdentifier": "cstr6suwn9.skadnetwork" },
+          { "SKAdNetworkIdentifier": "4fzdc2evr5.skadnetwork" },
+          { "SKAdNetworkIdentifier": "2fnua5tdw4.skadnetwork" }
+        ]
+      }
     },
     "android": {
-      "backgroundColor": "#0D0221"
+      "package": "com.aiblur.quiz",
+      "versionCode": 1,
+      "backgroundColor": "#0D0221",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#0D0221"
+      },
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -30,7 +50,19 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511",
+          "userTrackingUsageDescription": "This app uses ad tracking to show relevant advertisements.",
+          "skAdNetworkItems": [
+            "cstr6suwn9.skadnetwork",
+            "4fzdc2evr5.skadnetwork"
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
