@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View, Text, Switch, ScrollView, Platform, TouchableOpacity } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
 import { useAudioStore } from '@/store/audioStore';
 import { useAdStore } from '@/store/adStore';
+import { iapService, IAP_SKUS } from '@/services/IAPService';
 import { useRTL } from '@/hooks/useRTL';
 import type { Language } from '@/types';
 
@@ -21,6 +22,8 @@ export default function SettingsScreen() {
   const { settings, updateSettings } = useUserStore();
   const { isMusicEnabled, isSoundEnabled, volume, isMuted, toggleMusic, toggleSound, setVolume, toggleMute } = useAudioStore();
   const { adsRemoved, removeAds } = useAdStore();
+  const [removeAdsLoading, setRemoveAdsLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
@@ -170,15 +173,32 @@ export default function SettingsScreen() {
           <>
             <Text style={[styles.sectionLabel, { textAlign }]}>Premium</Text>
             <TouchableOpacity
-              style={styles.removeAdsBtn}
-              onPress={() => {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                removeAds();
+              style={[styles.removeAdsBtn, removeAdsLoading && { opacity: 0.6 }]}
+              disabled={removeAdsLoading}
+              onPress={async () => {
+                setRemoveAdsLoading(true);
+                try {
+                  const ok = await iapService.purchase(IAP_SKUS.REMOVE_ADS);
+                  if (ok) {
+                    removeAds();
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  }
+                } catch (err) {
+                  if (__DEV__) console.warn('[Settings] remove-ads purchase error', err);
+                } finally {
+                  setRemoveAdsLoading(false);
+                }
               }}
               activeOpacity={0.85}
             >
-              <Ionicons name="star-outline" size={22} color={GameColors.backgroundPrimary} />
-              <Text style={styles.removeAdsText}>Remove Ads</Text>
+              <Ionicons
+                name={removeAdsLoading ? 'hourglass-outline' : 'star-outline'}
+                size={22}
+                color={GameColors.backgroundPrimary}
+              />
+              <Text style={styles.removeAdsText}>
+                {removeAdsLoading ? 'Processing…' : 'Remove Ads'}
+              </Text>
             </TouchableOpacity>
           </>
         )}
@@ -188,6 +208,31 @@ export default function SettingsScreen() {
             <Text style={styles.adFreeText}>Ad-Free Experience Active</Text>
           </View>
         )}
+
+        {/* Restore Purchases */}
+        <TouchableOpacity
+          style={[styles.restoreBtn, restoreLoading && { opacity: 0.5 }]}
+          disabled={restoreLoading}
+          onPress={async () => {
+            setRestoreLoading(true);
+            try {
+              const restored = await iapService.restoreAdsRemoved();
+              if (restored) {
+                removeAds();
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              }
+            } catch (err) {
+              if (__DEV__) console.warn('[Settings] restore error', err);
+            } finally {
+              setRestoreLoading(false);
+            }
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.restoreText}>
+            {restoreLoading ? 'Restoring…' : 'Restore Purchases'}
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </AnimatedBackground>
   );
@@ -300,4 +345,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   adFreeText: { ...Typography.caption, color: GameColors.accentGreen, fontFamily: 'Inter_500Medium' },
+  restoreBtn: { alignSelf: 'center' as const, paddingVertical: 8, paddingHorizontal: 16, marginTop: 4 },
+  restoreText: { ...Typography.small, color: GameColors.textSecondary, textDecorationLine: 'underline' as const },
 });

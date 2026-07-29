@@ -17,3 +17,68 @@ externalPort = 3002
 [[ports]]
 localPort = 18115
 externalPort = 3000
+
+[workflows]
+
+[[workflows.workflow]]
+name = "artifacts/artifacts/mockup-sandbox: Component Preview Server"
+author = "agent"
+mode = "parallel"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+artifactId = "XegfDyZt7HqfW2Bb8Ghoy"
+isCanvasWorkflow = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/mockup-sandbox run dev"
+cwd = "./artifacts/artifacts/mockup-sandbox"
+waitForPort = 8081
+ensurePreviewReachable = "/"
+router = "path"
+
+[workflows.workflow.tasks.env]
+PORT = "8081"
+BASE_PATH = "/__mockup"
+
+[[workflows.workflow]]
+name = "artifacts/artifacts/mobile: expo"
+author = "agent"
+mode = "sequential"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+artifactId = "artifacts/mobile"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/mobile run dev"
+cwd = "./artifacts/artifacts/mobile"
+waitForPort = 18115
+ensurePreviewReachable = "/status"
+router = "expo-domain"
+
+[workflows.workflow.tasks.env]
+PORT = "18115"
+BASE_PATH = "/"
+
+[[workflows.workflow]]
+name = "artifacts/artifacts/api-server: API Server"
+author = "agent"
+mode = "sequential"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+artifactId = "3B4_FFSkEVBkAeYMFRJ2e"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/api-server run dev"
+cwd = "./artifacts/artifacts/api-server"
+waitForPort = 8080
+ensurePreviewReachable = "/"
+router = "path"
+
+[workflows.workflow.tasks.env]
+PORT = "8080"
