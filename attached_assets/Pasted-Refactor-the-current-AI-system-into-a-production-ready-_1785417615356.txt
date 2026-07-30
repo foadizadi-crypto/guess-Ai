@@ -1,0 +1,94 @@
+Refactor the current AI system into a production-ready multi-provider AI architecture.
+
+IMPORTANT:
+Do not change the game UI.
+Do not change gameplay logic.
+Do not remove the current OpenAI implementation.
+Only improve the AI infrastructure layer.
+
+Goal:
+The game should support multiple AI providers at the same time.
+I want to add API keys in Replit Secrets and the system should automatically select the best available provider depending on the task.
+
+Create an AI Provider Manager / Router system.
+
+Required environment variables:
+
+OPENAI_API_KEY
+GEMINI_API_KEY
+GROQ_API_KEY
+ANTHROPIC_API_KEY
+ZHIPU_API_KEY
+HUGGINGFACE_API_KEY
+
+Architecture:
+
+Create a central AI service layer:
+
+AI Manager
+ ├── Text Generation Providers
+ │      ├── OpenAI
+ │      ├── Gemini
+ │      ├── Groq
+ │      ├── Claude
+ │      └── GLM
+ │
+ └── Image Generation Providers
+        ├── OpenAI Image
+        ├── Stable Diffusion compatible providers
+        └── Future image providers
+
+Task routing rules:
+
+For question generation:
+1. Check available providers.
+2. Prefer free/low-cost fast providers first:
+   Gemini Flash
+   Groq
+   OpenAI
+   Claude
+3. If a provider fails because of:
+   - quota exceeded
+   - billing issue
+   - invalid key
+   - timeout
+   automatically try the next provider.
+
+For image generation:
+1. Check available image providers.
+2. Prefer the highest quality available provider.
+3. If unavailable, fallback to the next provider.
+4. Keep mock fallback as the final safety option.
+
+Add:
+
+- AI_MODE=auto configuration.
+- Provider health checking.
+- API error detection.
+- Automatic fallback system.
+- Clear logging showing:
+  - which provider was selected
+  - why it was selected
+  - when fallback happened.
+
+Example logs:
+
+"Question generation: Using Gemini"
+"Gemini quota exceeded, switching to Groq"
+"Image generation: Using OpenAI Image API"
+
+Requirements:
+
+- Keep all API keys only in environment variables / Replit Secrets.
+- Never hardcode keys.
+- Keep current endpoints working:
+  POST /api/questions
+  POST /api/images
+
+After implementation provide:
+
+1. List of files created or modified.
+2. Explain the provider selection logic.
+3. Explain how to add a new API key.
+4. Explain how to test each provider.
+5. Confirm that the game still works if no AI provider is available.

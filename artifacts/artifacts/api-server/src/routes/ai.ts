@@ -1,16 +1,9 @@
 import { Router } from "express";
-import OpenAI from "openai";
 import { logger } from "../lib/logger";
+import { generateImageWithFallback, generateQuestionsWithFallback, getProviderStatus } from "../services/ai/manager";
+import type { Difficulty, RawQuestion } from "../services/ai/types";
 
 const router: Router = Router();
-
-function getOpenAI(): OpenAI {
-  const apiKey = process.env["OPENAI_API_KEY"];
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY environment variable is not set");
-  }
-  return new OpenAI({ apiKey });
-}
 
 const BLUR_LEVEL: Record<string, number> = {
   easy: 8,
@@ -18,9 +11,43 @@ const BLUR_LEVEL: Record<string, number> = {
   hard: 20,
 };
 
-// ─── POST /api/questions ──────────────────────────────────────────────────────
-// Generates quiz questions via GPT-4o, then generates images via DALL-E 3.
-// Falls back to a picsum placeholder if a DALL-E call fails (rate limit, etc.)
+// Built-in, dependency-free mock question generator. This is the absolute
+// last line of defense: even with zero AI providers configured (or all of
+// them failing), the endpoint still returns a valid, playable question set.
+const MOCK_ANSWERS: Record<string, string[]> = {
+  nature: ["Mountain Peak", "Ocean Wave", "Rainforest", "Sand Dune"],
+  animals: ["Lion", "Elephant", "Dolphin", "Eagle"],
+  food: ["Sushi Bowl", "Margherita Pizza", "Tacos", "Croissant"],
+  landmarks: ["Eiffel Tower", "Great Wall", "Pyramids of Giza", "Statue of Liberty"],
+};
+
+function generateMockQuestions(category: string, difficulty: string, count: number): RawQuestion[] {
+  const pool = MOCK_ANSWERS[category] ?? ["Mystery Object", "Hidden Item", "Unknown Subject", "Secret Thing"];
+  return Array.from({ length: count }, (_, i) => {
+    const answer = pool[i % pool.length] ?? "Unknown";
+    const distractors = pool.filter((a) => a !== answer).slice(0, 3);
+    const options = [answer, ...distractors];
+    while (options.length < 4) options.push(`Option ${options.length + 1}`);
+    return {
+      answer,
+      options,
+      correctIndex: 0,
+      funFact: `${answer} is a fascinating part of the ${category} category.`,
+      hints: [
+        `It belongs to the ${category} category`,
+        `This is a ${difficulty}-difficulty question`,
+        `Starts with "${answer.charAt(0)}"`,
+      ],
+      imagePrompt: answer,
+    };
+  });
+}
+
+// ─── POST /api/questions ────────────────────────────────────────────────────
+// Generates quiz questions via the AI Manager, which tries every configured
+// text provider in priority order (Gemini → Groq → OpenAI → Claude → Zhipu,
+// unless AI_MODE pins one) before falling back to the local mock generator.
+// Images are generated the same way (OpenAI → Stable Diffusion → picsum).
 router.post("/questions", async (req, res, next) => {
   try {
     const { category = "nature", difficulty = "medium", count = 10 } = req.body as {
@@ -32,81 +59,26 @@ router.post("/questions", async (req, res, next) => {
     const safeCount = Math.min(Math.max(1, Number(count) || 10), 20);
     const blurLevel = BLUR_LEVEL[difficulty] ?? 14;
 
-    const openai = getOpenAI();
-
-    // ── Step 1: GPT-4o question metadata ─────────────────────────────────────
-    logger.info({ category, difficulty, count: safeCount }, "Generating questions with GPT-4o");
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a quiz generator for BlurQuiz, a mobile image-guessing game where players identify progressively un-blurred images. Return only valid JSON.",
-        },
-        {
-          role: "user",
-          content: `Generate exactly ${safeCount} unique quiz questions for the "${category}" category at "${difficulty}" difficulty.
-
-Return a JSON object with a "questions" array. Each item must have:
-- "answer": string — the thing shown in the image (e.g. "Eiffel Tower", "Lion", "Sushi Bowl")
-- "options": string[] — exactly 4 options including the correct answer, shuffled randomly
-- "correctIndex": number — 0-based index of the correct answer in "options"
-- "funFact": string — one interesting sentence about the answer
-- "hints": string[] — exactly 3 hints ordered vague→specific; do NOT reveal the answer
-- "imagePrompt": string — a concise DALL-E 3 prompt for a clear, photorealistic image of the answer with plain background
-
-All answers must be distinct and suitable for ${difficulty} difficulty.`,
-        },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.9,
+    const { questions: aiQuestions, providerUsed: textProvider } = await generateQuestionsWithFallback({
+      category,
+      difficulty: difficulty as Difficulty,
+      count: safeCount,
     });
 
-    type RawQuestion = {
-      answer: string;
-      options: string[];
-      correctIndex: number;
-      funFact: string;
-      hints: string[];
-      imagePrompt: string;
-    };
+    const usingMock = aiQuestions.length === 0;
+    const source = usingMock ? generateMockQuestions(category, difficulty, safeCount) : aiQuestions;
 
-    const parsed = JSON.parse(completion.choices[0]?.message.content ?? "{}") as {
-      questions?: RawQuestion[];
-    };
-    const rawQuestions: RawQuestion[] = Array.isArray(parsed.questions)
-      ? parsed.questions
-      : [];
+    if (usingMock) {
+      logger.warn({ category, difficulty }, "Question generation: serving built-in mock questions");
+    }
 
-    logger.info({ count: rawQuestions.length }, "GPT-4o questions generated");
-
-    // ── Step 2: DALL-E 3 images (concurrent, graceful fallback) ──────────────
     const questions = await Promise.all(
-      rawQuestions.map(async (q, index) => {
+      source.map(async (q, index) => {
         const fallbackUrl = `https://picsum.photos/seed/${encodeURIComponent(q.answer)}/400/400`;
-        let imageUrl = fallbackUrl;
-
-        try {
-          const imgResponse = await openai.images.generate({
-            model: "dall-e-2",
-            prompt: `${q.imagePrompt}. Photorealistic, vivid colors, centered subject, clean background, no text.`,
-            n: 1,
-            size: "512x512",
-          });
-          imageUrl = imgResponse.data[0]?.url ?? fallbackUrl;
-          logger.info({ answer: q.answer }, "DALL-E 3 image generated");
-        } catch (imgErr) {
-          logger.warn(
-            { err: imgErr, answer: q.answer },
-            "DALL-E 3 image generation failed — using picsum fallback",
-          );
-        }
-
+        const { url } = await generateImageWithFallback(q.imagePrompt);
         return {
           id: `q_${Date.now()}_${index}`,
-          imageUrl,
+          imageUrl: url ?? fallbackUrl,
           answer: q.answer,
           options: q.options,
           correctIndex: q.correctIndex,
@@ -119,14 +91,14 @@ All answers must be distinct and suitable for ${difficulty} difficulty.`,
       }),
     );
 
-    res.json({ questions });
+    res.json({ questions, meta: { textProvider: textProvider ?? "mock" } });
   } catch (err) {
     next(err);
   }
 });
 
-// ─── POST /api/images ─────────────────────────────────────────────────────────
-// Generates a single image from a text prompt using DALL-E 3.
+// ─── POST /api/images ───────────────────────────────────────────────────────
+// Generates a single image from a text prompt via the AI Manager.
 router.post("/images", async (req, res, next) => {
   try {
     const { prompt } = req.body as { prompt?: string };
@@ -136,20 +108,22 @@ router.post("/images", async (req, res, next) => {
       return;
     }
 
-    const openai = getOpenAI();
+    const trimmedPrompt = prompt.trim();
+    const { url, providerUsed } = await generateImageWithFallback(trimmedPrompt);
+    const fallbackUrl = `https://picsum.photos/seed/${encodeURIComponent(trimmedPrompt)}/400/400`;
 
-    const response = await openai.images.generate({
-      model: "dall-e-2",
-      prompt: `${prompt.trim()}. Photorealistic, vivid colors, centered subject, clean background, no text.`,
-      n: 1,
-      size: "512x512",
-    });
-
-    const url = response.data[0]?.url ?? null;
-    res.json({ url });
+    res.json({ url: url ?? fallbackUrl, provider: providerUsed ?? "mock" });
   } catch (err) {
     next(err);
   }
+});
+
+// ─── GET /api/ai-status ─────────────────────────────────────────────────────
+// Read-only introspection of which providers are configured, which are on
+// cooldown, and the active AI_MODE — useful for confirming a newly-added key
+// is picked up without spending a real generation call.
+router.get("/ai-status", (_req, res) => {
+  res.json(getProviderStatus());
 });
 
 export default router;
