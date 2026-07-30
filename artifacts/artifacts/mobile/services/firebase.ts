@@ -13,7 +13,11 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getAuth, initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import { getAuth, initializeAuth } from 'firebase/auth';
+// getReactNativePersistence is only available via @firebase/auth's react-native
+// conditional export (resolved by Metro at runtime). We require it dynamically
+// inside the try/catch below so TypeScript doesn't attempt a static resolution
+// against the browser types where it is absent.
 import { Platform } from 'react-native';
 
 // ─── Firebase project config (from google-services.json / Firebase console) ─
@@ -39,9 +43,11 @@ if (!isFirstInit || Platform.OS === 'web') {
   _auth = getAuth(firebaseApp);
 } else {
   try {
-    // @react-native-async-storage/async-storage is already in devDependencies
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // Both requires resolve via Metro's react-native conditional export at runtime.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
     const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+    const { getReactNativePersistence } = require('@firebase/auth') as any;
     _auth = initializeAuth(firebaseApp, {
       persistence: getReactNativePersistence(AsyncStorage),
     });

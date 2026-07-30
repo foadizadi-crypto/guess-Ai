@@ -33,6 +33,39 @@ BlurQuiz is an Expo mobile game where players identify images through increasing
 - `lib` — shared API, database, and generated client packages
 - `attached_assets` — imported Phase 0/Phase 2 notes and prompts
 
+## Multi-provider AI architecture
+
+The API server uses a provider router in `artifacts/artifacts/api-server/src/services/ai/`:
+
+| Layer | File | Purpose |
+|---|---|---|
+| Manager | `manager.ts` | Orchestrates fallback chains for text and image generation |
+| Health | `health.ts` | Tracks per-provider cooldowns after failures |
+| Errors | `errors.ts` | Classifies SDK/HTTP errors into typed kinds |
+| Text providers | `providers/text/` | Gemini, Groq, OpenAI, Anthropic, Zhipu |
+| Image providers | `providers/image/` | OpenAI DALL-E, Stable Diffusion (Hugging Face) |
+
+**Text chain (priority order):** Gemini Flash → Groq (Llama 3.3) → OpenAI GPT-4o → Claude (Haiku) → Zhipu GLM-4
+
+**Image chain (priority order):** OpenAI DALL-E 2 → Stable Diffusion XL (Hugging Face) → picsum.photos placeholder
+
+**To activate a provider:** add its key as a Replit Secret. Keys are never hardcoded.
+
+| Provider | Secret name |
+|---|---|
+| Gemini | `GEMINI_API_KEY` |
+| Groq | `GROQ_API_KEY` |
+| OpenAI (text + image) | `OPENAI_API_KEY` |
+| Anthropic | `ANTHROPIC_API_KEY` |
+| Zhipu / GLM | `ZHIPU_API_KEY` |
+| Stable Diffusion (HF) | `HUGGINGFACE_API_KEY` |
+
+**To pin a provider for testing:** set `AI_MODE=<provider-id>` (e.g. `AI_MODE=groq`). Valid ids: `gemini`, `groq`, `openai`, `anthropic`, `zhipu`, `openai-image`, `stable-diffusion`.
+
+**To inspect live provider status:** `GET /api/ai-status` — shows which providers are configured, on cooldown, and the active AI_MODE.
+
+**Fallback guarantee:** if every provider fails (or none are configured), both endpoints fall back gracefully — `/api/questions` uses a built-in local mock generator, `/api/images` uses picsum.photos seeds. The game never hard-fails.
+
 ## Architecture decisions
 
 - The imported pnpm workspace and Expo stack are kept intact; no migration or restructure was performed.

@@ -61,8 +61,11 @@ class OpenAIService {
 
   /**
    * Generate a set of quiz questions via the API server.
-   * The server uses GPT-4o for question data and DALL-E 3 for images.
-   * Falls back to local mock data if the API is unreachable.
+   * The server automatically selects the best available AI provider
+   * (Gemini → Groq → OpenAI → Claude → Zhipu for text; OpenAI DALL-E →
+   * Stable Diffusion for images) and falls back to picsum placeholders
+   * when no image provider is configured.
+   * Falls back to local mock data if the API server is unreachable.
    */
   async generateQuestions(
     category: Category,
