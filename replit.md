@@ -76,6 +76,18 @@ The API server uses a provider router in `artifacts/artifacts/api-server/src/ser
 
 The current imported project contains the BlurQuiz foundation and Phase 2 core gameplay flows, including onboarding, lobby, difficulty and category selection, game, results, profile, settings, shop, and leaderboard screens.
 
+## Game Economy Bible
+
+`GAME_ECONOMY_BIBLE.md` in the repo root is the authoritative design document for all economy, progression, monetization, and retention systems. Implement features against this document. Key decisions:
+
+- XP per correct answer: Easy 10 / Medium 15 / Hard 25; wrong answers always give 2 XP.
+- Combo bonuses: +5/+10/+20/+30 XP per question at 3/5/8/12-streak; resets on wrong answer.
+- Level formula: `floor(100 × L^1.5)` (L ≤ 50), `L^1.8` (51–200), `L^2.1` (201–500).
+- Level 500 is a multi-year prestige ceiling; daily XP cap is 10,000.
+- Coins from gameplay (1 per correct answer) + daily missions + rewarded ads.
+- BlurPass subscription: $3.99/mo — ad-free, 2× daily coins, exclusive cosmetics.
+- Interstitials: minimum 3-game gap, 3-min cooldown, max 5/session; never mid-game.
+
 ## User preferences
 
 - The user plans to provide the five project phases one at a time and wants the Expo game built incrementally.
