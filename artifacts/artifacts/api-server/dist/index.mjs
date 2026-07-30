@@ -56881,17 +56881,25 @@ var MOCK_ANSWERS = {
   food: ["Sushi Bowl", "Margherita Pizza", "Tacos", "Croissant"],
   landmarks: ["Eiffel Tower", "Great Wall", "Pyramids of Giza", "Statue of Liberty"]
 };
+function shuffleArray(arr) {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
 function generateMockQuestions(category, difficulty, count) {
   const pool = MOCK_ANSWERS[category] ?? ["Mystery Object", "Hidden Item", "Unknown Subject", "Secret Thing"];
   return Array.from({ length: count }, (_, i) => {
     const answer = pool[i % pool.length] ?? "Unknown";
     const distractors = pool.filter((a) => a !== answer).slice(0, 3);
-    const options = [answer, ...distractors];
+    const options = shuffleArray([answer, ...distractors]);
     while (options.length < 4) options.push(`Option ${options.length + 1}`);
     return {
       answer,
       options,
-      correctIndex: 0,
+      correctIndex: options.indexOf(answer),
       funFact: `${answer} is a fascinating part of the ${category} category.`,
       hints: [
         `It belongs to the ${category} category`,

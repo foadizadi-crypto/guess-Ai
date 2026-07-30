@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { AppScreen, Category, Difficulty, GameSession } from '@/types';
 import { GAME_CONSTANTS } from '@/constants';
-import { DIFFICULTY_CONFIG, getStartingClarity, getStartingTime, getAvatarAbility } from '@/gameEngine';
+import { DIFFICULTY_CONFIG, getStartingClarity, getStartingTime, getAvatarAbility, getRevealDelta } from '@/gameEngine';
 import { useUserStore } from '@/store/userStore';
 import { generateId } from '@/utils';
 
@@ -29,6 +29,9 @@ interface GameState {
   xpEarned: number;
   doubleCoinsActive: boolean;
   lastGameWasTimedOut: boolean;
+  streak: number;
+  consecutiveWrong: number;
+  totalWrong: number;
 
   // ─── Actions ────────────────────────────────────────────────────────────
 
@@ -73,6 +76,9 @@ const initialState = {
   xpEarned: 0,
   doubleCoinsActive: false,
   lastGameWasTimedOut: false,
+  streak: 0,
+  consecutiveWrong: 0,
+  totalWrong: 0,
 };
 
 // ─── Store ────────────────────────────────────────────────────────────────
@@ -135,24 +141,35 @@ export const useGameStore = create<GameState>((set) => ({
       xpEarned: 0,
       doubleCoinsActive: false,
       lastGameWasTimedOut: false,
+      streak: 0,
+      consecutiveWrong: 0,
+      totalWrong: 0,
       };
     }),
 
   recordAnswer: (correct, points) =>
-    set((state) => ({
-      score: Math.max(0, state.score + points),
-      correctAnswers: state.correctAnswers + (correct ? 1 : 0),
-      clarity: Math.min(100, state.clarity + (correct ? 5 : 2)),
-      timer: correct ? state.timer : Math.max(0, state.timer - 5),
-      xpEarned: state.xpEarned + (correct ? (getAvatarAbility(useUserStore.getState().selectedAvatarId) === 'xp-sage' ? 13 : 10) : 0),
-      gameSession: state.gameSession
-        ? {
-            ...state.gameSession,
-            score: Math.max(0, state.score + points),
-            questionsAnswered: state.currentQuestionIndex + 1,
-          }
-        : null,
-    })),
+    set((state) => {
+      const newStreak = correct ? state.streak + 1 : 0;
+      const newConsecutiveWrong = correct ? 0 : state.consecutiveWrong + 1;
+      const newTotalWrong = correct ? state.totalWrong : state.totalWrong + 1;
+      const revealDelta = getRevealDelta(state.selectedDifficulty, correct);
+      return {
+        score: Math.max(0, state.score + points),
+        correctAnswers: state.correctAnswers + (correct ? 1 : 0),
+        clarity: Math.min(100, Math.max(0, state.clarity + revealDelta)),
+        streak: newStreak,
+        consecutiveWrong: newConsecutiveWrong,
+        totalWrong: newTotalWrong,
+        xpEarned: state.xpEarned + (correct ? (getAvatarAbility(useUserStore.getState().selectedAvatarId) === 'xp-sage' ? 13 : 10) : 0),
+        gameSession: state.gameSession
+          ? {
+              ...state.gameSession,
+              score: Math.max(0, state.score + points),
+              questionsAnswered: state.currentQuestionIndex + 1,
+            }
+          : null,
+      };
+    }),
 
   advanceQuestion: () =>
     set((state) => ({ currentQuestionIndex: state.currentQuestionIndex + 1 })),

@@ -40,17 +40,26 @@ export const getAvatarAbility = (avatarId: string): AvatarAbility => {
 export const getStartingClarity = (difficulty: Difficulty, ability: AvatarAbility): number =>
   Math.min(100, 100 - DIFFICULTY_CONFIG[difficulty].blurPercent + (ability === 'blur-buster' ? 20 : 0));
 
+/** How much the reveal % changes per answer, by difficulty. */
+export const getRevealDelta = (difficulty: Difficulty, correct: boolean): number => {
+  if (correct) return difficulty === 'hard' ? 3 : difficulty === 'medium' ? 4 : 5;
+  return difficulty === 'hard' ? -3 : difficulty === 'medium' ? -2 : -1;
+};
+
 export const getStartingTime = (ability: AvatarAbility): number => 120 + (ability === 'time-master' ? 5 : 0);
 
 export const calculateAnswerScore = (
   difficulty: Difficulty,
   timeRemaining: number,
   ability: AvatarAbility,
+  streak = 0,
 ): number => {
   const base = 10 * DIFFICULTY_CONFIG[difficulty].multiplier;
   const timeBonus = Math.min(5, Math.floor(timeRemaining / 30));
   const abilityBonus = ability === 'visionary' ? 2 : 0;
-  return base + timeBonus + abilityBonus;
+  // +1 bonus point per 3 consecutive correct answers (combo)
+  const streakBonus = Math.floor(streak / 3);
+  return base + timeBonus + abilityBonus + streakBonus;
 };
 
 export const getTimerColor = (seconds: number): string => {
@@ -59,4 +68,13 @@ export const getTimerColor = (seconds: number): string => {
   return '#FFFFFF';
 };
 
-export const shuffleOptions = (question: Question): string[] => [...question.options];
+/** Fisher-Yates shuffle. Returns new options array and the updated correctIndex. */
+export const shuffleOptions = (question: Question): { options: string[]; correctIndex: number } => {
+  const correct = question.options[question.correctIndex] ?? question.options[0];
+  const shuffled = [...question.options];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+  }
+  return { options: shuffled, correctIndex: shuffled.indexOf(correct) };
+};

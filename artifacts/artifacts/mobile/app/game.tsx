@@ -32,7 +32,7 @@ import { useUserStore } from '@/store/userStore';
 import { useAdStore } from '@/store/adStore';
 import { useAudio } from '@/hooks/useAudio';
 import { openAIService } from '@/services/OpenAIService';
-import { DIFFICULTY_CONFIG, calculateAnswerScore, getAvatarAbility, getTimerColor } from '@/gameEngine';
+import { DIFFICULTY_CONFIG, calculateAnswerScore, getAvatarAbility, getTimerColor, shuffleOptions } from '@/gameEngine';
 import { ROUTES } from '@/navigation/routes';
 import type { Question } from '@/types';
 import type { PowerUpId } from '@/types';
@@ -57,6 +57,9 @@ export default function GameScreen() {
   const startSession = useGameStore((s) => s.startSession);
   const endSession = useGameStore((s) => s.endSession);
   const resetGame = useGameStore((s) => s.resetGame);
+  const streak = useGameStore((s) => s.streak);
+  const consecutiveWrong = useGameStore((s) => s.consecutiveWrong);
+  const totalWrong = useGameStore((s) => s.totalWrong);
   const activateDoubleCoins = useGameStore((s) => s.activateDoubleCoins);
   const usePowerUp = useUserStore((s) => s.usePowerUp);
   const powerUps = useUserStore((s) => s.powerUps);
@@ -65,6 +68,7 @@ export default function GameScreen() {
   const { playEffect, playMusic, stopMusic } = useAudio();
 
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [gameImageUrl, setGameImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
@@ -72,6 +76,7 @@ export default function GameScreen() {
   const [paused, setPaused] = useState(false);
   const [reviveVisible, setReviveVisible] = useState(false);
   const [reviveLoading, setReviveLoading] = useState(false);
+  const [superComboVisible, setSuperComboVisible] = useState(false);
   const endedRef = useRef(false);
   const reviveOffered = useRef(false);
   const shakeX = useSharedValue(0);
@@ -138,7 +143,14 @@ export default function GameScreen() {
     setLoading(true);
     openAIService.generateQuestions(category, difficulty, 20).then((items) => {
       if (active) {
-        setQuestions(items);
+        // Shuffle answer options so correct answer position is unpredictable
+        const shuffled = items.map((q) => {
+          const { options, correctIndex } = shuffleOptions(q);
+          return { ...q, options, correctIndex };
+        });
+        // Fix #1: pin one image for the entire session — use first question's image
+        setGameImageUrl(shuffled[0]?.imageUrl ?? null);
+        setQuestions(shuffled);
         setLoading(false);
       }
     });
@@ -166,7 +178,16 @@ export default function GameScreen() {
     (answerIndex: number) => {
       if (!currentQuestion || feedback || paused || endedRef.current) return;
       const correct = answerIndex === currentQuestion.correctIndex;
-      const points = correct ? calculateAnswerScore(difficulty, timer, getAvatarAbility(selectedAvatarId)) : 0;
+      const points = correct ? calculateAnswerScore(difficulty, timer, getAvatarAbility(selectedAvatarId), streak) : 0;
+      // Compute new streak locally to act on it immediately (before store update)
+      const newStreak = correct ? streak + 1 : 0;
+      // Super Combo: every 10th consecutive correct answer → +10s
+      if (correct && newStreak > 0 && newStreak % 10 === 0) {
+        setTimer(Math.min(180, timer + 10));
+        setSuperComboVisible(true);
+        setTimeout(() => setSuperComboVisible(false), 2000);
+        playEffect('coin');
+      }
       setSelectedAnswer(answerIndex);
       setFeedback(correct ? 'correct' : 'wrong');
       setIsTimerRunning(false);
@@ -184,6 +205,12 @@ export default function GameScreen() {
         );
       }
       setTimeout(() => {
+        // Game over: 5 consecutive wrong OR 10 total wrong
+        const { consecutiveWrong: cw, totalWrong: tw } = useGameStore.getState();
+        if (cw >= 5 || tw >= 10) {
+          finishGame();
+          return;
+        }
         const isLast = questionIndex >= questions.length - 1 || questionIndex >= 19;
         if (isLast) {
           finishGame();
@@ -208,7 +235,9 @@ export default function GameScreen() {
       recordAnswer,
       selectedAvatarId,
       setIsTimerRunning,
+      setSuperComboVisible,
       shakeX,
+      streak,
       timer,
     ],
   );
@@ -324,20 +353,31 @@ export default function GameScreen() {
           <>
             <Animated.View style={[styles.imageWrap, shakeStyle]}>
               <Image
-                source={{ uri: currentQuestion.imageUrl }}
+                source={{ uri: gameImageUrl ?? '' }}
                 style={styles.image}
                 blurRadius={blurRadius}
               />
-              <View style={styles.imageOverlay}>
-                <Text style={styles.clarityValue}>{Math.round(clarityProgress)}%</Text>
-                <Text style={styles.clarityLabel}>CLARITY</Text>
-              </View>
+              {/* Reveal % — top-left corner badge, keeps image clean */}
               <View style={[styles.imageBadge, { borderColor: config.color }]}>
                 <Ionicons name="eye-outline" size={16} color={config.color} />
                 <Text style={[styles.imageBadgeText, { color: config.color }]}>
-                  {config.blurPercent}% BLUR
+                  {Math.round(clarityProgress)}% REVEAL
                 </Text>
               </View>
+              {/* Combo / Super Combo — top-right corner */}
+              {streak >= 3 && (
+                <View style={[styles.streakBadge, streak >= 10 && styles.superComboBadge]}>
+                  <Text style={[styles.streakText, streak >= 10 && styles.superComboText]}>
+                    {streak >= 10 ? `⚡ ${streak}x SUPER` : `🔥 ${streak}x COMBO`}
+                  </Text>
+                </View>
+              )}
+              {/* Super Combo announcement overlay */}
+              {superComboVisible && (
+                <View style={styles.superComboAnnounce}>
+                  <Text style={styles.superComboAnnounceText}>⚡ SUPER COMBO! +10s</Text>
+                </View>
+              )}
             </Animated.View>
 
             <GlassCard style={styles.questionCard}>
@@ -347,7 +387,7 @@ export default function GameScreen() {
               </Text>
               {feedback && (
                 <Text style={[styles.feedback, { color: feedback === 'correct' ? GameColors.accentGreen : GameColors.accentRed }]}>
-                  {feedback === 'correct' ? `Correct! +${calculateAnswerScore(difficulty, timer, getAvatarAbility(selectedAvatarId))}` : `Not quite — ${currentQuestion.answer}`}
+                  {feedback === 'correct' ? `Correct! +${calculateAnswerScore(difficulty, timer, getAvatarAbility(selectedAvatarId), streak)}` : `Not quite — ${currentQuestion.answer}`}
                 </Text>
               )}
             </GlassCard>
@@ -453,11 +493,14 @@ const styles = StyleSheet.create({
   segmentDone: { backgroundColor: GameColors.accentGreen },
   imageWrap: { flex: 1, minHeight: 240, maxHeight: 330, borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: GameColors.cardBorder, backgroundColor: GameColors.backgroundSecondary },
   image: { width: '100%', height: '100%', resizeMode: 'cover' },
-  imageOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(13,2,33,0.2)' },
-  clarityValue: { fontSize: 44, color: GameColors.textWhite, fontFamily: 'Inter_700Bold', textShadowColor: '#000', textShadowRadius: 8 },
-  clarityLabel: { ...Typography.small, color: GameColors.textWhite, letterSpacing: 2 },
   imageBadge: { position: 'absolute', left: 14, top: 14, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, backgroundColor: 'rgba(13,2,33,0.75)', flexDirection: 'row', gap: 5, alignItems: 'center' },
   imageBadgeText: { ...Typography.small, fontFamily: 'Inter_700Bold', fontSize: 11 },
+  streakBadge: { position: 'absolute', right: 14, top: 14, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: '#FFD700', backgroundColor: 'rgba(13,2,33,0.85)' },
+  streakText: { fontFamily: 'Inter_700Bold', fontSize: 11, color: '#FFD700', letterSpacing: 0.5 },
+  superComboBadge: { borderColor: '#00BFFF', backgroundColor: 'rgba(0,50,80,0.92)' },
+  superComboText: { color: '#00BFFF' },
+  superComboAnnounce: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.55)' },
+  superComboAnnounceText: { fontFamily: 'Inter_700Bold', fontSize: 22, color: '#00BFFF', letterSpacing: 1, textShadowColor: '#000', textShadowRadius: 8 },
   questionCard: { padding: 14, gap: 4 },
   powerBar: { flexDirection: 'row', gap: 6 },
   powerButton: { flex: 1, minHeight: 38, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,215,0,0.35)', backgroundColor: 'rgba(255,215,0,0.08)', alignItems: 'center', justifyContent: 'center', gap: 1 },

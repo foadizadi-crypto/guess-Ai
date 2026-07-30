@@ -14,7 +14,6 @@ import type { Difficulty } from '@/types';
 import { useRTL } from '@/hooks/useRTL';
 import { GAME_CONSTANTS } from '@/constants';
 import { DIFFICULTY_CONFIG } from '@/gameEngine';
-import { useUserStore } from '@/store/userStore';
 
 interface LevelCard {
   difficulty: Difficulty;
@@ -62,17 +61,8 @@ export default function LevelSelectScreen() {
   const { textAlign } = useRTL();
   const setDifficulty = useGameStore((s) => s.setDifficulty);
   const selectedDifficulty = useGameStore((s) => s.selectedDifficulty);
-  const gamesPlayed = useUserStore((s) => s.statistics.totalGamesPlayed);
-  const level = useUserStore((s) => s.level);
 
   const handleSelect = (difficulty: Difficulty) => {
-    const locked =
-      difficulty === 'medium'
-        ? level < 3 && gamesPlayed < 5
-        : difficulty === 'hard'
-          ? level < 5 && gamesPlayed < 10
-          : false;
-    if (locked) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setDifficulty(difficulty);
   };
@@ -100,20 +90,13 @@ export default function LevelSelectScreen() {
         <ScrollView style={styles.cards} contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
           {LEVELS.map((lvl) => {
             const selected = selectedDifficulty === lvl.difficulty;
-            const locked =
-              lvl.difficulty === 'medium'
-                ? level < 3 && gamesPlayed < 5
-                : lvl.difficulty === 'hard'
-                  ? level < 5 && gamesPlayed < 10
-                  : false;
             return (
               <TouchableOpacity
                 key={lvl.difficulty}
                 style={[
                   styles.card,
                   { borderColor: selected ? lvl.color : GameColors.border },
-                 selected && { backgroundColor: `${lvl.color}15` },
-                 locked && styles.lockedCard,
+                  selected && { backgroundColor: `${lvl.color}15` },
                 ]}
                 onPress={() => handleSelect(lvl.difficulty)}
                 activeOpacity={0.8}
@@ -121,20 +104,18 @@ export default function LevelSelectScreen() {
                 <View style={[styles.cardIcon, { borderColor: lvl.color }]}>
                   <Ionicons name={lvl.icon} size={32} color={lvl.color} />
                 </View>
-                 <View style={styles.cardInfo}>
+                <View style={styles.cardInfo}>
                   <Text style={[styles.cardLabel, { color: lvl.color }]}>{lvl.label}</Text>
-                   <View style={styles.metaGrid}>
-                     <Text style={styles.cardMeta}>{lvl.blur}</Text>
-                     <Text style={styles.cardMeta}>{lvl.hints}</Text>
-                     <Text style={styles.cardMeta}>{lvl.multiplier}</Text>
+                  <View style={styles.metaGrid}>
+                    <Text style={styles.cardMeta}>{lvl.blur}</Text>
+                    <Text style={styles.cardMeta}>{lvl.hints}</Text>
+                    <Text style={styles.cardMeta}>{lvl.multiplier}</Text>
                   </View>
-                   <Text style={styles.unlockText}>{locked ? `Unlock: ${lvl.difficulty === 'medium' ? 'Level 3 or 5 games played' : 'Level 5 or 10 games played'}` : 'Always unlocked'}</Text>
+                  <Text style={styles.unlockText}>Unlocked</Text>
                 </View>
-                 {locked ? (
-                   <Ionicons name="lock-closed" size={24} color={GameColors.textSecondary} />
-                 ) : selected ? (
+                {selected ? (
                   <Ionicons name="checkmark-circle" size={24} color={lvl.color} />
-                 ) : null}
+                ) : null}
               </TouchableOpacity>
             );
           })}

@@ -1,0 +1,205 @@
+You are now acting as a Senior Mobile Game Developer.
+
+IMPORTANT:
+This task is ONLY for fixing the current gameplay logic and existing bugs.
+Do NOT add new systems.
+Do NOT implement XP, Level, Shop, Premium, Ads, or Economy features yet.
+
+First inspect the current implementation and identify where the game logic is handled.
+
+Fix the following issues:
+
+## 1. IMAGE FLOW BUG
+
+Current problem:
+The image changes after every question.
+
+Required behavior:
+- One game session contains exactly 20 questions.
+- The same image must remain for the entire 20-question round.
+- The image must NOT regenerate or change after each question.
+- Only the blur/reveal percentage changes during the round.
+- After the round finishes, a new image can be loaded for the next game.
+
+---
+
+## 2. BLUR / REVEAL SYSTEM
+
+Current problem:
+Reveal percentage logic is incorrect.
+
+Implement a proper reveal system:
+
+The reveal percentage represents how much of the FULL IMAGE becomes visible.
+
+Important:
+When we say:
+50% reveal = 50% of the complete image is visible.
+50% hidden = 50% blurred.
+
+The blur effect must apply to the whole original image, not a cropped area.
+
+Difficulty starting values:
+
+Easy:
+- Start with 50% reveal.
+- 50% of the image should be understandable.
+
+Medium:
+- Start with 20% reveal.
+- 80% blurred.
+
+Hard:
+- Start with 0% reveal.
+- Entire image starts blurred.
+
+---
+
+## 3. REVEAL VISUALIZATION
+
+Important UI change:
+
+The reveal percentage number should NOT stay in the center of the image.
+
+Current problem:
+The percentage text is displayed over the image and distracts the player.
+
+Required:
+- Move the percentage indicator to a separate corner area.
+- Example: top-right or top-left corner.
+- Keep the main image clean.
+- The percentage indicator should update smoothly.
+
+---
+
+## 4. ANSWER EFFECT ON REVEAL
+
+Correct answer:
+Increase reveal percentage.
+
+Wrong answer:
+Decrease reveal percentage.
+
+The logic must be connected correctly.
+
+Difficulty values:
+
+Easy:
+Correct: +5%
+Wrong: -1%
+
+Medium:
+Correct: +4%
+Wrong: -2%
+
+Hard:
+Correct: +3%
+Wrong: -3%
+
+Do not allow values:
+below 0%
+above 100%
+
+---
+
+## 5. DIFFICULTY SELECTION BUG
+
+Current problem:
+Only Easy difficulty is unlocked.
+
+Required:
+All difficulties must be available from the beginning.
+
+Unlock state:
+
+Easy:
+Unlocked
+
+Medium:
+Unlocked
+
+Hard:
+Unlocked
+
+Remove current lock restrictions.
+
+---
+
+## 6. COMBO SYSTEM BUG
+
+Current problem:
+Correct answers in sequence do not trigger combo.
+
+Implement:
+
+3 correct answers in a row:
+- Activate Combo state.
+
+10 correct answers in a row:
+- Activate Super Combo.
+- Add +10 seconds to remaining game time.
+- Show proper visual feedback.
+
+The combo counter must reset after a wrong answer.
+
+---
+
+## 7. GAME OVER LOGIC
+
+Implement:
+
+Condition 1:
+5 wrong answers consecutively:
+Game Over.
+
+Condition 2:
+10 total wrong answers during one round:
+Game Over.
+
+Reset counters when a new game starts.
+
+---
+
+## 8. PERFORMANCE REQUIREMENT
+
+Keep:
+- 60 FPS performance.
+- Smooth blur transitions.
+- No unnecessary image regeneration.
+- No API calls for the same image multiple times during one round.
+
+---
+
+## 9. TESTING
+
+After implementation test these scenarios:
+
+Test A:
+Start Easy game:
+- Image remains identical for all 20 questions.
+- Reveal changes correctly.
+
+Test B:
+Start Medium game:
+- Initial reveal is 20%.
+
+Test C:
+Start Hard game:
+- Initial reveal is 0%.
+
+Test D:
+Answer 3 questions correctly:
+- Combo appears.
+
+Test E:
+Answer 10 questions correctly:
+- Super Combo +10 seconds.
+
+Test F:
+Answer 5 wrong questions in a row:
+- Game Over.
+
+When finished:
+Provide a summary of files changed and confirm each issue is fixed.
+
+Do not modify anything outside this scope.
