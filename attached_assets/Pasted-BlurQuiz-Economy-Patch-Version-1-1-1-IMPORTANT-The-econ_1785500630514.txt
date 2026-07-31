@@ -1,0 +1,216 @@
+BlurQuiz Economy Patch — Version 1.1.1
+
+IMPORTANT:
+The economy system has already been implemented based on Version 1.0.
+
+Do NOT rebuild the economy system.
+Do NOT remove existing features.
+Do NOT change the core game loop.
+
+This task is ONLY a balance correction and data preparation pass.
+
+The goal is:
+Create a healthy progression system where players feel continuous achievement and the game remains enjoyable long-term.
+
+--------------------------------------------------
+
+1. Level Progression Balance
+
+Review the current XP and Level calculation system.
+
+Requirements:
+
+- Maximum main progression level remains Level 100.
+- Do NOT create Level 500 or unlimited levels.
+- After Level 100, Prestige can be added only in a future update.
+
+Balance target:
+
+Casual player:
+5 games/day
+
+Active player:
+10-15 games/day
+
+Hardcore player:
+20 games/day
+
+The target progression:
+
+Active player:
+- Level 25 should feel achievable within approximately 1-2 months.
+- Level 50 should feel achievable within approximately 4-8 months.
+- Level 100 should feel achievable within approximately 12-24 months.
+
+If the current formula does not match these targets:
+Adjust the XP curve.
+
+Any formula change must be tested with simulation before applying.
+
+--------------------------------------------------
+
+2. Level Reward Expansion
+
+Current rewards are too sparse.
+
+Expand the reward structure.
+
+Minor rewards:
+Every 5 levels.
+
+Major rewards:
+Every 10 levels.
+
+Reward types:
+
+- Coins
+- Avatar
+- Frame
+- Badge
+- Title
+- Theme/Skin
+- Category Unlock
+- Cosmetic Packs
+
+Rules:
+
+- No gameplay advantage.
+- No pay-to-win.
+- Rewards are cosmetic, social, or progression based only.
+
+--------------------------------------------------
+
+3. Category Unlock Progression
+
+Categories must unlock gradually.
+
+Do NOT make all categories available early.
+
+Recommended structure:
+
+Level 10:
+New category
+
+Level 20:
+New category
+
+Level 30:
+New category
+
+Level 40:
+New category
+
+Level 50:
+Rare category
+
+Level 70:
+Special category
+
+Level 100:
+Legend category
+
+Final category count should be balanced with available content.
+
+--------------------------------------------------
+
+4. Shop Inventory Data Preparation
+
+Prepare shop data for future UI/Figma implementation.
+
+Launch inventory target:
+
+Avatars:
+30 items
+
+Frames:
+20 items
+
+Themes:
+10 items
+
+Badges:
+50 items
+
+Titles:
+30 items
+
+Power-ups:
+
+- Hint
+- Reveal
+- Skip Question
+- Double XP
+
+All shop items must be data-driven.
+
+Do NOT hardcode items inside UI components.
+
+--------------------------------------------------
+
+5. Advertisement Adjustment
+
+Keep current advertisement system.
+
+Add first-day protection:
+
+First 3 completed games:
+No interstitial advertisements.
+
+Rules:
+
+- Never show ads during questions.
+- Never interrupt active gameplay.
+- Ads only appear between sessions or natural breaks.
+
+--------------------------------------------------
+
+6. Economy Simulation Test
+
+Before final approval, run simulations.
+
+Players:
+
+Player A:
+5 games/day
+
+Player B:
+10 games/day
+
+Player C:
+20 games/day
+
+Report:
+
+After 7 days:
+- Level
+- Total XP
+- Coins
+- Unlocked rewards
+
+After 30 days:
+- Level
+- Total XP
+- Coins
+- Unlocked rewards
+
+After 6 months:
+- Level
+- Total XP
+- Coins
+- Unlocked rewards
+
+After 12 months:
+- Level
+- Total XP
+- Coins
+- Unlocked rewards
+
+Final balance requirement:
+
+Player should always feel:
+
+"I am making progress."
+
+Never:
+
+"This game has no realistic end."
