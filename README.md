@@ -26,7 +26,9 @@ A mobile guessing game built with **Expo (React Native)** where players identify
 | Framework | Expo SDK 54 + React Native 0.81 |
 | Navigation | Expo Router (file-based) |
 | State | Zustand with AsyncStorage persistence |
-| AI Questions | OpenAI API (GPT-4o) |
+| AI Questions |
+| AI Images |
+|Multi-Provider|
 | Ads | react-native-google-mobile-ads (AdMob) |
 | IAP | react-native-iap v15 (Nitro bridge) |
 | Audio | expo-av |
