@@ -1,0 +1,95 @@
+7. ADVERTISING SYSTEM (REWARDED ADS ONLY)
+
+Policy: No forced interstitials. All ads are opt-in rewarded videos.
+
+7.1. Ad Placement #1 – Lobby "Daily Reward" Button
+
+· A button appears in the lobby labeled "Daily Gift" or "Free Lucky Spin".
+· Cooldown: 4 hours (configurable).
+· Reward: Watching a 30s ad grants a Gift Bag containing:
+  · 50 to 150 Coins (random).
+  · 10% chance for a bonus consumable (e.g., Time Boost or Error Nullifier).
+
+7.2. Ad Placement #2 – Post-Game "Double Rewards" Button
+
+· After finishing a session, if a Session Counter is ≥ 3, a button appears: "Watch Ad to Double Your Rewards!"
+· Reward: All Coins and XP earned in that session are multiplied by 2.
+· Session Counter Logic:
+  · Start at 0.
+  · After every completed session (even if exited early), add 1.
+  · If counter reaches 3, enable the double-reward button.
+  · If the player watches the ad: reward doubled, counter resets to 0.
+  · If the player declines: counter stays at 3 (or 4) and carries over to the next session. It never resets on decline.
+
+7.3. Ad-Free Pass Integration
+
+· If a player owns the Ad-Free Pass (Lifetime or 7-day):
+  · The "Daily Reward" button grants the reward instantly without showing an ad.
+  · The "Double Rewards" button applies the 2x multiplier instantly without showing an ad.
+  · The session counter still functions (to control frequency), but the ad skip is automatic.
+· Expiry logic: Check timestamp on the pass; if expired, revert to normal ad-watching behavior.
+
+---
+
+8. ENDGAME – LEVEL 500 ULTIMATE REWARD
+
+When a player reaches Level 500, the following prestige rewards are granted instantly and permanently:
+
+· Legendary Crown (profile overlay).
+· Exclusive Title: "The Clarity Legend".
+· Golden Theme (main menu skin).
+· Special Particle Effect on avatar (visible in lobby).
+
+Post-500 Logic:
+
+· The XP bar locks. Further XP is still tracked and stored in a buffer (for future Prestige or Seasons) but does not increase level.
+· A visual indicator shows "MAX LEVEL" on the profile.
+
+---
+
+9. DATABASE SCHEMA SUGGESTION (MINIMAL VIABLE TABLES)
+
+Table: players
+
+Field Type Description
+player_id UUID Primary key
+level INT Current level (1-500)
+current_xp INT XP accumulated towards next level
+total_xp BIGINT Lifetime XP earned
+coins INT Free currency
+gems INT Premium currency
+session_counter INT 0-10 (for ad double logic)
+last_daily_ad_timestamp TIMESTAMP For 4-hour cooldown
+ad_free_pass_expiry TIMESTAMP NULL if not owned, else expiry date
+
+Table: inventory
+
+Field Type Description
+player_id UUID Foreign key
+item_id INT Reference to shop items
+quantity INT Stackable consumables
+
+Table: game_history
+
+Field Type Description
+session_id UUID Primary key
+player_id UUID Foreign key
+difficulty ENUM('easy','medium','hard') 
+category STRING e.g., "Animals"
+correct_answers INT 0-20
+wrong_answers INT 0-20
+max_combo INT Highest combo achieved
+xp_earned INT Total XP from session
+coins_earned INT Total coins from session
+start_time TIMESTAMP 
+end_time TIMESTAMP 
+
+Table: config (Key-Value store for live balancing)
+
+Key Value
+xp_formula_coefficient 1.2
+xp_formula_exponent 1.4
+... (all values from section 2) ...
+
+---
+
