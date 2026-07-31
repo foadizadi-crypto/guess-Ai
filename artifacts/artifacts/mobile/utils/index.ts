@@ -1,5 +1,6 @@
 import { GAME_CONSTANTS } from '@/constants';
-import { MAX_LEVEL, xpToAdvance } from '@/constants/economy';
+import { MAX_LEVEL } from '@/constants/economy';
+import { xpToAdvanceLevel, xpThresholdForLevel, levelFromXP as _levelFromXP } from '@/constants/gameConfig';
 
 // ─── ID generation (no uuid package — crashes on iOS/Android) ──────────────
 
@@ -23,31 +24,21 @@ export const formatTime = (seconds: number): string => {
   return `${s}s`;
 };
 
-// ─── XP / Level — formula: xpToAdvance(L) = 500 + L×150 ───────────────────
-//
-// Cumulative XP to reach level L from level 1:
-//   cumXP(L) = Σ(l=1 to L-1) xpToAdvance(l) = (L-1)×500 + 75×(L-1)×L
-//
-// Closed-form level from total XP (via quadratic formula):
-//   75m² + 575m - totalXP = 0, where m = level - 1
-//   m = (-575 + sqrt(575² + 4×75×totalXP)) / (2×75)
-//   level = floor(m) + 1, clamped to [1, MAX_LEVEL]
+// ─── XP / Level — formula: Round( coefficient × N ^ exponent ) per level N ──
+// All tunables live in gameConfig.ts (GAME_CONFIG).
+// These helpers are thin wrappers so the rest of the codebase doesn't need to
+// import from gameConfig directly.
 
-/** Total XP accumulated when a player first reaches `level`. */
-export const xpAtStartOfLevel = (level: number): number => {
-  if (level <= 1) return 0;
-  return (level - 1) * 500 + 75 * (level - 1) * level;
-};
+/** Total XP accumulated when a player first reaches `level` (level 1 = 0 XP). */
+export const xpAtStartOfLevel = (level: number): number => xpThresholdForLevel(level);
 
-/** Derive the current level from total accumulated XP. */
+/** Derive the current level from total accumulated XP. Clamped to MAX_LEVEL. */
 export const calculateLevel = (totalXP: number): number => {
-  if (totalXP <= 0) return 1;
-  const discriminant = 575 * 575 + 4 * 75 * totalXP; // = 330625 + 300×XP
-  const m = (-575 + Math.sqrt(discriminant)) / 150;
-  return Math.min(Math.max(1, Math.floor(m) + 1), MAX_LEVEL);
+  const level = _levelFromXP(totalXP);
+  return Math.min(Math.max(1, level), MAX_LEVEL);
 };
 
-/** XP earned within the current level (resets each time you level up). */
+/** XP earned within the current level (resets to 0 each time you level up). */
 export const xpInCurrentLevel = (totalXP: number): number => {
   const level = calculateLevel(totalXP);
   return totalXP - xpAtStartOfLevel(level);
@@ -56,7 +47,7 @@ export const xpInCurrentLevel = (totalXP: number): number => {
 /** XP required to advance from `level` to `level + 1`. Returns Infinity at MAX_LEVEL. */
 export const xpForCurrentLevel = (level: number): number => {
   if (level >= MAX_LEVEL) return Infinity;
-  return xpToAdvance(level);
+  return xpToAdvanceLevel(level);
 };
 
 /**

@@ -1,0 +1,53 @@
+5. LEVEL REWARD PACKAGES (FREE LOOT)
+
+All players receive these rewards automatically upon leveling up. They are purely cosmetic or convenience-based, never giving gameplay advantages.
+
+5.1. Reward Schedule (based on new level reached)
+
+Level Range Minor Reward (Every 5 Levels) Major Reward (Every 10 Levels)
+1 – 100 100 Coins + 1 "Error Nullifier" (consumable) 1 Simple Frame + 1 Avatar
+101 – 250 250 Coins + 1 Rare Sticker 1 Game Theme + 1 Silver Badge
+251 – 400 400 Coins + 1 Title (e.g., "Detective") Unlock 1 Category + Entrance Effect
+401 – 500 600 Coins + 1 Legendary Skin Piece 1 Complete Legendary Skin + 1 Animated Frame
+
+Logic: If a level qualifies for both (e.g., level 10, 20, 30...), grant both rewards.
+
+5.2. Consumable Items Granted Free
+
+· Error Nullifier: When used during a session, the next wrong answer will NOT reduce image clarity (single use).
+· These are also sold in the shop (see section 6).
+
+---
+
+6. SHOP SYSTEM (CURRENCIES & ITEMS)
+
+6.1. Currencies
+
+Currency Type Earning Method
+Coins Free Gameplay, level rewards, missions, events.
+Gems Premium Purchased with real money. (Rarely given as event rewards).
+
+6.2. Shop Inventory (Full List)
+
+Category Item Name Effect Price (Coins / Gems)
+Consumables Clarity Bomb Removes 15% of current blur instantly (one session). 200 Coins
+ Combo Shield On wrong answer, combo drops by only 1 tier instead of resetting to 0. 150 Coins
+ Time Boost Adds 20 seconds to the session timer (next session only). 100 Coins
+ 2x Multiplier Doubles Coins & XP for the next 3 complete sessions. 300 Coins
+Utility Early Category Unlock Unlocks a locked category permanently (bypasses level requirement). 1000 Coins or 50 Gems
+Cosmetics (Gems only) Rare Frame Dynamic or golden profile frame. 20 – 150 Gems
+ Environment Theme Changes lobby and game board visual theme. 80 Gems
+ Entrance Effect Special visual effect when starting a session. 40 Gems
+ Sticker/Emoji Pack Emojis for chat or result reactions. 30 Gems
+Special Offers (Real Money) Starter Pack (one-time) 5 Combo Shields + 3 Clarity Bombs + exclusive Silver Frame. $2.00 USD
+ Season Pass (future) Seasonal reward track with exclusive cosmetics. $5.00 USD
+Ad Removal Ad-Free Pass (Lifetime) Grants all rewarded ad bonuses instantly without watching videos (permanent). $4.99 USD
+ Ad-Free Pass (7 days) Same as lifetime, but expires after 7 days. $0.99 USD
+
+6.3. Purchase Logic
+
+· When a consumable is bought, it is added to the player's inventory.
+· Consumables are used before starting a session (except Clarity Bomb, which can be used mid-session).
+· Cosmetics are applied immediately to the player's profile.
+
+---

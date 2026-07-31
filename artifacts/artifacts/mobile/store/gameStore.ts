@@ -4,7 +4,9 @@ import { GAME_CONSTANTS } from '@/constants';
 import { DIFFICULTY_CONFIG, getStartingClarity, getStartingTime, getAvatarAbility, getRevealDelta } from '@/gameEngine';
 import { useUserStore } from '@/store/userStore';
 import { generateId } from '@/utils';
-import { getDifficultyXP, getComboBonus, XP_WRONG } from '@/constants/economy';
+import { getDifficultyXP, XP_WRONG } from '@/constants/economy';
+import { GAME_CONFIG, computeAnswerXP } from '@/constants/gameConfig';
+import { type ConsumableId } from '@/constants/shopData';
 
 // ─── State shape ──────────────────────────────────────────────────────────
 
@@ -31,10 +33,15 @@ interface GameState {
   coinsEarned: number;     // accumulates 1 coin per correct answer during a session
   doubleXPActive: boolean;
   lastGameWasTimedOut: boolean;
-  streak: number;          // consecutive correct answers in this session
+  streak: number;              // consecutive correct answers in this session
+  superComboActive: boolean;   // true once streak reaches super_combo_threshold; 2.5× XP + clarity protection
+  comboShieldActive: boolean;  // wrong answer drops combo 1 tier instead of full reset
+  errorNullifierActive: boolean; // next wrong answer won't reduce clarity
+  timeBoosted: boolean;        // time_boost consumable was applied this session
+  multiplierActive: boolean;   // 2× coins & XP (from multiplier_2x consumable)
   consecutiveWrong: number;
   totalWrong: number;
-  maxStreakThisGame: number; // highest streak reached in this game session
+  maxStreakThisGame: number;   // highest streak reached in this game session
 
   // ─── Actions ────────────────────────────────────────────────────────────
 
@@ -81,6 +88,11 @@ const initialState = {
   doubleXPActive: false,
   lastGameWasTimedOut: false,
   streak: 0,
+  superComboActive: false,
+  comboShieldActive: false,
+  errorNullifierActive: false,
+  timeBoosted: false,
+  multiplierActive: false,
   consecutiveWrong: 0,
   totalWrong: 0,
   maxStreakThisGame: 0,
@@ -122,6 +134,23 @@ export const useGameStore = create<GameState>((set) => ({
   startSession: (difficulty, category) =>
     set(() => {
       const ability = getAvatarAbility(useUserStore.getState().selectedAvatarId);
+      const userState = useUserStore.getState();
+      const consumables = userState.consumables;
+
+      // ── Apply session-start consumables ────────────────────────────────
+      // Time Boost: +20s added to base timer
+      const timeBoosted = consumables.time_boost > 0;
+      const baseTimer   = getStartingTime(ability) + (timeBoosted ? 20 : 0);
+      // Combo Shield, Error Nullifier, 2x Multiplier activate for this session
+      const comboShieldActive    = consumables.combo_shield > 0;
+      const errorNullifierActive = consumables.error_nullifier > 0;
+      const multiplierActive     = userState.multiplierSessionsLeft > 0;
+
+      // Deduct consumables that were activated
+      if (timeBoosted)         userState.useConsumable('time_boost');
+      if (comboShieldActive)   userState.useConsumable('combo_shield');
+      if (errorNullifierActive) userState.useConsumable('error_nullifier');
+
       return {
         gameSession: {
           id: generateId(),
@@ -137,7 +166,7 @@ export const useGameStore = create<GameState>((set) => ({
         score: 0,
         hintsUsed: 0,
         blurAmount: GAME_CONSTANTS.MAX_BLUR - Math.round(getStartingClarity(difficulty, ability) / 5),
-        timer: getStartingTime(ability),
+        timer: baseTimer,
         isTimerRunning: true,
         currentQuestionIndex: 0,
         correctAnswers: 0,
@@ -148,6 +177,11 @@ export const useGameStore = create<GameState>((set) => ({
         doubleXPActive: false,
         lastGameWasTimedOut: false,
         streak: 0,
+        superComboActive: false,
+        comboShieldActive,
+        errorNullifierActive,
+        timeBoosted,
+        multiplierActive,
         consecutiveWrong: 0,
         totalWrong: 0,
         maxStreakThisGame: 0,
@@ -156,38 +190,71 @@ export const useGameStore = create<GameState>((set) => ({
 
   recordAnswer: (correct, points) =>
     set((state) => {
-      const newStreak = correct ? state.streak + 1 : 0;
+      // ── Combo Shield: on wrong answer drop 1 tier instead of full reset ─
+      let newStreak: number;
+      let newComboShieldActive = state.comboShieldActive;
+      if (correct) {
+        newStreak = state.streak + 1;
+      } else if (state.comboShieldActive && state.streak >= GAME_CONFIG.combo_tier_1_min) {
+        // Drop streak to start of previous tier
+        if (state.streak >= GAME_CONFIG.combo_tier_4_min)      newStreak = GAME_CONFIG.combo_tier_3_min;
+        else if (state.streak >= GAME_CONFIG.combo_tier_3_min) newStreak = GAME_CONFIG.combo_tier_2_min;
+        else if (state.streak >= GAME_CONFIG.combo_tier_2_min) newStreak = GAME_CONFIG.combo_tier_1_min;
+        else                                                    newStreak = 0;
+        newComboShieldActive = false; // shield consumed on use
+      } else {
+        newStreak = 0;
+      }
+
       const newConsecutiveWrong = correct ? 0 : state.consecutiveWrong + 1;
-      const newTotalWrong = correct ? state.totalWrong : state.totalWrong + 1;
-      const newMaxStreak = Math.max(state.maxStreakThisGame, newStreak);
+      const newTotalWrong       = correct ? state.totalWrong : state.totalWrong + 1;
+      const newMaxStreak        = Math.max(state.maxStreakThisGame, newStreak);
 
-      // ── XP calculation per spec ─────────────────────────────────────────
-      // Correct: base difficulty XP + combo bonus (applied to new streak)
-      // Wrong:   XP_WRONG (always awarded)
-      const baseXP   = correct ? getDifficultyXP(state.selectedDifficulty) : XP_WRONG;
-      const bonusXP  = correct ? getComboBonus(newStreak) : 0;
-      // XP Sage avatar gives +25% XP (rounded up)
-      const avatarAbility = getAvatarAbility(useUserStore.getState().selectedAvatarId);
-      const xpMultiplier  = avatarAbility === 'xp-sage' ? 1.25 : 1;
-      const questionXP    = Math.ceil((baseXP + bonusXP) * xpMultiplier);
+      // ── Super Combo state ───────────────────────────────────────────────
+      const wasInSuperCombo     = state.superComboActive;
+      const newSuperComboActive = correct
+        ? newStreak >= GAME_CONFIG.super_combo_threshold
+        : false;
 
-      // ── Coin calculation per spec ───────────────────────────────────────
-      // 1 coin per correct answer; Coin Magnet avatar gives +25%
-      const coinMultiplier = avatarAbility === 'coin-magnet' ? 1.25 : 1;
+      // ── XP calculation ──────────────────────────────────────────────────
+      const avatarAbility    = getAvatarAbility(useUserStore.getState().selectedAvatarId);
+      const xpSageMultiplier = avatarAbility === 'xp-sage' ? 1.25 : 1;
+      const sessionXPMult    = state.multiplierActive ? 2 : 1;
+      let questionXP: number;
+      if (correct) {
+        questionXP = Math.ceil(computeAnswerXP(state.selectedDifficulty, newStreak) * xpSageMultiplier * sessionXPMult);
+      } else {
+        questionXP = Math.ceil(XP_WRONG * xpSageMultiplier);
+      }
+
+      // ── Coin calculation ────────────────────────────────────────────────
+      const coinMultiplier = (avatarAbility === 'coin-magnet' ? 1.25 : 1) * (state.multiplierActive ? 2 : 1);
       const questionCoins  = correct ? Math.ceil(1 * coinMultiplier) : 0;
 
-      const revealDelta = getRevealDelta(state.selectedDifficulty, correct);
+      // ── Clarity / blur update ───────────────────────────────────────────
+      // Suppress penalty when: super combo is broken, or error nullifier is active
+      const suppressClarityPenalty = !correct && (wasInSuperCombo || state.errorNullifierActive);
+      const revealDelta = suppressClarityPenalty ? 0 : getRevealDelta(state.selectedDifficulty, correct);
+      // Error Nullifier is consumed after one wrong-answer protection
+      const newErrorNullifierActive = state.errorNullifierActive && (correct || !suppressClarityPenalty || wasInSuperCombo)
+        ? state.errorNullifierActive  // super combo handled it; nullifier still available
+        : !correct && state.errorNullifierActive
+          ? false  // nullifier consumed
+          : state.errorNullifierActive;
 
       return {
-        score: Math.max(0, state.score + points),
-        correctAnswers: state.correctAnswers + (correct ? 1 : 0),
-        clarity: Math.min(100, Math.max(0, state.clarity + revealDelta)),
-        streak: newStreak,
-        consecutiveWrong: newConsecutiveWrong,
-        totalWrong: newTotalWrong,
-        maxStreakThisGame: newMaxStreak,
-        xpEarned: state.xpEarned + questionXP,
-        coinsEarned: state.coinsEarned + questionCoins,
+        score:               Math.max(0, state.score + points),
+        correctAnswers:      state.correctAnswers + (correct ? 1 : 0),
+        clarity:             Math.min(100, Math.max(0, state.clarity + revealDelta)),
+        streak:              newStreak,
+        superComboActive:    newSuperComboActive,
+        comboShieldActive:   newComboShieldActive,
+        errorNullifierActive: newErrorNullifierActive,
+        consecutiveWrong:    newConsecutiveWrong,
+        totalWrong:          newTotalWrong,
+        maxStreakThisGame:   newMaxStreak,
+        xpEarned:            state.xpEarned + questionXP,
+        coinsEarned:         state.coinsEarned + questionCoins,
         gameSession: state.gameSession
           ? {
               ...state.gameSession,

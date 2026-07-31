@@ -2,34 +2,40 @@
 // All economy values live here. Never hardcode these in UI files.
 // Change values here only; never in component files.
 // Reference: BlurQuiz Game Economy & Progression Design Document v1.0
+//
+// ⚠️  Core tunables now live in gameConfig.ts (GAME_CONFIG).
+//     This file re-exports them as named constants so existing imports keep working.
+// ─────────────────────────────────────────────────────────────────────────────
+import {
+  GAME_CONFIG,
+  getComboBonus as _getComboBonus,
+  xpToAdvanceLevel,
+} from './gameConfig';
 
 // ─── XP per answer ──────────────────────────────────────────────────────────
-export const XP_CORRECT_EASY   = 10;
-export const XP_CORRECT_MEDIUM = 15;
-export const XP_CORRECT_HARD   = 25;
-export const XP_WRONG          = 2;   // always awarded; prevents frustration
+export const XP_CORRECT_EASY   = GAME_CONFIG.xp_correct_easy;
+export const XP_CORRECT_MEDIUM = GAME_CONFIG.xp_correct_medium;
+export const XP_CORRECT_HARD   = GAME_CONFIG.xp_correct_hard;
+export const XP_WRONG          = GAME_CONFIG.xp_wrong;
 
 // ─── Game completion bonuses ─────────────────────────────────────────────────
-export const XP_COMPLETION_BONUS = 50;  // every completed 20-question game
-export const XP_PERFECT_BONUS   = 100; // 20/20 correct; stacks with all other XP
+export const XP_COMPLETION_BONUS = GAME_CONFIG.xp_session_complete_bonus;
+export const XP_PERFECT_BONUS   = GAME_CONFIG.xp_perfect_game_bonus;
 
 // ─── Combo thresholds ────────────────────────────────────────────────────────
 // Consecutive correct answers within one session earn bonus XP per question.
 // Bonuses do NOT stack — higher streak tier REPLACES the previous bonus.
 // Combo resets to 0 on any wrong answer.
 export const COMBO_TIERS = [
-  { minStreak: 12, bonusXP: 30 }, // Ultra Combo
-  { minStreak:  8, bonusXP: 20 }, // Super Combo
-  { minStreak:  5, bonusXP: 10 }, // Combo
-  { minStreak:  3, bonusXP:  5 }, // Mini-combo
+  { minStreak: GAME_CONFIG.combo_tier_4_min, bonusXP: GAME_CONFIG.combo_tier_4_bonus }, // Ultra Combo
+  { minStreak: GAME_CONFIG.combo_tier_3_min, bonusXP: GAME_CONFIG.combo_tier_3_bonus }, // Super Combo
+  { minStreak: GAME_CONFIG.combo_tier_2_min, bonusXP: GAME_CONFIG.combo_tier_2_bonus }, // Combo
+  { minStreak: GAME_CONFIG.combo_tier_1_min, bonusXP: GAME_CONFIG.combo_tier_1_bonus }, // Mini-combo
 ] as const;
 
 /** Returns the combo bonus XP for the given consecutive streak. */
 export function getComboBonus(streak: number): number {
-  for (const tier of COMBO_TIERS) {
-    if (streak >= tier.minStreak) return tier.bonusXP;
-  }
-  return 0;
+  return _getComboBonus(streak);
 }
 
 /** Returns base XP for a correct answer based on difficulty. */
@@ -40,13 +46,14 @@ export function getDifficultyXP(difficulty: 'easy' | 'medium' | 'hard'): number 
 }
 
 // ─── Level system ────────────────────────────────────────────────────────────
-// Formula: xpToAdvance(currentLevel) = 500 + currentLevel × 150
-// Level 1→2: 650 XP | Level 50→51: 8,000 XP | Level 99→100: 15,350 XP
-export const MAX_LEVEL = 100;
+// Formula now driven by gameConfig.ts (coefficient × level ^ exponent × 100).
+// max_level: 500 per Final Implementation Prompt (change GAME_CONFIG.max_level to 100
+// if capping at 100 per Economy Patch 1.1.1).
+export const MAX_LEVEL = GAME_CONFIG.max_level;
 
 /** XP required to advance FROM currentLevel TO currentLevel+1. */
 export function xpToAdvance(currentLevel: number): number {
-  return 500 + currentLevel * 150;
+  return xpToAdvanceLevel(currentLevel);
 }
 
 // ─── Coin earning rates ──────────────────────────────────────────────────────

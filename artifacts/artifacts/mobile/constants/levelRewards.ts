@@ -1,24 +1,33 @@
-// ─── Level reward table — data-driven, 100 levels ───────────────────────────
-// Every level earns coins. Milestone levels earn additional named rewards.
+// ─── Level reward table — data-driven, 500 levels ───────────────────────────
+// Spec: Final Implementation Prompt §5 (Level Reward Packages)
+// Minor reward every 5 levels | Major reward every 10 levels
+// If a level is a multiple of 10 it qualifies for BOTH — grant both.
 // UI must read from this table — never hardcode rewards in component files.
-// Reward packages: Bronze (1-30) | Silver (31-60) | Gold (61-90) | Legendary (91-100)
 
 export type RewardItemType =
   | 'coins'
+  | 'avatar'
   | 'avatar_frame'
+  | 'animated_frame'
   | 'title'
   | 'skin'
+  | 'skin_piece'
   | 'badge'
+  | 'silver_badge'
   | 'crown'
+  | 'rare_sticker'
+  | 'game_theme'
+  | 'entrance_effect'
   | 'category_unlock'
-  | 'avatar'
-  | 'animated_frame'
+  | 'error_nullifier'   // consumable: next wrong answer won't reduce clarity
+  | 'legendary_skin'
   | 'extra_coins';
 
 export interface RewardItem {
   type: RewardItemType;
   id: string;
   label: string;
+  quantity?: number;
 }
 
 export type PackageTier = 'bronze' | 'silver' | 'gold' | 'legendary';
@@ -28,80 +37,128 @@ export interface LevelReward {
   coins: number;
   items: RewardItem[];
   packageTier: PackageTier;
+  isMinor: boolean;   // qualifies for minor reward (every 5 levels)
+  isMajor: boolean;   // qualifies for major reward (every 10 levels)
 }
 
+// ─── Tier helpers ─────────────────────────────────────────────────────────────
+
 function tier(level: number): PackageTier {
-  if (level <= 30)  return 'bronze';
-  if (level <= 60)  return 'silver';
-  if (level <= 90)  return 'gold';
+  if (level <= 100) return 'bronze';
+  if (level <= 250) return 'silver';
+  if (level <= 400) return 'gold';
   return 'legendary';
 }
 
-function baseCoins(level: number): number {
-  if (level <= 30)  return 100;
-  if (level <= 60)  return 150;
-  if (level <= 90)  return 200;
-  return 300;
+// ─── Reward schedules by range ────────────────────────────────────────────────
+//
+//  Range     Minor (every 5)                         Major (every 10)
+//  1–100     100 coins + 1 Error Nullifier            1 Simple Frame + 1 Avatar
+//  101–250   250 coins + 1 Rare Sticker               1 Game Theme + 1 Silver Badge
+//  251–400   400 coins + 1 Title                      Unlock 1 Category + Entrance Effect
+//  401–500   600 coins + 1 Legendary Skin Piece       1 Complete Legendary Skin + 1 Animated Frame
+
+function minorCoins(level: number): number {
+  if (level <= 100) return 100;
+  if (level <= 250) return 250;
+  if (level <= 400) return 400;
+  return 600;
 }
 
-// Milestone levels that earn extra coins on top of baseCoins
-const MILESTONE_EXTRA_COINS: Record<number, number> = {
-  10: 200, 20: 200, 25: 200, 30: 200,
-  40: 200, 50: 200, 60: 200, 70: 200,
-  75: 200, 80: 200, 90: 200, 100: 300,
-};
+function minorItems(level: number): RewardItem[] {
+  if (level <= 100) {
+    return [{ type: 'error_nullifier', id: `error_nullifier_l${level}`, label: 'Error Nullifier', quantity: 1 }];
+  }
+  if (level <= 250) {
+    return [{ type: 'rare_sticker', id: `sticker_l${level}`, label: `Rare Sticker #${Math.ceil((level - 100) / 5)}` }];
+  }
+  if (level <= 400) {
+    const titleNum = Math.ceil((level - 250) / 5);
+    const TITLES = [
+      'Detective', 'Analyst', 'Investigator', 'Observer', 'Scout',
+      'Tracker', 'Pathfinder', 'Seeker', 'Explorer', 'Wanderer',
+      'Pursuer', 'Discerner', 'Visionary', 'Perceiver', 'Watcher',
+      'Sage', 'Oracle', 'Prophet', 'Seer', 'Mystic',
+      'Pioneer', 'Trailblazer', 'Voyager', 'Navigator', 'Discoverer',
+      'Scholar', 'Maestro', 'Virtuoso', 'Artisan', 'Curator',
+    ];
+    const title = TITLES[(titleNum - 1) % TITLES.length] ?? 'Legend';
+    return [{ type: 'title', id: `title_l${level}_${title.toLowerCase()}`, label: `Title: ${title}` }];
+  }
+  // 401–500
+  const pieceNum = Math.ceil((level - 400) / 5);
+  return [{ type: 'skin_piece', id: `legendary_piece_${pieceNum}`, label: `Legendary Skin Piece #${pieceNum}` }];
+}
 
-// Milestone items keyed by level
-const MILESTONE_ITEMS: Record<number, RewardItem[]> = {
-  5:   [{ type: 'avatar_frame',   id: 'frame_bronze',       label: 'Bronze Avatar Frame' }],
-  10:  [{ type: 'title',          id: 'title_beginner',     label: 'Title: Beginner Guesser' },
-        { type: 'avatar',         id: 'avatar_bonus_1',     label: 'Bonus Avatar' }],
-  15:  [{ type: 'extra_coins',    id: 'bonus_500',          label: '+500 Bonus Coins' }],
-  20:  [{ type: 'skin',           id: 'skin_dark',          label: 'New Theme Skin' }],
-  25:  [{ type: 'badge',          id: 'badge_25',           label: 'Silver Badge' }],
-  30:  [{ type: 'crown',          id: 'crown_bronze',       label: 'Bronze Crown' }],
-  40:  [{ type: 'category_unlock',id: 'cat_vintage_movies', label: 'New Category: Vintage Movies' }],
-  50:  [{ type: 'avatar_frame',   id: 'frame_silver',       label: 'Silver Frame' },
-        { type: 'title',          id: 'title_observer',     label: 'Exclusive Title' }],
-  60:  [{ type: 'avatar',         id: 'avatar_premium_1',   label: 'Premium Avatar' }],
-  70:  [{ type: 'extra_coins',    id: 'bonus_1500',         label: '+1500 Bonus Coins' }],
-  75:  [{ type: 'badge',          id: 'badge_75',           label: 'Special Gold Badge' }],
-  80:  [{ type: 'category_unlock',id: 'cat_mystery',        label: 'New Category: Mystery Objects' }],
-  90:  [{ type: 'animated_frame', id: 'frame_animated_90',  label: 'Animated Profile Frame' }],
-  100: [{ type: 'crown',          id: 'crown_legendary',    label: 'Legendary Crown' },
-        { type: 'title',          id: 'title_legendary',    label: 'Title: Blur Master' },
-        { type: 'skin',           id: 'skin_legendary',     label: 'Exclusive Legendary Skin' },
-        { type: 'animated_frame', id: 'frame_legendary',    label: 'Animated Legendary Frame' }],
-};
+function majorItems(level: number): RewardItem[] {
+  const n = Math.floor(level / 10); // unique number for this major level
+  if (level <= 100) {
+    return [
+      { type: 'avatar_frame', id: `frame_simple_${n}`, label: `Simple Frame #${n}` },
+      { type: 'avatar',       id: `avatar_l${level}`,  label: `Avatar — Level ${level}` },
+    ];
+  }
+  if (level <= 250) {
+    return [
+      { type: 'game_theme',   id: `theme_${n}`,        label: `Game Theme #${n - 10}` },
+      { type: 'silver_badge', id: `badge_silver_${n}`, label: `Silver Badge #${n - 10}` },
+    ];
+  }
+  if (level <= 400) {
+    return [
+      { type: 'category_unlock', id: `cat_unlock_l${level}`, label: `Category Unlock — Level ${level}` },
+      { type: 'entrance_effect', id: `effect_l${level}`,      label: `Entrance Effect — Level ${level}` },
+    ];
+  }
+  // 401–500
+  return [
+    { type: 'legendary_skin',  id: `legendary_skin_${n}`,  label: `Complete Legendary Skin #${n - 40}` },
+    { type: 'animated_frame',  id: `anim_frame_${n}`,       label: `Animated Frame #${n - 40}` },
+  ];
+}
+
+// ─── Build the full 500-level table ──────────────────────────────────────────
 
 function buildLevelRewards(): LevelReward[] {
   const rewards: LevelReward[] = [];
-  for (let level = 1; level <= 100; level++) {
-    const extraCoins = MILESTONE_EXTRA_COINS[level] ?? 0;
-    const milestoneItems = MILESTONE_ITEMS[level] ?? [];
 
-    // Extra-coins items get converted to actual coins; remove them from items list
-    // and fold into the coins total
-    const realItems = milestoneItems.filter(i => i.type !== 'extra_coins');
-    const extraCoinItems = milestoneItems.filter(i => i.type === 'extra_coins');
-    const extraFromItems = extraCoinItems.reduce((sum, item) => {
-      // e.g. id='bonus_500' → 500 coins
-      const match = item.id.match(/bonus_(\d+)/);
-      return sum + (match ? parseInt(match[1]!, 10) : 0);
-    }, 0);
+  for (let level = 1; level <= 500; level++) {
+    const isMinor = level % 5 === 0;
+    const isMajor = level % 10 === 0;
+
+    let coins = 0;
+    const items: RewardItem[] = [];
+
+    if (isMinor) {
+      coins += minorCoins(level);
+      items.push(...minorItems(level));
+    }
+
+    if (isMajor) {
+      items.push(...majorItems(level));
+    }
 
     rewards.push({
       level,
-      coins: baseCoins(level) + extraCoins + extraFromItems,
-      items: realItems,
+      coins,
+      items,
       packageTier: tier(level),
+      isMinor,
+      isMajor,
     });
   }
+
   return rewards;
 }
 
 export const LEVEL_REWARDS: LevelReward[] = buildLevelRewards();
 
+/** Returns the reward entry for a given level (undefined if no reward at that level). */
 export function getLevelReward(level: number): LevelReward | undefined {
   return LEVEL_REWARDS.find(r => r.level === level);
+}
+
+/** Returns true if a given level has any reward (minor or major). */
+export function hasLevelReward(level: number): boolean {
+  return level % 5 === 0 && level >= 5 && level <= 500;
 }

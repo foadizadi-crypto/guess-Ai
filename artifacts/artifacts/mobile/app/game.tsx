@@ -58,6 +58,7 @@ export default function GameScreen() {
   const endSession = useGameStore((s) => s.endSession);
   const resetGame = useGameStore((s) => s.resetGame);
   const streak = useGameStore((s) => s.streak);
+  const superComboActive = useGameStore((s) => s.superComboActive);
   const consecutiveWrong = useGameStore((s) => s.consecutiveWrong);
   const totalWrong = useGameStore((s) => s.totalWrong);
   const blurAmount = useGameStore((s) => s.blurAmount);
@@ -184,11 +185,11 @@ export default function GameScreen() {
       const points = correct ? calculateAnswerScore(difficulty, timer, getAvatarAbility(selectedAvatarId), streak) : 0;
       // Compute new streak locally to act on it immediately (before store update)
       const newStreak = correct ? streak + 1 : 0;
-      // Super Combo: every 10th consecutive correct answer → +10s
-      if (correct && newStreak > 0 && newStreak % 10 === 0) {
-        setTimer(Math.min(180, timer + 10));
+      // Super Combo activates when streak first reaches super_combo_threshold (15).
+      // Show the announcement once on activation; no time bonus (spec §3.4).
+      if (correct && !superComboActive && newStreak >= 15) {
         setSuperComboVisible(true);
-        setTimeout(() => setSuperComboVisible(false), 2000);
+        setTimeout(() => setSuperComboVisible(false), 2500);
         playEffect('coin');
       }
       setSelectedAnswer(answerIndex);
@@ -367,16 +368,16 @@ export default function GameScreen() {
               </View>
               {/* Combo / Super Combo — top-right corner */}
               {streak >= 3 && (
-                <View style={[styles.streakBadge, streak >= 10 && styles.superComboBadge]}>
-                  <Text style={[styles.streakText, streak >= 10 && styles.superComboText]}>
-                    {streak >= 10 ? `⚡ ${streak}x SUPER` : `🔥 ${streak}x COMBO`}
+                <View style={[styles.streakBadge, superComboActive && styles.superComboBadge]}>
+                  <Text style={[styles.streakText, superComboActive && styles.superComboText]}>
+                    {superComboActive ? `⚡ ${streak}x SUPER` : `🔥 ${streak}x COMBO`}
                   </Text>
                 </View>
               )}
-              {/* Super Combo announcement overlay */}
+              {/* Super Combo announcement overlay — fires once on activation */}
               {superComboVisible && (
                 <View style={styles.superComboAnnounce}>
-                  <Text style={styles.superComboAnnounceText}>⚡ SUPER COMBO! +10s</Text>
+                  <Text style={styles.superComboAnnounceText}>⚡ SUPER COMBO! ×2.5 XP</Text>
                 </View>
               )}
             </Animated.View>

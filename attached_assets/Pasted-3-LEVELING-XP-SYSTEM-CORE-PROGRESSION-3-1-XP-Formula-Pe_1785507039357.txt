@@ -1,0 +1,72 @@
+3. LEVELING & XP SYSTEM (CORE PROGRESSION)
+
+3.1. XP Formula (Per Level Requirement)
+
+The XP required to advance from Level N to N+1 is calculated as:
+RequiredXP(N) = Round( Config.xp_base_formula_coefficient × (N ^ Config.xp_base_formula_exponent) )
+
+· Example: Level 1 → 2 XP, Level 50 → 286 XP, Level 500 → 7,200 XP.
+· Total XP from Level 1 to 500 ≈ 1,510,000 XP (for reference).
+
+3.2. XP Earning Sources (Per Question/Session)
+
+Action XP Earned
+Correct Answer (Easy) Config.xp_correct_easy
+Correct Answer (Medium) Config.xp_correct_medium
+Correct Answer (Hard) Config.xp_correct_hard
+Wrong Answer (Any difficulty) Config.xp_wrong (always given)
+Session Completion (20 questions) Config.xp_session_complete_bonus (added once)
+Perfect Game (20/20 correct) Config.xp_perfect_game_bonus (stacked on top of session bonus)
+
+3.3. Combo Bonus (Additive to Per-Question XP)
+
+Based on consecutive correct answers within one session:
+
+Consecutive Correct Answers Bonus XP per Question
+combo_tier_1_min to combo_tier_1_max combo_tier_1_bonus
+combo_tier_2_min to combo_tier_2_max combo_tier_2_bonus
+combo_tier_3_min to combo_tier_3_max combo_tier_3_bonus
+combo_tier_4_min and above combo_tier_4_bonus
+
+Combo Rules:
+
+· A wrong answer resets the combo counter to 0.
+· The base XP for that wrong answer (Config.xp_wrong) is still awarded.
+· The combo bonus is calculated and added per question at the moment of answering correctly.
+
+3.4. Super Combo System
+
+· Trigger: super_combo_threshold (15) consecutive correct answers.
+· Effect: The final XP multiplier for all subsequent correct answers becomes super_combo_multiplier (2.5x) until the combo is broken.
+· Protection: If a wrong answer occurs during Super Combo:
+  · The combo counter resets to 0.
+  · Super Combo state ends.
+  · Image clarity does NOT decrease for that wrong answer (no penalty).
+· The Super Combo state is visually indicated on the HUD.
+
+---
+
+4. IMAGE CLARITY / BLUR MECHANIC
+
+4.1. Initial Blur Percentage
+
+· Easy: initial_blur_easy (50% blurred, 50% visible).
+· Medium: initial_blur_medium (80% blurred, 20% visible).
+· Hard: initial_blur_hard (100% blurred, completely hidden).
+
+4.2. Dynamic Clarity Formula (Per Session)
+
+Current Clarity (%) = (Correct Answers × clarity_correct_increment) - (Wrong Answers × Difficulty Modifier)
+
+· clarity_correct_increment = 5% per correct answer.
+· Difficulty Modifiers:
+  · Easy: clarity_wrong_penalty_easy (3%)
+  · Medium: clarity_wrong_penalty_medium (5%)
+  · Hard: clarity_wrong_penalty_hard (7%)
+
+Example (Hard): 4 wrong answers = -28% clarity. The player must answer 6 questions correctly just to break even.
+
+Clarity UI: Display as a progress bar or percentage number that updates in real-time after each answer.
+
+---
+

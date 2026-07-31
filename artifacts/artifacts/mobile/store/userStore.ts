@@ -14,6 +14,7 @@ import type {
 } from '@/types';
 import { ACHIEVEMENTS, DEFAULT_AVATARS, DAILY_REWARDS, DEFAULT_POWER_UPS } from '@/constants';
 import { getLevelReward } from '@/constants/levelRewards';
+import { type ConsumableId, CONSUMABLE_PRICES } from '@/constants/shopData';
 import { getDailyMissions, getTodayUTC, type MissionType } from '@/constants/missions';
 import {
   DAILY_XP_CAP,
@@ -27,16 +28,29 @@ import { calculateLevel, isToday, getTodayUTCString } from '@/utils';
 
 // ─── State shape ──────────────────────────────────────────────────────────
 
+export type ConsumableInventory = Record<ConsumableId, number>;
+
+const DEFAULT_CONSUMABLES: ConsumableInventory = {
+  clarity_bomb:     0,
+  combo_shield:     0,
+  time_boost:       0,
+  multiplier_2x:    0,
+  error_nullifier:  0,
+};
+
 interface UserState {
   // Profile
   username: string;
   coins: number;
+  gems: number;                         // premium currency (purchased with real money)
   xp: number;
   level: number;
   isPremium: boolean;
   selectedAvatarId: string;
   avatars: Avatar[];
   powerUps: PowerUpInventory;
+  consumables: ConsumableInventory;     // new consumable items (§6)
+  multiplierSessionsLeft: number;       // remaining sessions for the 2× multiplier
   avatarFragments: number;
 
   // Progress
@@ -62,11 +76,17 @@ interface UserState {
   setUsername: (username: string) => void;
   addCoins: (amount: number) => void;
   spendCoins: (amount: number) => boolean;
+  addGems: (amount: number) => void;
+  spendGems: (amount: number) => boolean;
   addXP: (amount: number) => void;
   unlockAvatar: (avatarId: string) => boolean;
   selectAvatar: (avatarId: string) => void;
   buyPowerUp: (powerUpId: PowerUpId, quantity?: number) => boolean;
   usePowerUp: (powerUpId: PowerUpId) => boolean;
+  buyConsumable: (id: ConsumableId, quantity?: number) => boolean;
+  useConsumable: (id: ConsumableId) => boolean;
+  addConsumable: (id: ConsumableId, quantity?: number) => void; // free grants (level rewards)
+  decrementMultiplierSession: () => void;
   mockPurchaseCoins: (amount: number) => void;
   updateBestScore: (score: number) => void;
   claimDailyReward: () => number;
@@ -116,12 +136,15 @@ export const useUserStore = create<UserState>()(
     (set, get) => ({
       username: '',
       coins: 500,
+      gems: 0,
       xp: 0,
       level: 1,
       isPremium: false,
       selectedAvatarId: 'avatar_1',
       avatars: DEFAULT_AVATARS.map((a) => ({ ...a })),
       powerUps: { ...DEFAULT_POWER_UPS },
+      consumables: { ...DEFAULT_CONSUMABLES },
+      multiplierSessionsLeft: 0,
       avatarFragments: 0,
       bestScore: 0,
       dailyReward: { ...defaultDailyReward },
@@ -153,6 +176,59 @@ export const useUserStore = create<UserState>()(
         set({ coins: coins - amount });
         return true;
       },
+
+      addGems: (amount) => set((state) => ({ gems: state.gems + amount })),
+
+      spendGems: (amount) => {
+        const { gems } = get();
+        if (gems < amount) return false;
+        set({ gems: gems - amount });
+        return true;
+      },
+
+      // ── Consumables ────────────────────────────────────────────────────
+
+      buyConsumable: (id, quantity = 1) => {
+        const price = CONSUMABLE_PRICES[id];
+        if (price === undefined) return false;
+        const cost = price * quantity;
+        const { coins } = get();
+        if (coins < cost) return false;
+        set((state) => ({
+          coins: state.coins - cost,
+          consumables: {
+            ...state.consumables,
+            [id]: state.consumables[id] + quantity,
+          },
+        }));
+        return true;
+      },
+
+      useConsumable: (id) => {
+        if (get().consumables[id] < 1) return false;
+        set((state) => ({
+          consumables: {
+            ...state.consumables,
+            [id]: Math.max(0, state.consumables[id] - 1),
+          },
+          // Activate multiplier sessions when multiplier_2x is used
+          ...(id === 'multiplier_2x' ? { multiplierSessionsLeft: state.multiplierSessionsLeft + 3 } : {}),
+        }));
+        return true;
+      },
+
+      addConsumable: (id, quantity = 1) =>
+        set((state) => ({
+          consumables: {
+            ...state.consumables,
+            [id]: state.consumables[id] + quantity,
+          },
+        })),
+
+      decrementMultiplierSession: () =>
+        set((state) => ({
+          multiplierSessionsLeft: Math.max(0, state.multiplierSessionsLeft - 1),
+        })),
 
       // ── XP with daily cap + level-up detection ─────────────────────────
 
@@ -324,9 +400,16 @@ export const useUserStore = create<UserState>()(
         const reward = getLevelReward(level);
         if (!reward) return false;
 
+        // Tally up any free consumables included in this reward
+        const nullifiersGranted = reward.items.filter(i => i.type === 'error_nullifier')
+          .reduce((sum, i) => sum + (i.quantity ?? 1), 0);
+
         set((state) => ({
           coins: state.coins + reward.coins,
           unclaimedLevelRewards: state.unclaimedLevelRewards.filter((l) => l !== level),
+          consumables: nullifiersGranted > 0
+            ? { ...state.consumables, error_nullifier: state.consumables.error_nullifier + nullifiersGranted }
+            : state.consumables,
           statistics: {
             ...state.statistics,
             totalCoinsEarned: state.statistics.totalCoinsEarned + reward.coins,
@@ -414,12 +497,15 @@ export const useUserStore = create<UserState>()(
         set({
           username: '',
           coins: 500,
+          gems: 0,
           xp: 0,
           level: 1,
           isPremium: false,
           selectedAvatarId: 'avatar_1',
           avatars: DEFAULT_AVATARS.map((a) => ({ ...a })),
           powerUps: { ...DEFAULT_POWER_UPS },
+          consumables: { ...DEFAULT_CONSUMABLES },
+          multiplierSessionsLeft: 0,
           avatarFragments: 0,
           bestScore: 0,
           dailyReward: { ...defaultDailyReward },
@@ -445,18 +531,21 @@ export const useUserStore = create<UserState>()(
             ...avatar,
             ...(saved.avatars ?? []).find((item) => item.id === avatar.id),
           })),
-          powerUps: { ...DEFAULT_POWER_UPS, ...(saved.powerUps ?? {}) },
-          dailyReward: { ...defaultDailyReward, ...(saved.dailyReward ?? {}) },
-          statistics: { ...defaultStatistics, ...(saved.statistics ?? {}) },
+          powerUps:   { ...DEFAULT_POWER_UPS,    ...(saved.powerUps   ?? {}) },
+          consumables: { ...DEFAULT_CONSUMABLES, ...(saved.consumables ?? {}) },
+          dailyReward:  { ...defaultDailyReward,  ...(saved.dailyReward  ?? {}) },
+          statistics:   { ...defaultStatistics,   ...(saved.statistics   ?? {}) },
           achievements: saved.achievements?.length
             ? saved.achievements
             : ACHIEVEMENTS.map((a) => ({ ...a, unlocked: false, unlockedAt: null })),
-          unclaimedLevelRewards: saved.unclaimedLevelRewards ?? [],
-          missions: saved.missions ?? [],
-          missionsDate: saved.missionsDate ?? null,
-          dailyXPEarned: saved.dailyXPEarned ?? 0,
-          dailyXPDate: saved.dailyXPDate ?? null,
-          isPremium: saved.isPremium ?? false,
+          gems:                    saved.gems                    ?? 0,
+          multiplierSessionsLeft:  saved.multiplierSessionsLeft  ?? 0,
+          unclaimedLevelRewards:   saved.unclaimedLevelRewards   ?? [],
+          missions:                saved.missions                 ?? [],
+          missionsDate:            saved.missionsDate             ?? null,
+          dailyXPEarned:           saved.dailyXPEarned            ?? 0,
+          dailyXPDate:             saved.dailyXPDate              ?? null,
+          isPremium:               saved.isPremium                ?? false,
         };
       },
     },
