@@ -10,14 +10,15 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
-import { ACHIEVEMENTS, CATEGORIES, GAME_CONSTANTS } from '@/constants';
-import { calculateXPProgress, formatScore } from '@/utils';
+import { ACHIEVEMENTS } from '@/constants';
+import { calculateXPProgress, formatScore, xpInCurrentLevel, xpForCurrentLevel } from '@/utils';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { username, coins, xp, level, selectedAvatarId, avatars, statistics } = useUserStore();
   const currentAvatar = avatars.find((avatar) => avatar.id === selectedAvatarId);
-  const xpInLevel = xp % GAME_CONSTANTS.XP_PER_LEVEL;
+  const xpInLevel  = xpInCurrentLevel(xp);
+  const xpLevelCap = xpForCurrentLevel(level);
   const winRate = statistics.totalGamesPlayed ? Math.round((statistics.totalWins / statistics.totalGamesPlayed) * 100) : 0;
   const topPad = Platform.OS === 'web' ? 62 : insets.top + 12;
   const bottomPad = Platform.OS === 'web' ? 28 : insets.bottom + 24;
@@ -48,7 +49,7 @@ export default function ProfileScreen() {
           <Text style={styles.username}>{username || 'Player'}</Text>
           <CoinDisplay amount={coins} size="medium" animate />
           <View style={styles.xpWrap}>
-            <View style={styles.xpLabels}><Text style={styles.muted}>Level {level}</Text><Text style={styles.xpText}>{xpInLevel} / {GAME_CONSTANTS.XP_PER_LEVEL} XP</Text></View>
+            <View style={styles.xpLabels}><Text style={styles.muted}>Level {level}</Text><Text style={styles.xpText}>{xpInLevel} / {xpLevelCap === Infinity ? '∞' : xpLevelCap} XP</Text></View>
             <ProgressBar progress={calculateXPProgress(xp)} height={7} animated />
           </View>
         </View>
@@ -78,7 +79,7 @@ export default function ProfileScreen() {
             );
           })}
         </View>
-        <Text style={styles.footerNote}>{CATEGORIES.length} categories mastered one blurred image at a time.</Text>
+        <Text style={styles.footerNote}>15 categories · one blurred image at a time.</Text>
       </ScrollView>
     </AnimatedBackground>
   );

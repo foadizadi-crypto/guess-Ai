@@ -104,15 +104,15 @@ export interface UserSettings {
 
 // ─── Shop ──────────────────────────────────────────────────────────────────
 
-export type PowerUpId = 'extra-time' | 'fifty-fifty' | 'skip-question' | 'double-coins';
+export type PowerUpId = 'hint' | 'reveal-blur' | 'skip-question' | 'double-xp';
 
 export type ShopItemType = 'hint' | 'avatar' | 'powerup' | 'removeAds';
 
 export interface PowerUpInventory {
-  'extra-time': number;
-  'fifty-fifty': number;
+  'hint': number;
+  'reveal-blur': number;
   'skip-question': number;
-  'double-coins': number;
+  'double-xp': number;
 }
 
 export interface Achievement {
@@ -120,6 +120,8 @@ export interface Achievement {
   title: string;
   description: string;
   icon: string;
+  unlocked?: boolean;
+  unlockedAt?: string | null;
 }
 
 export interface ShopItem {
@@ -130,6 +132,38 @@ export interface ShopItem {
   type: ShopItemType;
   quantity: number;
   iconKey: string;
+}
+
+// ─── Missions ─────────────────────────────────────────────────────────────
+
+export type MissionType =
+  | 'play_games'
+  | 'correct_answers'
+  | 'complete_hard'
+  | 'get_combo'
+  | 'perfect_game'
+  | 'use_powerup'
+  | 'play_category';
+
+export interface ActiveMission {
+  id: string;
+  type: MissionType;
+  label: string;
+  description: string;
+  target: number;
+  progress: number;
+  reward: number;
+  completed: boolean;
+  rewardClaimed: boolean;
+  param?: string;
+}
+
+// ─── Level rewards ────────────────────────────────────────────────────────
+
+export interface LevelUpResult {
+  newLevel: number;
+  coinsAwarded: number;
+  items: Array<{ type: string; id: string; label: string }>;
 }
 
 // ─── Leaderboard ───────────────────────────────────────────────────────────

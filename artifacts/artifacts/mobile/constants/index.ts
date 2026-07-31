@@ -1,4 +1,5 @@
-import type { ShopItem, Avatar, LeaderboardEntry, PowerUpId } from '@/types';
+import type { ShopItem, Avatar, LeaderboardEntry, PowerUpId, PowerUpInventory } from '@/types';
+import { POWER_UP_PRICES } from '@/constants/economy';
 
 // ─── Game rules ────────────────────────────────────────────────────────────
 
@@ -18,6 +19,7 @@ export const GAME_CONSTANTS = {
   COINS_PER_WIN: 50,
   HINT_COST_COINS: 10,
   XP_PER_WIN: 100,
+  // XP_PER_LEVEL kept for backward compat but level logic now uses economy.ts formula
   XP_PER_LEVEL: 1000,
   DAILY_REWARD_BASE: 100,
   DAILY_REWARD_STREAK_BONUS: 50,
@@ -104,6 +106,9 @@ export const SHOP_ITEMS: ShopItem[] = [
   },
 ];
 
+// ─── Power-ups — prices from economy.ts ───────────────────────────────────
+// Prices are read from economy.ts; only name/description/icon live here.
+
 export const POWER_UPS: Array<{
   id: PowerUpId;
   name: string;
@@ -111,18 +116,43 @@ export const POWER_UPS: Array<{
   cost: number;
   icon: string;
 }> = [
-  { id: 'extra-time', name: 'Extra Time', description: '+15 seconds in the current game', cost: 75, icon: 'time-outline' },
-  { id: 'fifty-fifty', name: '50/50', description: 'Remove two wrong answers', cost: 100, icon: 'contrast-outline' },
-  { id: 'skip-question', name: 'Skip Question', description: 'Move past a tricky image', cost: 125, icon: 'play-skip-forward-outline' },
-  { id: 'double-coins', name: 'Double Coins', description: 'Double your game reward once', cost: 175, icon: 'logo-bitcoin' },
+  {
+    id: 'hint',
+    name: 'Hint',
+    description: 'Shows the first letter of the answer',
+    cost: POWER_UP_PRICES['hint'],
+    icon: 'bulb-outline',
+  },
+  {
+    id: 'reveal-blur',
+    name: 'Reveal Blur',
+    description: 'Removes one blur layer instantly',
+    cost: POWER_UP_PRICES['reveal-blur'],
+    icon: 'eye-outline',
+  },
+  {
+    id: 'skip-question',
+    name: 'Skip Question',
+    description: 'Move past a tricky image with no XP penalty',
+    cost: POWER_UP_PRICES['skip-question'],
+    icon: 'play-skip-forward-outline',
+  },
+  {
+    id: 'double-xp',
+    name: 'Double XP',
+    description: 'Double XP earned for the next 30 minutes',
+    cost: POWER_UP_PRICES['double-xp'],
+    icon: 'flash-outline',
+  },
 ];
 
+// ─── Coin packages — spec pricing ─────────────────────────────────────────
+
 export const COIN_PACKAGES = [
-  { id: 'coins-100', amount: 100, price: '$0.99' },
-  { id: 'coins-500', amount: 500, price: '$3.99' },
-  { id: 'coins-1200', amount: 1200, price: '$7.99' },
-  { id: 'coins-2500', amount: 2500, price: '$14.99' },
-  { id: 'coins-5000', amount: 5000, price: '$24.99' },
+  { id: 'coins-100',  amount:  100, price: '$0.99' },
+  { id: 'coins-500',  amount:  600, price: '$4.99' },
+  { id: 'coins-1200', amount: 1500, price: '$9.99' },
+  { id: 'coins-2500', amount: 3500, price: '$19.99' },
 ] as const;
 
 // ─── Mock leaderboard ──────────────────────────────────────────────────────
@@ -144,21 +174,39 @@ export const MOCK_LEADERBOARD: LeaderboardEntry[] = LEADERBOARD_NAMES.map((usern
   level: Math.max(2, 15 - Math.floor(index / 4)),
 }));
 
+// ─── Daily rewards — spec schedule ────────────────────────────────────────
+// Cycle: days 1-7 repeat. Milestones (14, 30) fire on those exact streak days.
+
 export const DAILY_REWARDS = [
-  { day: 1, label: '50 coins', coins: 50, icon: 'logo-bitcoin' as const },
-  { day: 2, label: '100 coins', coins: 100, icon: 'logo-bitcoin' as const },
-  { day: 3, label: '150 coins', coins: 150, icon: 'logo-bitcoin' as const },
-  { day: 4, label: 'Avatar Fragment', coins: 0, icon: 'diamond-outline' as const },
-  { day: 5, label: '200 coins', coins: 200, icon: 'logo-bitcoin' as const },
-  { day: 6, label: '300 coins', coins: 300, icon: 'logo-bitcoin' as const },
-  { day: 7, label: 'Legendary Chest', coins: 500, icon: 'gift-outline' as const },
+  { day: 1, label: '15 coins',        coins: 15,  icon: 'logo-bitcoin'  as const },
+  { day: 2, label: '30 coins',        coins: 30,  icon: 'logo-bitcoin'  as const },
+  { day: 3, label: '30 coins + Hint', coins: 30,  icon: 'bulb-outline'  as const },
+  { day: 4, label: '60 coins',        coins: 60,  icon: 'logo-bitcoin'  as const },
+  { day: 5, label: '80 coins',        coins: 80,  icon: 'logo-bitcoin'  as const },
+  { day: 6, label: '100 coins',       coins: 100, icon: 'logo-bitcoin'  as const },
+  { day: 7, label: '150 coins + Reveal', coins: 150, icon: 'gift-outline' as const },
 ] as const;
 
+// ─── Default power-up inventory ────────────────────────────────────────────
+
+export const DEFAULT_POWER_UPS: PowerUpInventory = {
+  'hint': 3,           // starter pack: 3 hints
+  'reveal-blur': 3,    // starter pack: 3 reveals
+  'skip-question': 0,
+  'double-xp': 0,
+};
+
+// ─── Achievements — spec-driven pool ──────────────────────────────────────
+
 export const ACHIEVEMENTS = [
-  { id: 'first-win', title: 'First Win', description: 'Win your first game', icon: 'trophy-outline' as const },
-  { id: 'sharp-eye', title: 'Sharp Eye', description: 'Get 10 correct answers', icon: 'eye-outline' as const },
-  { id: 'streak-master', title: 'Streak Master', description: 'Reach a 7 game streak', icon: 'flame-outline' as const },
-  { id: 'collector', title: 'Collector', description: 'Own 5 avatars', icon: 'people-outline' as const },
-  { id: 'high-roller', title: 'High Roller', description: 'Earn 1,000 coins', icon: 'cash-outline' as const },
-  { id: 'quiz-veteran', title: 'Quiz Veteran', description: 'Play 25 games', icon: 'medal-outline' as const },
+  { id: 'first-win',      title: 'First Win',       description: 'Win your first game',             icon: 'trophy-outline'        as const },
+  { id: 'sharp-eye',      title: 'Sharp Eye',        description: 'Get 10 correct answers',          icon: 'eye-outline'           as const },
+  { id: 'streak-master',  title: 'Streak Master',    description: 'Reach a 7-answer combo streak',   icon: 'flame-outline'         as const },
+  { id: 'collector',      title: 'Collector',        description: 'Own 5 avatars',                   icon: 'people-outline'        as const },
+  { id: 'high-roller',    title: 'High Roller',      description: 'Earn 1,000 coins total',          icon: 'cash-outline'          as const },
+  { id: 'quiz-veteran',   title: 'Quiz Veteran',     description: 'Play 25 games',                   icon: 'medal-outline'         as const },
+  { id: 'perfect-game',   title: 'Perfect Game',     description: 'Score 20/20 in a game',           icon: 'star-outline'          as const },
+  { id: 'combo-king',     title: 'Combo King',       description: 'Reach a 12-answer Ultra Combo',   icon: 'flash-outline'         as const },
+  { id: 'century',        title: 'Century',          description: 'Answer 100 questions correctly',  icon: 'checkmark-circle-outline' as const },
+  { id: 'dedicated',      title: 'Dedicated',        description: 'Play 7 days in a row',            icon: 'calendar-outline'      as const },
 ] as const;

@@ -1,4 +1,5 @@
 import { GAME_CONSTANTS } from '@/constants';
+import { MAX_LEVEL, xpToAdvance } from '@/constants/economy';
 
 // ─── ID generation (no uuid package — crashes on iOS/Android) ──────────────
 
@@ -22,13 +23,53 @@ export const formatTime = (seconds: number): string => {
   return `${s}s`;
 };
 
-// ─── XP / Level ────────────────────────────────────────────────────────────
+// ─── XP / Level — formula: xpToAdvance(L) = 500 + L×150 ───────────────────
+//
+// Cumulative XP to reach level L from level 1:
+//   cumXP(L) = Σ(l=1 to L-1) xpToAdvance(l) = (L-1)×500 + 75×(L-1)×L
+//
+// Closed-form level from total XP (via quadratic formula):
+//   75m² + 575m - totalXP = 0, where m = level - 1
+//   m = (-575 + sqrt(575² + 4×75×totalXP)) / (2×75)
+//   level = floor(m) + 1, clamped to [1, MAX_LEVEL]
 
-export const calculateLevel = (xp: number): number =>
-  Math.floor(xp / GAME_CONSTANTS.XP_PER_LEVEL) + 1;
+/** Total XP accumulated when a player first reaches `level`. */
+export const xpAtStartOfLevel = (level: number): number => {
+  if (level <= 1) return 0;
+  return (level - 1) * 500 + 75 * (level - 1) * level;
+};
 
-export const calculateXPProgress = (xp: number): number =>
-  (xp % GAME_CONSTANTS.XP_PER_LEVEL) / GAME_CONSTANTS.XP_PER_LEVEL;
+/** Derive the current level from total accumulated XP. */
+export const calculateLevel = (totalXP: number): number => {
+  if (totalXP <= 0) return 1;
+  const discriminant = 575 * 575 + 4 * 75 * totalXP; // = 330625 + 300×XP
+  const m = (-575 + Math.sqrt(discriminant)) / 150;
+  return Math.min(Math.max(1, Math.floor(m) + 1), MAX_LEVEL);
+};
+
+/** XP earned within the current level (resets each time you level up). */
+export const xpInCurrentLevel = (totalXP: number): number => {
+  const level = calculateLevel(totalXP);
+  return totalXP - xpAtStartOfLevel(level);
+};
+
+/** XP required to advance from `level` to `level + 1`. Returns Infinity at MAX_LEVEL. */
+export const xpForCurrentLevel = (level: number): number => {
+  if (level >= MAX_LEVEL) return Infinity;
+  return xpToAdvance(level);
+};
+
+/**
+ * Progress within the current level as a value in [0, 1].
+ * Used by the XP progress bar.
+ */
+export const calculateXPProgress = (totalXP: number): number => {
+  const level = calculateLevel(totalXP);
+  if (level >= MAX_LEVEL) return 1;
+  const xpInLevel = xpInCurrentLevel(totalXP);
+  const xpNeeded  = xpForCurrentLevel(level);
+  return Math.min(1, xpInLevel / xpNeeded);
+};
 
 // ─── Score ─────────────────────────────────────────────────────────────────
 
@@ -54,6 +95,10 @@ export const isToday = (dateStr: string | null): boolean => {
     date.getFullYear() === today.getFullYear()
   );
 };
+
+/** Returns the current UTC date as YYYY-MM-DD. */
+export const getTodayUTCString = (): string =>
+  new Date().toISOString().split('T')[0]!;
 
 // ─── Math helpers ──────────────────────────────────────────────────────────
 

@@ -36,7 +36,7 @@ import { useUserStore } from '@/store/userStore';
 import { useAdStore } from '@/store/adStore';
 import { useAudio } from '@/hooks/useAudio';
 import { ROUTES } from '@/navigation/routes';
-import { calculateXPProgress, formatScore, isToday } from '@/utils';
+import { calculateXPProgress, formatScore, isToday, xpInCurrentLevel, xpForCurrentLevel } from '@/utils';
 import { GAME_CONSTANTS } from '@/constants';
 
 // ─── Sub-components ───────────────────────────────────────────────────────
@@ -133,7 +133,8 @@ export default function LobbyScreen() {
   );
 
   const xpProgress = calculateXPProgress(xp);
-  const xpInLevel = xp % GAME_CONSTANTS.XP_PER_LEVEL;
+  const xpInLevel = xpInCurrentLevel(xp);
+  const xpLevelCap = xpForCurrentLevel(level);
 
   const [dailyModalVisible, setDailyModalVisible] = useState(false);
   const [dailyClaimed, setDailyClaimed] = useState(isToday(dailyReward.lastClaimed));
@@ -311,7 +312,7 @@ export default function LobbyScreen() {
 
                 <View style={styles.xpRow}>
                   <Text style={styles.xpLabel}>Level {level}</Text>
-                  <Text style={styles.xpVal}>{xpInLevel}/{GAME_CONSTANTS.XP_PER_LEVEL} XP</Text>
+                  <Text style={styles.xpVal}>{xpInLevel}/{xpLevelCap === Infinity ? '∞' : xpLevelCap} XP</Text>
                 </View>
 
                 <ProgressBar

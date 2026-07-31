@@ -1,0 +1,228 @@
+BlurQuiz — Game Economy & Progression Design Document
+Version 1.0 — Production Implementation Specification
+Purpose
+This document is the single source of truth for BlurQuiz economy, progression, rewards, monetization, and retention systems.
+The goal is to create a healthy long-term mobile game economy where:
+• Players feel constant progress.
+• Casual players are not left behind.
+• Hardcore players have long-term goals.
+• Monetization exists without Pay-to-Win.
+• Progression feels rewarding, achievable, and enjoyable.
+Do not modify economy values without balance testing.
+1. Core Game Loop
+The player loop:
+• Start game
+• Answer 20 blurred image questions
+• Earn: 
+• XP
+• Coins
+• Achievements
+• Progress toward rewards
+• Level up
+• Unlock cosmetics/features
+• Return for daily missions and challenges
+The game should encourage daily play without creating frustration.
+2. XP System
+XP Per Question
+ActionXPEasy correct answer10 XPMedium correct answer15 XPHard correct answer25 XPWrong answer2 XP 
+Wrong answers still give a small reward to avoid player frustration.
+3. Game Completion Rewards
+Every completed 20-question game:
++50 XP completion bonus
+Perfect game (20/20):
++100 XP bonus
+4. Combo System
+Combo rewards consecutive correct answers.
+StreakBonus XP3-4 answers+5 XP/question5-7 answers+10 XP/question8-11 answers+20 XP/question12+ answers+30 XP/question 
+Rules:
+• Combo resets after wrong answer.
+• Bonuses do not stack.
+• Maximum bonus is +30 XP/question.
+5. Level System
+Maximum Main Level
+Level 100
+After Level 100:
+Prestige system can be added later.
+XP Required Formula
+XP required for next level:
+XP = 500 + (Level × 150) 
+Example:
+Level 1 → Level 2:
+650 XP
+Level 50 → Level 51:
+8000 XP
+Level 99 → Level 100:
+15500 XP
+6. Expected Progression
+Target player:
+Casual Player
+5 games/day
+Expected:
+• Level 10: ~2 weeks
+• Level 25: ~2 months
+• Level 50: ~6 months
+• Level 100: ~18-24 months
+Active Player
+10-15 games/day
+Expected:
+• Level 10: first week
+• Level 25: 1 month
+• Level 50: 4 months
+• Level 100: 12 months
+Hardcore Player
+20+ games/day
+Expected:
+• Level 50: 2-3 months
+• Level 100: 6-9 months
+7. Level Rewards
+Every level must feel meaningful.
+Major Rewards
+LevelReward5Bronze Avatar Frame + 200 coins10Title: Beginner Guesser + Avatar15500 coins20New Theme Skin25Badge + 700 coins30Bronze Crown40New Category Unlock50Silver Frame + Exclusive Title60Premium Avatar701500 coins75Special Badge80New Category Unlock90Animated Frame100Legendary Crown + Legendary Title + Exclusive Skin 
+8. Coin Economy
+Coins are the main free currency.
+Sources
+SourceRewardCorrect answer1 coinPerfect game+25 coinsDaily login15-150 coinsDaily mission30-80 coinsAchievement50-500 coinsRewarded Ad30 coinsWeekly challenge500 coins 
+9. Daily Coin Expectation
+Casual
+5 games/day
+≈150-200 coins/day
+Active
+10-15 games/day
+≈350-500 coins/day
+Hardcore
+20 games/day
+≈700 coins/day
+10. Shop Economy
+Category A — Gameplay Helpers
+These improve comfort only.
+ItemPriceHint50 coinsReveal Blur80 coinsSkip Question40 coinsDouble XP 30 min200 coins 
+Category B — Cosmetics
+ItemPriceBasic Avatar300-600 coinsAvatar Frame500-1000 coinsTheme Skin800-1500 coinsAnimated FramePremium only 
+11. Reward Packages
+Level rewards should not only be coins.
+Create reward packages:
+Bronze Package
+Levels 1-30
+Contains:
+• Coins
+• Basic avatars
+• Frames
+• Badges
+Silver Package
+Levels 31-60
+Contains:
+• Better cosmetics
+• New categories
+• Premium looking items
+Gold Package
+Levels 61-90
+Contains:
+• Animated cosmetics
+• Rare titles
+• Special themes
+Legendary Package
+Levels 91-100
+Contains:
+• Exclusive crown
+• Legendary frame
+• Unique profile effects
+12. Premium System
+Premium must provide convenience, not advantage.
+BlurPass Subscription
+Price:
+$3.99/month
+Benefits:
+• Remove ads
+• 2x daily login coins
+• Exclusive cosmetics
+• Monthly premium category
+• Extra missions
+• Premium badge
+No:
+• Answer advantages
+• Higher score bonuses
+• Gameplay advantages
+13. Advertisement System
+Ads must never interrupt gameplay.
+Interstitial Ads
+Rules:
+• Never during questions
+• Never first launch
+• Never tutorial
+Show:
+After every 3 completed games.
+Maximum:
+5 ads/session
+Rewarded Ads
+Available:
+• Free coins
+• Extra hints
+• Double XP
+Limit:
+5/day free users
+10/day premium users
+14. Daily Retention System
+Daily Login
+Day rewards:
+Day 1: 15 coins
+Day 3: 30 coins + Hint
+Day 7: 150 coins + Reveal
+Day 14: Cosmetic reward
+Day 30: Premium cosmetic
+15. Daily Missions
+Free users:
+3 missions/day
+Premium:
+5 missions/day
+Examples:
+• Play 3 games
+• Answer 20 questions
+• Get 5 combo streak
+• Complete category challenge
+16. Seasonal System
+Every 8 weeks:
+New season:
+Includes:
+• New category
+• New cosmetics
+• Seasonal leaderboard
+• Limited badges
+17. Monetization Products
+Coin Packs
+PriceCoins$0.99100$4.99600$9.991500$19.993500 
+Other Purchases
+Remove Ads:
+$2.99
+Premium Subscription:
+$3.99/month
+18. Anti Farming Rules
+Implement:
+• No XP from repeated identical question sets within 1 hour.
+• Daily XP cap:
+10000 XP/day.
+• Server-side tracking.
+19. Implementation Requirements
+Before UI design:
+Developer must implement:
+• XP calculation
+• Level calculation
+• Coin wallet
+• Reward claiming
+• Shop inventory system
+• Premium state
+• Daily missions
+• Achievement tracking
+All systems must be data-driven.
+Do not hardcode rewards inside UI files.
+Use configuration files/database tables.
+Final Design Goal
+BlurQuiz should feel:
+• Fun
+• Fair
+• Rewarding
+• Addictive in a healthy way
+• Respectful of player time
+The player should always feel:
+"I am making progress."
+Never:
+"I can never finish this game.

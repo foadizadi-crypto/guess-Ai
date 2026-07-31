@@ -4,6 +4,7 @@ import { GAME_CONSTANTS } from '@/constants';
 import { DIFFICULTY_CONFIG, getStartingClarity, getStartingTime, getAvatarAbility, getRevealDelta } from '@/gameEngine';
 import { useUserStore } from '@/store/userStore';
 import { generateId } from '@/utils';
+import { getDifficultyXP, getComboBonus, XP_WRONG } from '@/constants/economy';
 
 // ─── State shape ──────────────────────────────────────────────────────────
 
@@ -26,12 +27,14 @@ interface GameState {
   correctAnswers: number;
   totalQuestions: number;
   clarity: number;
-  xpEarned: number;
-  doubleCoinsActive: boolean;
+  xpEarned: number;        // accumulates per-question XP + combo during a session
+  coinsEarned: number;     // accumulates 1 coin per correct answer during a session
+  doubleXPActive: boolean;
   lastGameWasTimedOut: boolean;
-  streak: number;
+  streak: number;          // consecutive correct answers in this session
   consecutiveWrong: number;
   totalWrong: number;
+  maxStreakThisGame: number; // highest streak reached in this game session
 
   // ─── Actions ────────────────────────────────────────────────────────────
 
@@ -50,7 +53,7 @@ interface GameState {
   advanceQuestion: () => void;
   endSession: () => void;
   resetGame: () => void;
-  activateDoubleCoins: () => void;
+  activateDoubleXP: () => void;
 }
 
 const getTimerForDifficulty = (d: Difficulty): number => {
@@ -74,11 +77,13 @@ const initialState = {
   totalQuestions: GAME_CONSTANTS.TOTAL_QUESTIONS,
   clarity: 50,
   xpEarned: 0,
-  doubleCoinsActive: false,
+  coinsEarned: 0,
+  doubleXPActive: false,
   lastGameWasTimedOut: false,
   streak: 0,
   consecutiveWrong: 0,
   totalWrong: 0,
+  maxStreakThisGame: 0,
 };
 
 // ─── Store ────────────────────────────────────────────────────────────────
@@ -115,35 +120,37 @@ export const useGameStore = create<GameState>((set) => ({
     })),
 
   startSession: (difficulty, category) =>
-    set((state) => {
+    set(() => {
       const ability = getAvatarAbility(useUserStore.getState().selectedAvatarId);
       return {
-      gameSession: {
-        id: generateId(),
-        difficulty,
-        category,
+        gameSession: {
+          id: generateId(),
+          difficulty,
+          category,
+          score: 0,
+          startTime: Date.now(),
+          endTime: null,
+          isComplete: false,
+          questionsAnswered: 0,
+          hintsUsed: 0,
+        },
         score: 0,
-        startTime: Date.now(),
-        endTime: null,
-        isComplete: false,
-        questionsAnswered: 0,
         hintsUsed: 0,
-      },
-      score: 0,
-      hintsUsed: 0,
-      blurAmount: GAME_CONSTANTS.MAX_BLUR - Math.round(getStartingClarity(difficulty, ability) / 5),
-      timer: getStartingTime(ability),
-      isTimerRunning: true,
-      currentQuestionIndex: 0,
-      correctAnswers: 0,
-      totalQuestions: GAME_CONSTANTS.TOTAL_QUESTIONS,
-      clarity: getStartingClarity(difficulty, ability),
-      xpEarned: 0,
-      doubleCoinsActive: false,
-      lastGameWasTimedOut: false,
-      streak: 0,
-      consecutiveWrong: 0,
-      totalWrong: 0,
+        blurAmount: GAME_CONSTANTS.MAX_BLUR - Math.round(getStartingClarity(difficulty, ability) / 5),
+        timer: getStartingTime(ability),
+        isTimerRunning: true,
+        currentQuestionIndex: 0,
+        correctAnswers: 0,
+        totalQuestions: GAME_CONSTANTS.TOTAL_QUESTIONS,
+        clarity: getStartingClarity(difficulty, ability),
+        xpEarned: 0,
+        coinsEarned: 0,
+        doubleXPActive: false,
+        lastGameWasTimedOut: false,
+        streak: 0,
+        consecutiveWrong: 0,
+        totalWrong: 0,
+        maxStreakThisGame: 0,
       };
     }),
 
@@ -152,7 +159,25 @@ export const useGameStore = create<GameState>((set) => ({
       const newStreak = correct ? state.streak + 1 : 0;
       const newConsecutiveWrong = correct ? 0 : state.consecutiveWrong + 1;
       const newTotalWrong = correct ? state.totalWrong : state.totalWrong + 1;
+      const newMaxStreak = Math.max(state.maxStreakThisGame, newStreak);
+
+      // ── XP calculation per spec ─────────────────────────────────────────
+      // Correct: base difficulty XP + combo bonus (applied to new streak)
+      // Wrong:   XP_WRONG (always awarded)
+      const baseXP   = correct ? getDifficultyXP(state.selectedDifficulty) : XP_WRONG;
+      const bonusXP  = correct ? getComboBonus(newStreak) : 0;
+      // XP Sage avatar gives +25% XP (rounded up)
+      const avatarAbility = getAvatarAbility(useUserStore.getState().selectedAvatarId);
+      const xpMultiplier  = avatarAbility === 'xp-sage' ? 1.25 : 1;
+      const questionXP    = Math.ceil((baseXP + bonusXP) * xpMultiplier);
+
+      // ── Coin calculation per spec ───────────────────────────────────────
+      // 1 coin per correct answer; Coin Magnet avatar gives +25%
+      const coinMultiplier = avatarAbility === 'coin-magnet' ? 1.25 : 1;
+      const questionCoins  = correct ? Math.ceil(1 * coinMultiplier) : 0;
+
       const revealDelta = getRevealDelta(state.selectedDifficulty, correct);
+
       return {
         score: Math.max(0, state.score + points),
         correctAnswers: state.correctAnswers + (correct ? 1 : 0),
@@ -160,7 +185,9 @@ export const useGameStore = create<GameState>((set) => ({
         streak: newStreak,
         consecutiveWrong: newConsecutiveWrong,
         totalWrong: newTotalWrong,
-        xpEarned: state.xpEarned + (correct ? (getAvatarAbility(useUserStore.getState().selectedAvatarId) === 'xp-sage' ? 13 : 10) : 0),
+        maxStreakThisGame: newMaxStreak,
+        xpEarned: state.xpEarned + questionXP,
+        coinsEarned: state.coinsEarned + questionCoins,
         gameSession: state.gameSession
           ? {
               ...state.gameSession,
@@ -174,7 +201,7 @@ export const useGameStore = create<GameState>((set) => ({
   advanceQuestion: () =>
     set((state) => ({ currentQuestionIndex: state.currentQuestionIndex + 1 })),
 
-  activateDoubleCoins: () => set({ doubleCoinsActive: true }),
+  activateDoubleXP: () => set({ doubleXPActive: true }),
 
   endSession: () =>
     set((state) => ({

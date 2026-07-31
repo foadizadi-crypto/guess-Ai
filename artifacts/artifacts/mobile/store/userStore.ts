@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   Achievement,
+  ActiveMission,
   Avatar,
   DailyReward,
   Language,
@@ -11,8 +12,18 @@ import type {
   UserSettings,
   UserStatistics,
 } from '@/types';
-import { ACHIEVEMENTS, DEFAULT_AVATARS, DAILY_REWARDS, GAME_CONSTANTS } from '@/constants';
-import { calculateLevel, isToday } from '@/utils';
+import { ACHIEVEMENTS, DEFAULT_AVATARS, DAILY_REWARDS, DEFAULT_POWER_UPS } from '@/constants';
+import { getLevelReward } from '@/constants/levelRewards';
+import { getDailyMissions, getTodayUTC, type MissionType } from '@/constants/missions';
+import {
+  DAILY_XP_CAP,
+  COINS_PERFECT_GAME_BONUS,
+  FREE_MISSIONS_PER_DAY,
+  PREMIUM_MISSIONS_PER_DAY,
+  PREMIUM_COIN_MULTIPLIER,
+  MAX_LEVEL,
+} from '@/constants/economy';
+import { calculateLevel, isToday, getTodayUTCString } from '@/utils';
 
 // ─── State shape ──────────────────────────────────────────────────────────
 
@@ -22,6 +33,7 @@ interface UserState {
   coins: number;
   xp: number;
   level: number;
+  isPremium: boolean;
   selectedAvatarId: string;
   avatars: Avatar[];
   powerUps: PowerUpInventory;
@@ -33,6 +45,17 @@ interface UserState {
   achievements: Achievement[];
   settings: UserSettings;
   statistics: UserStatistics;
+
+  // Anti-farming
+  dailyXPEarned: number;
+  dailyXPDate: string | null;   // YYYY-MM-DD UTC
+
+  // Level rewards
+  unclaimedLevelRewards: number[];
+
+  // Daily missions
+  missions: ActiveMission[];
+  missionsDate: string | null;  // YYYY-MM-DD UTC — date missions were generated
 
   // ─── Actions ────────────────────────────────────────────────────────────
 
@@ -50,6 +73,11 @@ interface UserState {
   updateSettings: (settings: Partial<UserSettings>) => void;
   updateLanguage: (language: Language) => void;
   updateStatistics: (stats: Partial<UserStatistics>) => void;
+  claimLevelReward: (level: number) => boolean;
+  refreshDailyMissions: () => void;
+  updateMissionProgress: (type: MissionType, increment: number, param?: string) => void;
+  claimMissionReward: (missionId: string) => boolean;
+  setPremium: (value: boolean) => void;
   resetUser: () => void;
 }
 
@@ -78,14 +106,7 @@ const defaultDailyReward: DailyReward = {
   lastClaimDate: null,
   streak: 0,
   currentDay: 0,
-  nextRewardAmount: GAME_CONSTANTS.DAILY_REWARD_BASE,
-};
-
-const defaultPowerUps: PowerUpInventory = {
-  'extra-time': 0,
-  'fifty-fifty': 0,
-  'skip-question': 0,
-  'double-coins': 0,
+  nextRewardAmount: 15,
 };
 
 // ─── Store ────────────────────────────────────────────────────────────────
@@ -97,20 +118,34 @@ export const useUserStore = create<UserState>()(
       coins: 500,
       xp: 0,
       level: 1,
+      isPremium: false,
       selectedAvatarId: 'avatar_1',
       avatars: DEFAULT_AVATARS.map((a) => ({ ...a })),
-      powerUps: { ...defaultPowerUps },
+      powerUps: { ...DEFAULT_POWER_UPS },
       avatarFragments: 0,
       bestScore: 0,
       dailyReward: { ...defaultDailyReward },
-      achievements: ACHIEVEMENTS.map((achievement) => ({ ...achievement, icon: achievement.icon })),
+      achievements: ACHIEVEMENTS.map((a) => ({ ...a, unlocked: false, unlockedAt: null })),
       settings: { ...defaultSettings },
       statistics: { ...defaultStatistics },
+      dailyXPEarned: 0,
+      dailyXPDate: null,
+      unclaimedLevelRewards: [],
+      missions: [],
+      missionsDate: null,
+
+      // ── Basic setters ──────────────────────────────────────────────────
 
       setUsername: (username) => set({ username }),
 
       addCoins: (amount) =>
-        set((state) => ({ coins: state.coins + amount })),
+        set((state) => ({
+          coins: state.coins + amount,
+          statistics: {
+            ...state.statistics,
+            totalCoinsEarned: state.statistics.totalCoinsEarned + amount,
+          },
+        })),
 
       spendCoins: (amount) => {
         const { coins } = get();
@@ -119,11 +154,45 @@ export const useUserStore = create<UserState>()(
         return true;
       },
 
+      // ── XP with daily cap + level-up detection ─────────────────────────
+
       addXP: (amount) =>
         set((state) => {
-          const newXP = state.xp + amount;
-          return { xp: newXP, level: calculateLevel(newXP) };
+          // Reset daily XP counter if it's a new UTC day
+          const today = getTodayUTCString();
+          const isNewDay = state.dailyXPDate !== today;
+          const currentDailyXP = isNewDay ? 0 : state.dailyXPEarned;
+
+          // Apply daily cap
+          const remaining = Math.max(0, DAILY_XP_CAP - currentDailyXP);
+          const actualXP = Math.min(amount, remaining);
+
+          if (actualXP <= 0) {
+            return { dailyXPDate: today, dailyXPEarned: currentDailyXP };
+          }
+
+          const newTotalXP = state.xp + actualXP;
+          const oldLevel   = state.level;
+          const newLevel   = calculateLevel(newTotalXP);
+
+          // Queue unclaimed rewards for any levels crossed
+          const newUnclaimed = [...state.unclaimedLevelRewards];
+          for (let l = oldLevel + 1; l <= newLevel; l++) {
+            if (l <= MAX_LEVEL && !newUnclaimed.includes(l)) {
+              newUnclaimed.push(l);
+            }
+          }
+
+          return {
+            xp: newTotalXP,
+            level: newLevel,
+            dailyXPEarned: currentDailyXP + actualXP,
+            dailyXPDate: today,
+            unclaimedLevelRewards: newUnclaimed,
+          };
         }),
+
+      // ── Avatar ────────────────────────────────────────────────────────
 
       unlockAvatar: (avatarId) => {
         const { avatars, coins } = get();
@@ -147,15 +216,17 @@ export const useUserStore = create<UserState>()(
         }
       },
 
+      // ── Power-ups — prices from economy.ts via POWER_UPS constant ──────
+
       buyPowerUp: (powerUpId, quantity = 1) => {
-        const { coins } = get();
-        const costs: Record<PowerUpId, number> = {
-          'extra-time': 75,
-          'fifty-fifty': 100,
-          'skip-question': 125,
-          'double-coins': 175,
+        const priceMap: Record<PowerUpId, number> = {
+          'hint':          50,
+          'reveal-blur':   80,
+          'skip-question': 40,
+          'double-xp':     200,
         };
-        const cost = costs[powerUpId] * quantity;
+        const cost = (priceMap[powerUpId] ?? 80) * quantity;
+        const { coins } = get();
         if (coins < cost) return false;
         set((state) => ({
           coins: state.coins - cost,
@@ -179,7 +250,13 @@ export const useUserStore = create<UserState>()(
       },
 
       mockPurchaseCoins: (amount) =>
-        set((state) => ({ coins: state.coins + amount })),
+        set((state) => ({
+          coins: state.coins + amount,
+          statistics: {
+            ...state.statistics,
+            totalCoinsEarned: state.statistics.totalCoinsEarned + amount,
+          },
+        })),
 
       updateBestScore: (score) =>
         set((state) => ({
@@ -190,9 +267,12 @@ export const useUserStore = create<UserState>()(
           },
         })),
 
+      // ── Daily reward ──────────────────────────────────────────────────
+
       claimDailyReward: () => {
-        const { dailyReward } = get();
+        const { dailyReward, isPremium } = get();
         if (isToday(dailyReward.lastClaimed)) return 0;
+
         const isConsecutive =
           dailyReward.lastClaimed !== null &&
           (() => {
@@ -201,23 +281,121 @@ export const useUserStore = create<UserState>()(
             yesterday.setDate(yesterday.getDate() - 1);
             return last.toDateString() === yesterday.toDateString();
           })();
-        const newStreak = isConsecutive ? dailyReward.streak + 1 : 1;
-        const currentDay = ((dailyReward.currentDay ?? dailyReward.streak) % 7) + 1;
-        const scheduledReward = DAILY_REWARDS[currentDay - 1];
-        const reward = scheduledReward.coins;
+
+        const newStreak  = isConsecutive ? dailyReward.streak + 1 : 1;
+        const cycleDay   = ((newStreak - 1) % 7) + 1; // 1-7 repeating cycle
+        const scheduled  = DAILY_REWARDS[cycleDay - 1];
+        const baseCoins  = scheduled?.coins ?? 15;
+        // Premium doubles daily login coins
+        const reward     = isPremium ? baseCoins * PREMIUM_COIN_MULTIPLIER : baseCoins;
+        // Day 3 bonus hint, Day 7 bonus reveal
+        const bonusHint    = cycleDay === 3 ? 1 : 0;
+        const bonusReveal  = cycleDay === 7 ? 1 : 0;
+
         set((state) => ({
           coins: state.coins + reward,
-          avatarFragments: state.avatarFragments + (currentDay === 4 ? 1 : 0),
+          powerUps: {
+            ...state.powerUps,
+            'hint':        state.powerUps['hint']        + bonusHint,
+            'reveal-blur': state.powerUps['reveal-blur'] + bonusReveal,
+          },
           dailyReward: {
-            lastClaimed: new Date().toISOString(),
-            lastClaimDate: new Date().toISOString(),
-            streak: newStreak,
-            currentDay,
-            nextRewardAmount: GAME_CONSTANTS.DAILY_REWARD_BASE + (newStreak + 1) * GAME_CONSTANTS.DAILY_REWARD_STREAK_BONUS,
+            lastClaimed:       new Date().toISOString(),
+            lastClaimDate:     new Date().toISOString(),
+            streak:            newStreak,
+            currentDay:        cycleDay,
+            nextRewardAmount:  DAILY_REWARDS[(cycleDay % 7)]?.coins ?? 15,
+          },
+          statistics: {
+            ...state.statistics,
+            totalCoinsEarned: state.statistics.totalCoinsEarned + reward,
+            longestStreak: Math.max(state.statistics.longestStreak, newStreak),
           },
         }));
-        return reward || (currentDay === 4 ? 1 : 0);
+        return reward;
       },
+
+      // ── Level reward claiming ─────────────────────────────────────────
+
+      claimLevelReward: (level) => {
+        const { unclaimedLevelRewards } = get();
+        if (!unclaimedLevelRewards.includes(level)) return false;
+
+        const reward = getLevelReward(level);
+        if (!reward) return false;
+
+        set((state) => ({
+          coins: state.coins + reward.coins,
+          unclaimedLevelRewards: state.unclaimedLevelRewards.filter((l) => l !== level),
+          statistics: {
+            ...state.statistics,
+            totalCoinsEarned: state.statistics.totalCoinsEarned + reward.coins,
+          },
+        }));
+        return true;
+      },
+
+      // ── Daily missions ────────────────────────────────────────────────
+
+      refreshDailyMissions: () => {
+        const { missionsDate, isPremium } = get();
+        const today = getTodayUTC();
+        if (missionsDate === today) return; // already refreshed today
+
+        const count    = isPremium ? PREMIUM_MISSIONS_PER_DAY : FREE_MISSIONS_PER_DAY;
+        const defs     = getDailyMissions(count, today);
+        const missions: ActiveMission[] = defs.map((d) => ({
+          id:            d.id,
+          type:          d.type,
+          label:         d.label,
+          description:   d.description,
+          target:        d.target,
+          reward:        d.reward,
+          param:         d.param,
+          progress:      0,
+          completed:     false,
+          rewardClaimed: false,
+        }));
+
+        set({ missions, missionsDate: today });
+      },
+
+      updateMissionProgress: (type, increment, param) =>
+        set((state) => ({
+          missions: state.missions.map((m) => {
+            if (m.completed) return m;
+            if (m.type !== type) return m;
+            // play_category missions require param to match
+            if (type === 'play_category' && param !== undefined && m.param !== param) return m;
+            const newProgress = m.progress + increment;
+            return {
+              ...m,
+              progress:  newProgress,
+              completed: newProgress >= m.target,
+            };
+          }),
+        })),
+
+      claimMissionReward: (missionId) => {
+        const mission = get().missions.find((m) => m.id === missionId);
+        if (!mission || !mission.completed || mission.rewardClaimed) return false;
+        set((state) => ({
+          coins: state.coins + mission.reward,
+          missions: state.missions.map((m) =>
+            m.id === missionId ? { ...m, rewardClaimed: true } : m,
+          ),
+          statistics: {
+            ...state.statistics,
+            totalCoinsEarned: state.statistics.totalCoinsEarned + mission.reward,
+          },
+        }));
+        return true;
+      },
+
+      // ── Achievement checking ──────────────────────────────────────────
+      // Called from result screen after updateStatistics
+
+      // ── Settings ──────────────────────────────────────────────────────
 
       updateSettings: (settings) =>
         set((state) => ({ settings: { ...state.settings, ...settings } })),
@@ -228,21 +406,31 @@ export const useUserStore = create<UserState>()(
       updateStatistics: (stats) =>
         set((state) => ({ statistics: { ...state.statistics, ...stats } })),
 
+      setPremium: (value) => set({ isPremium: value }),
+
+      // ── Reset ─────────────────────────────────────────────────────────
+
       resetUser: () =>
         set({
           username: '',
           coins: 500,
           xp: 0,
           level: 1,
+          isPremium: false,
           selectedAvatarId: 'avatar_1',
           avatars: DEFAULT_AVATARS.map((a) => ({ ...a })),
-          powerUps: { ...defaultPowerUps },
+          powerUps: { ...DEFAULT_POWER_UPS },
           avatarFragments: 0,
           bestScore: 0,
           dailyReward: { ...defaultDailyReward },
-          achievements: ACHIEVEMENTS.map((achievement) => ({ ...achievement, icon: achievement.icon })),
+          achievements: ACHIEVEMENTS.map((a) => ({ ...a, unlocked: false, unlockedAt: null })),
           settings: { ...defaultSettings },
           statistics: { ...defaultStatistics },
+          dailyXPEarned: 0,
+          dailyXPDate: null,
+          unclaimedLevelRewards: [],
+          missions: [],
+          missionsDate: null,
         }),
     }),
     {
@@ -257,12 +445,18 @@ export const useUserStore = create<UserState>()(
             ...avatar,
             ...(saved.avatars ?? []).find((item) => item.id === avatar.id),
           })),
-          powerUps: { ...defaultPowerUps, ...(saved.powerUps ?? {}) },
+          powerUps: { ...DEFAULT_POWER_UPS, ...(saved.powerUps ?? {}) },
           dailyReward: { ...defaultDailyReward, ...(saved.dailyReward ?? {}) },
           statistics: { ...defaultStatistics, ...(saved.statistics ?? {}) },
           achievements: saved.achievements?.length
             ? saved.achievements
-            : ACHIEVEMENTS.map((achievement) => ({ ...achievement, icon: achievement.icon })),
+            : ACHIEVEMENTS.map((a) => ({ ...a, unlocked: false, unlockedAt: null })),
+          unclaimedLevelRewards: saved.unclaimedLevelRewards ?? [],
+          missions: saved.missions ?? [],
+          missionsDate: saved.missionsDate ?? null,
+          dailyXPEarned: saved.dailyXPEarned ?? 0,
+          dailyXPDate: saved.dailyXPDate ?? null,
+          isPremium: saved.isPremium ?? false,
         };
       },
     },

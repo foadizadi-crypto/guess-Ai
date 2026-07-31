@@ -60,7 +60,9 @@ export default function GameScreen() {
   const streak = useGameStore((s) => s.streak);
   const consecutiveWrong = useGameStore((s) => s.consecutiveWrong);
   const totalWrong = useGameStore((s) => s.totalWrong);
-  const activateDoubleCoins = useGameStore((s) => s.activateDoubleCoins);
+  const blurAmount = useGameStore((s) => s.blurAmount);
+  const setBlurAmount = useGameStore((s) => s.setBlurAmount);
+  const activateDoubleXP = useGameStore((s) => s.activateDoubleXP);
   const usePowerUp = useUserStore((s) => s.usePowerUp);
   const powerUps = useUserStore((s) => s.powerUps);
   const selectedAvatarId = useUserStore((s) => s.selectedAvatarId);
@@ -77,6 +79,7 @@ export default function GameScreen() {
   const [reviveVisible, setReviveVisible] = useState(false);
   const [reviveLoading, setReviveLoading] = useState(false);
   const [superComboVisible, setSuperComboVisible] = useState(false);
+  const [hintUsed, setHintUsed] = useState(false);
   const endedRef = useRef(false);
   const reviveOffered = useRef(false);
   const shakeX = useSharedValue(0);
@@ -248,29 +251,28 @@ export default function GameScreen() {
       if (!usePowerUp(powerUpId)) return;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       playEffect('button_click');
-      if (powerUpId === 'extra-time') {
-        setTimer(Math.min(180, timer + 15));
+      if (powerUpId === 'hint') {
+        // Shows the first letter (handled by question component via state)
+        setHintUsed(true);
         playEffect('coin');
-      } else if (powerUpId === 'fifty-fifty') {
-        const wrong = currentQuestion.options
-          .map((_, index) => index)
-          .filter((index) => index !== currentQuestion.correctIndex)
-          .slice(0, 2);
-        setRemovedOptions(wrong);
+      } else if (powerUpId === 'reveal-blur') {
+        setBlurAmount(Math.max(0, blurAmount - 5));
+        playEffect('coin');
       } else if (powerUpId === 'skip-question') {
         if (questionIndex >= questions.length - 1 || questionIndex >= 19) {
           finishGame();
         } else {
           advanceQuestion();
         }
-      } else if (powerUpId === 'double-coins') {
-        activateDoubleCoins();
+      } else if (powerUpId === 'double-xp') {
+        activateDoubleXP();
         playEffect('coin');
       }
     },
     [
-      activateDoubleCoins,
+      activateDoubleXP,
       advanceQuestion,
+      blurAmount,
       currentQuestion,
       feedback,
       finishGame,
@@ -279,8 +281,7 @@ export default function GameScreen() {
       powerUps,
       questionIndex,
       questions.length,
-      setTimer,
-      timer,
+      setBlurAmount,
       usePowerUp,
     ],
   );
@@ -394,11 +395,11 @@ export default function GameScreen() {
 
             <View style={styles.powerBar}>
               {([
-                ['extra-time', 'time-outline', '+15s'],
-                ['fifty-fifty', 'contrast-outline', '50/50'],
+                ['hint', 'bulb-outline', 'Hint'],
+                ['reveal-blur', 'eye-outline', 'Reveal'],
                 ['skip-question', 'play-skip-forward-outline', 'Skip'],
-                ['double-coins', 'logo-bitcoin', '2x coins'],
-              ] as const).map(([id, icon, label]) => (
+                ['double-xp', 'flash-outline', '2x XP'],
+              ] as [PowerUpId, React.ComponentProps<typeof Ionicons>['name'], string][]).map(([id, icon, label]) => (
                 <TouchableOpacity
                   key={id}
                   style={[styles.powerButton, powerUps[id] < 1 && styles.powerButtonDisabled]}
