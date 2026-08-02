@@ -26,6 +26,7 @@ import { CoinDisplay } from '@/components/CoinDisplay';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
+import { useAdStore } from '@/store/adStore';
 import { iapService, IAP_SKUS } from '@/services/IAPService';
 
 // Maps COIN_PACKAGES id → IAP product SKU
@@ -66,6 +67,9 @@ export default function ShopScreen() {
   const buyPowerUp = useUserStore((s) => s.buyPowerUp);
   const mockPurchaseCoins = useUserStore((s) => s.mockPurchaseCoins);
 
+  const { isAdFreePassActive, removeAds, adFreePassExpiry } = useAdStore();
+  const adFreeActive = isAdFreePassActive();
+
   useEffect(() => {
     indicator.value = withSpring(tab * TAB_WIDTH, { damping: 18, stiffness: 180 });
   }, [indicator, tab]);
@@ -97,6 +101,43 @@ export default function ShopScreen() {
       showPurchase(`-${avatar.cost} coins`);
     } else {
       Alert.alert('Not enough coins', `You need ${avatar.cost} coins to unlock ${avatar.name}.`);
+    }
+  };
+
+  const buyAdFreePass = async () => {
+    if (adFreeActive || purchaseLoading) return;
+    setPurchaseLoading('remove_ads');
+    try {
+      const ok = await iapService.purchase(IAP_SKUS.REMOVE_ADS);
+      if (ok) {
+        removeAds(); // lifetime pass — no expiry
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        playEffect('purchase');
+        showPurchase('Ad-Free activated!');
+      }
+    } catch (err) {
+      if (__DEV__) console.warn('[Shop] remove_ads purchase error', err);
+    } finally {
+      setPurchaseLoading(null);
+    }
+  };
+
+  const restorePurchases = async () => {
+    if (purchaseLoading) return;
+    setPurchaseLoading('restore');
+    try {
+      const restored = await iapService.restoreAdsRemoved();
+      if (restored) {
+        removeAds();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showPurchase('Purchases restored');
+      } else {
+        Alert.alert('Nothing to restore', 'No previous Ad-Free Pass purchase found for this account.');
+      }
+    } catch {
+      Alert.alert('Restore failed', 'Could not reach the store. Please try again.');
+    } finally {
+      setPurchaseLoading(null);
     }
   };
 
@@ -201,6 +242,43 @@ export default function ShopScreen() {
             <Text style={styles.sectionHint}>
               {iapService.isMockMode ? 'Mock purchase · no payment processed' : 'Real purchase via App Store / Play Store'}
             </Text>
+
+            {/* ── Ad-Free Pass card ──────────────────────────────────────── */}
+            <View style={[styles.adFreeCard, adFreeActive && styles.adFreeCardActive]}>
+              <View style={styles.adFreeLeft}>
+                <View style={styles.adFreeIconWrap}>
+                  <Ionicons
+                    name={adFreeActive ? 'shield-checkmark' : 'shield-outline'}
+                    size={28}
+                    color={adFreeActive ? GameColors.accentGold : '#CE93D8'}
+                  />
+                </View>
+                <View style={styles.adFreeCopy}>
+                  <Text style={styles.adFreeTitle}>Ad-Free Pass</Text>
+                  <Text style={styles.adFreeDesc}>
+                    {adFreeActive
+                      ? adFreePassExpiry
+                        ? `Active · expires ${new Date(adFreePassExpiry).toLocaleDateString()}`
+                        : 'Active · Lifetime'
+                      : 'Enjoy all rewards without watching ads'}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.adFreeBtn,
+                  adFreeActive && styles.adFreeBtnOwned,
+                  purchaseLoading === 'remove_ads' && { opacity: 0.6 },
+                ]}
+                onPress={buyAdFreePass}
+                disabled={adFreeActive || purchaseLoading === 'remove_ads'}
+              >
+                <Text style={[styles.adFreeBtnText, adFreeActive && styles.adFreeBtnTextOwned]}>
+                  {purchaseLoading === 'remove_ads' ? '…' : adFreeActive ? 'Owned ✓' : '$2.99'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             {COIN_PACKAGES.map((pack, index) => (
               <TouchableOpacity
                 key={pack.id}
@@ -229,6 +307,18 @@ export default function ShopScreen() {
                 {index === 2 && <Text style={styles.popularLabel}>BEST VALUE</Text>}
               </TouchableOpacity>
             ))}
+
+            {/* ── Restore purchases ──────────────────────────────────────── */}
+            <TouchableOpacity
+              style={[styles.restoreBtn, purchaseLoading === 'restore' && { opacity: 0.6 }]}
+              onPress={restorePurchases}
+              disabled={!!purchaseLoading}
+            >
+              <Ionicons name="refresh-outline" size={14} color={GameColors.textSecondary} />
+              <Text style={styles.restoreText}>
+                {purchaseLoading === 'restore' ? 'Restoring…' : 'Restore Purchases'}
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -273,4 +363,55 @@ const styles = StyleSheet.create({
   coinAmount: { flex: 1, color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 17 },
   coinPrice: { color: GameColors.accentGold, fontFamily: 'Inter_700Bold', fontSize: 16 },
   popularLabel: { position: 'absolute', top: -9, right: 14, color: GameColors.backgroundPrimary, backgroundColor: GameColors.accentGold, fontFamily: 'Inter_700Bold', fontSize: 9, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
+
+  // ── Ad-Free Pass ────────────────────────────────────────────────────────
+  adFreeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 18,
+    padding: 16,
+    backgroundColor: 'rgba(206,147,216,0.08)',
+    borderWidth: 1.5,
+    borderColor: '#CE93D8',
+    gap: 12,
+  },
+  adFreeCardActive: {
+    backgroundColor: 'rgba(255,215,0,0.07)',
+    borderColor: GameColors.accentGold,
+  },
+  adFreeLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  adFreeIconWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adFreeCopy: { flex: 1, gap: 3 },
+  adFreeTitle: { color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 16 },
+  adFreeDesc: { color: GameColors.textSecondary, fontSize: 12, fontFamily: 'Inter_500Medium' },
+  adFreeBtn: {
+    minWidth: 72,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: '#CE93D8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adFreeBtnOwned: { backgroundColor: 'rgba(255,215,0,0.18)', borderWidth: 1, borderColor: GameColors.accentGold },
+  adFreeBtnText: { color: GameColors.backgroundPrimary, fontFamily: 'Inter_700Bold', fontSize: 14 },
+  adFreeBtnTextOwned: { color: GameColors.accentGold },
+
+  // ── Restore purchases ───────────────────────────────────────────────────
+  restoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+  },
+  restoreText: { color: GameColors.textSecondary, fontFamily: 'Inter_500Medium', fontSize: 13 },
 });
