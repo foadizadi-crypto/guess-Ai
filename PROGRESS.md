@@ -5,44 +5,54 @@
 ---
 
 ### Ad System — Spec §7 (rewarded-only policy)
-- **`store/adStore.ts`** — Full rewrite:
-  - `sessionCounter` (persisted) — increments after every game session
-  - `lastDailyAdTimestamp` (persisted) — 4-hour Daily Gift cooldown
-  - `adFreePassExpiry` (persisted) — lifetime + timed Ad-Free Pass support
-  - `isAdFreePassActive()`, `canShowDoubleReward()`, `isDailyAdAvailable()` helpers
-  - All actions: `incrementSessionCounter`, `resetSessionCounter`, `setLastDailyAdClaimed`, `setAdFreePassExpiry`, `removeAds`
-- **`app/game.tsx`** — Removed revive ad modal (timer → results directly). Session counter incremented on early `exitToLobby`.
-- **`app/result.tsx`** — Removed forced interstitial. "Double Rewards" button doubles **both coins and XP**. Gated by `sessionCounter ≥ 3`. Ad-free pass skips ad but NOT counter. Counter resets only on successful watch; carries over on decline.
-- **`app/lobby.tsx`** — Removed banner ad. New **"Free Lucky Spin"** FAB: 4-hour cooldown, 50–150 coins (random), 10% consumable bonus. Ad-free pass grants instantly. Shows remaining cooldown when unavailable.
+- **`store/adStore.ts`** — Full rewrite: session counter, 4h Daily Gift cooldown, lifetime/timed Ad-Free Pass expiry, all helpers and actions
+- **`app/game.tsx`** — Removed revive ad modal; session counter incremented on early `exitToLobby`
+- **`app/result.tsx`** — Removed forced interstitial; "Double Rewards" button (coins+XP), gated by `sessionCounter ≥ 3`; ad-free pass skips ad only, not counter
+- **`app/lobby.tsx`** — Removed banner ad; "Free Lucky Spin" FAB with 4h cooldown, 50–150 coins, 10% consumable, cooldown timer display
 
-### Task 1 — Let players buy the Ad-Free Pass from the shop ✅
-- **`app/shop.tsx`** — Ad-Free Pass card added at top of Coins tab:
-  - Purple shield icon, $2.99 price
-  - Status: "Owned ✓ / Active · Lifetime / Active · expires [date]"
-  - Calls `iapService.purchase(IAP_SKUS.REMOVE_ADS)` → `adStore.removeAds()`
-  - **Restore Purchases** button at bottom (App Store compliance)
+### Task 1 — Ad-Free Pass in Shop ✅
+- **`app/shop.tsx`** — Ad-Free Pass card ($2.99, purple shield) at top of Coins tab; status display; Restore Purchases button at bottom
 
-### Task 2 — App and API server running on Replit ✅
-- `pnpm install` completed at workspace root
-- **API Server** running on port 8080 (`artifacts/artifacts/api-server: API Server` workflow)
-- **Expo app** running with QR code (`artifacts/artifacts/mobile: expo` workflow)
-- Scan QR code in Expo Go app (Android) or Camera app (iOS) to test on device
-- Web preview also available in Replit pane
+### Task 2 — App Running on Replit ✅
+- Both workflows started: Expo (QR code + web) and API Server (port 8080)
+- Scan QR code with Expo Go to test on device
 
-### Task 3 — Wire Ad-Free Pass IAP to actually remove ads ✅
-- **`services/IAPService.ts`** (web/mock) — `purchase(REMOVE_ADS)` now calls `useAdStore.getState().removeAds()` after mock delay
-- **`services/IAPService.native.ts`** (native) — Same in mock-mode path + `setupListener` (via `grantAdFreePass()` helper) + `restoreAdsRemoved()` calls `grantAdFreePass()` on confirmed restore
-- Full purchase → ad removal loop is now closed on both platforms
+### Task 3 — Wire IAP → adStore ✅
+- **`services/IAPService.ts`** — REMOVE_ADS purchase calls `adStore.removeAds()`
+- **`services/IAPService.native.ts`** — Same for native mock + purchase listener + restoreAdsRemoved
+
+### Database Schema — Spec §9 ✅
+- **`lib/lib/db/src/schema/index.ts`** — Extended/added:
+  - `players` table: new columns `gems`, `current_xp`, `total_xp (BIGINT)`, `session_counter`, `last_daily_ad_timestamp`, `ad_free_pass_expiry`
+  - `inventory` table (NEW): player_id, item_id, quantity — stackable consumables
+  - `game_history` table (NEW): UUID PK, player_id, difficulty enum, category, correct/wrong answers, max_combo, xp_earned, coins_earned, start_time, end_time
+  - `config` table (NEW): key-value store for live balancing (TEXT key PK, value, description, updated_at)
+  - `difficultyEnum` pgEnum: `easy | medium | hard`
+- **`lib/lib/db/src/seeds.ts`** (NEW): `seedConfig()` function — upserts all GAME_CONFIG values into config table (28 keys including XP formula, combo tiers, blur mechanics, ad cooldowns, coin rates)
+- **`lib/lib/db/src/seed-runner.ts`** (NEW): standalone CLI runner — `pnpm --filter @workspace/db run seed`
+- **`lib/lib/db/package.json`** — added `"seed"` script
 
 ---
 
-## Files Changed (complete list)
+## Next Steps (if more work requested)
+- **Push schema to DB**: requires `DATABASE_URL` secret → `pnpm --filter @workspace/db run push`
+- **Seed config**: `pnpm --filter @workspace/db run seed`
+- **API routes** for game_history writes (POST /sessions) and config reads (GET /config)
+- **Mobile sync** — write game sessions to DB after each game (currently local-only)
+
+---
+
+## All Changed Files
 | File | Change |
 |---|---|
-| `store/adStore.ts` | Full rewrite — session counter, cooldown, pass expiry, all new actions |
-| `app/game.tsx` | Removed revive ad; counter on early exit; removed Modal/showRewarded/adsRemoved |
-| `app/result.tsx` | Removed interstitial; Double Rewards (coins+XP, counter-gated, ad-free aware) |
-| `app/lobby.tsx` | Removed banner; Daily Gift FAB with 4h cooldown, random reward, consumable |
-| `app/shop.tsx` | Ad-Free Pass card + Restore Purchases in Coins tab |
-| `services/IAPService.ts` | REMOVE_ADS purchase → adStore.removeAds() |
-| `services/IAPService.native.ts` | Same for native: purchase + restore both trigger removeAds() |
+| `store/adStore.ts` | Full rewrite |
+| `app/game.tsx` | Removed revive ad; counter on exit |
+| `app/result.tsx` | Removed interstitial; Double Rewards (counter-gated) |
+| `app/lobby.tsx` | Removed banner; Daily Gift FAB (4h cooldown) |
+| `app/shop.tsx` | Ad-Free Pass card + Restore Purchases |
+| `services/IAPService.ts` | REMOVE_ADS → adStore.removeAds() |
+| `services/IAPService.native.ts` | Same + restore wired |
+| `lib/lib/db/src/schema/index.ts` | Extended players; added inventory, game_history, config, difficultyEnum |
+| `lib/lib/db/src/seeds.ts` | NEW — seedConfig() with all 28 economy keys |
+| `lib/lib/db/src/seed-runner.ts` | NEW — CLI seed runner |
+| `lib/lib/db/package.json` | Added seed script |
