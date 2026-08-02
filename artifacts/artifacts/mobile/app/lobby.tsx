@@ -25,7 +25,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { AnimatedGradientBackground } from '@/components/AnimatedGradientBackground';
-import { AdBanner } from '@/components/AdBanner';
 import { CoinDisplay } from '@/components/CoinDisplay';
 import { AvatarFrame } from '@/components/AvatarFrame';
 import { ProgressBar } from '@/components/ProgressBar';
@@ -33,11 +32,12 @@ import { DailyRewardModal } from '@/components/DailyRewardModal';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
-import { useAdStore } from '@/store/adStore';
+import { useAdStore, DAILY_AD_COOLDOWN_MS } from '@/store/adStore';
 import { useAudio } from '@/hooks/useAudio';
 import { ROUTES } from '@/navigation/routes';
 import { calculateXPProgress, formatScore, isToday, xpInCurrentLevel, xpForCurrentLevel } from '@/utils';
 import { GAME_CONSTANTS } from '@/constants';
+import type { ConsumableId } from '@/constants/shopData';
 
 // ─── Sub-components ───────────────────────────────────────────────────────
 
@@ -121,7 +121,13 @@ export default function LobbyScreen() {
     username, coins, xp, level, selectedAvatarId,
     bestScore, dailyReward, claimDailyReward,
   } = useUserStore();
-  const { adsRemoved, showRewarded, addCoins } = { ...useAdStore(), addCoins: useUserStore((s) => s.addCoins) };
+  const { addCoins, addConsumable } = useUserStore((s) => ({ addCoins: s.addCoins, addConsumable: s.addConsumable }));
+  const {
+    isDailyAdAvailable,
+    setLastDailyAdClaimed,
+    showRewarded,
+    isAdFreePassActive,
+  } = useAdStore();
   const { playEffect, playMusic, stopMusic } = useAudio();
 
   // Play menu music whenever this screen is focused
@@ -140,6 +146,7 @@ export default function LobbyScreen() {
   const [dailyClaimed, setDailyClaimed] = useState(isToday(dailyReward.lastClaimed));
   const [adLoading, setAdLoading] = useState(false);
   const [activeNav, setActiveNav] = useState<string>('home');
+  const [, forceUpdate] = useState(0); // used to refresh cooldown timer display
 
   // ── Staggered entrance animations ────────────────────────────────────────
   const headerY = useSharedValue(-40);
@@ -201,22 +208,42 @@ export default function LobbyScreen() {
     }, []),
   );
 
-  // ── Watch ad for coins ────────────────────────────────────────────────────
-  const handleWatchAd = useCallback(async () => {
-    if (adLoading) return;
+  // ── Refresh cooldown display every 30 s while screen is focused ──────────
+  useFocusEffect(
+    useCallback(() => {
+      const timer = setInterval(() => forceUpdate((n) => n + 1), 30_000);
+      return () => clearInterval(timer);
+    }, []),
+  );
+
+  // ── Daily Gift handler (spec §7.1) ────────────────────────────────────────
+  // Cooldown: 4 hours.  Reward: 50-150 coins + 10% chance for a consumable.
+  // Ad-free pass: grant instantly without showing an ad.
+  const handleDailyGift = useCallback(async () => {
+    if (adLoading || !isDailyAdAvailable()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setAdLoading(true);
     try {
-      const rewarded = await showRewarded();
-      if (rewarded) {
-        addCoins(50);
+      const adFreeActive = isAdFreePassActive();
+      const watched = adFreeActive ? true : await showRewarded();
+      if (watched) {
+        // Random coins 50-150 (spec §7.1)
+        const coins = Math.floor(Math.random() * 101) + 50;
+        addCoins(coins);
+        // 10% chance for a bonus consumable
+        if (Math.random() < 0.1) {
+          const bonus: ConsumableId = Math.random() < 0.5 ? 'time_boost' : 'error_nullifier';
+          addConsumable(bonus, 1);
+        }
+        setLastDailyAdClaimed();
         playEffect('coin');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        forceUpdate((n) => n + 1); // refresh cooldown display immediately
       }
     } finally {
       setAdLoading(false);
     }
-  }, [adLoading, showRewarded, addCoins]);
+  }, [adLoading, isDailyAdAvailable, isAdFreePassActive, showRewarded, addCoins, addConsumable, setLastDailyAdClaimed, playEffect]);
 
   // ── Daily reward ─────────────────────────────────────────────────────────
   const handleDailyReward = useCallback(() => {
@@ -385,30 +412,16 @@ export default function LobbyScreen() {
             </View>
           </Animated.View>
 
-          {/* ── Banner ad ─────────────────────────────────────────────────── */}
-          <AdBanner visible={!adsRemoved} />
         </ScrollView>
 
-        {/* ── Floating Watch Ad button (if ads enabled) ─────────────────── */}
-        {!adsRemoved && (
-          <Animated.View style={[styles.fabWrap, fabStyle, { bottom: botPad + 16 }]}>
-            <TouchableOpacity
-              style={[styles.fab, adLoading && styles.fabLoading]}
-              onPress={handleWatchAd}
-              activeOpacity={0.85}
-              disabled={adLoading}
-            >
-              <Ionicons
-                name={adLoading ? 'hourglass-outline' : 'play-outline'}
-                size={16}
-                color={GameColors.backgroundPrimary}
-              />
-              <Text style={styles.fabText}>
-                {adLoading ? 'Loading…' : 'Watch Ad +50'}
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-        )}
+        {/* ── Daily Gift FAB (spec §7.1) ────────────────────────────────── */}
+        <DailyGiftFab
+          onPress={handleDailyGift}
+          loading={adLoading}
+          available={isDailyAdAvailable()}
+          adFree={isAdFreePassActive()}
+          style={[styles.fabWrap, fabStyle, { bottom: botPad + 16 }]}
+        />
 
         {/* ── Bottom navigation bar ─────────────────────────────────────── */}
         <View
@@ -483,6 +496,59 @@ const ActionCard: React.FC<ActionCardProps> = ({ icon, label, sublabel, color, o
     <Text style={styles.actionSublabel}>{sublabel}</Text>
   </TouchableOpacity>
 );
+
+// ─── Daily Gift FAB sub-component (spec §7.1) ─────────────────────────────
+
+function formatCooldownRemaining(lastTimestamp: number | null): string {
+  if (lastTimestamp === null) return '';
+  const elapsed = Date.now() - lastTimestamp;
+  const remaining = Math.max(0, DAILY_AD_COOLDOWN_MS - elapsed);
+  if (remaining === 0) return '';
+  const totalMinutes = Math.ceil(remaining / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+interface DailyGiftFabProps {
+  onPress: () => void;
+  loading: boolean;
+  available: boolean;
+  adFree: boolean;
+  style?: object | object[];
+}
+
+const DailyGiftFab: React.FC<DailyGiftFabProps> = ({ onPress, loading, available, adFree, style }) => {
+  const { lastDailyAdTimestamp } = useAdStore();
+  const cooldown = !available ? formatCooldownRemaining(lastDailyAdTimestamp) : '';
+
+  const fabColor = available ? GameColors.accentGreen : 'rgba(100,100,100,0.6)';
+
+  return (
+    <Animated.View style={[styles.fabWrap, style]}>
+      <TouchableOpacity
+        style={[styles.fab, { backgroundColor: fabColor }, (loading || !available) && styles.fabLoading]}
+        onPress={onPress}
+        activeOpacity={0.85}
+        disabled={loading || !available}
+      >
+        <Ionicons
+          name={loading ? 'hourglass-outline' : available ? 'gift-outline' : 'time-outline'}
+          size={16}
+          color={available ? GameColors.backgroundPrimary : GameColors.textSecondary}
+        />
+        <Text style={[styles.fabText, !available && { color: GameColors.textSecondary }]}>
+          {loading
+            ? 'Loading…'
+            : available
+            ? adFree ? 'Free Lucky Spin ⚡' : 'Free Lucky Spin'
+            : `Lucky Spin ${cooldown}`}
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
 
 // ─── Styles ───────────────────────────────────────────────────────────────
 

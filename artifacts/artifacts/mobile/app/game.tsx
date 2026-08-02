@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Image,
-  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -67,7 +66,7 @@ export default function GameScreen() {
   const usePowerUp = useUserStore((s) => s.usePowerUp);
   const powerUps = useUserStore((s) => s.powerUps);
   const selectedAvatarId = useUserStore((s) => s.selectedAvatarId);
-  const { adsRemoved, showRewarded } = useAdStore();
+  const { incrementSessionCounter } = useAdStore();
   const { playEffect, playMusic, stopMusic } = useAudio();
 
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -77,12 +76,9 @@ export default function GameScreen() {
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [removedOptions, setRemovedOptions] = useState<number[]>([]);
   const [paused, setPaused] = useState(false);
-  const [reviveVisible, setReviveVisible] = useState(false);
-  const [reviveLoading, setReviveLoading] = useState(false);
   const [superComboVisible, setSuperComboVisible] = useState(false);
   const [hintUsed, setHintUsed] = useState(false);
   const endedRef = useRef(false);
-  const reviveOffered = useRef(false);
   const shakeX = useSharedValue(0);
   const clarityProgress = Math.min(100, Math.max(0, clarity));
   const currentQuestion = questions[questionIndex];
@@ -104,39 +100,10 @@ export default function GameScreen() {
     router.replace(ROUTES.RESULT);
   }, [endSession, router, setIsTimerRunning]);
 
-  /** Intercepts timer-zero to offer a rewarded-ad revive before finishing. */
+  /** Timer reached zero — proceed directly to results (spec §7: rewarded-only, opt-in). */
   const handleTimerEnd = useCallback(() => {
-    if (adsRemoved || reviveOffered.current) {
-      finishGame();
-      return;
-    }
-    reviveOffered.current = true;
-    setIsTimerRunning(false);
-    setReviveVisible(true);
-  }, [adsRemoved, finishGame, setIsTimerRunning]);
-
-  const handleRevive = useCallback(async () => {
-    if (reviveLoading) return;
-    setReviveLoading(true);
-    try {
-      const rewarded = await showRewarded();
-      if (rewarded) {
-        setReviveVisible(false);
-        setTimer(30);
-        setIsTimerRunning(true);
-        playEffect('coin');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else {
-        setReviveVisible(false);
-        finishGame();
-      }
-    } catch {
-      setReviveVisible(false);
-      finishGame();
-    } finally {
-      setReviveLoading(false);
-    }
-  }, [finishGame, playEffect, reviveLoading, setIsTimerRunning, setTimer, showRewarded]);
+    finishGame();
+  }, [finishGame]);
 
   useEffect(() => {
     setRemovedOptions([]);
@@ -289,18 +256,18 @@ export default function GameScreen() {
 
   const restart = useCallback(() => {
     endedRef.current = false;
-    reviveOffered.current = false;
     setPaused(false);
     setSelectedAnswer(null);
     setFeedback(null);
-    setReviveVisible(false);
     startSession(difficulty, category);
   }, [category, difficulty, startSession]);
 
   const exitToLobby = useCallback(() => {
+    // Count early exits as completed sessions for the double-reward counter (spec §7.2)
+    incrementSessionCounter();
     resetGame();
     router.replace(ROUTES.LOBBY);
-  }, [resetGame, router]);
+  }, [incrementSessionCounter, resetGame, router]);
 
   const shakeStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: shakeX.value }],
@@ -455,27 +422,6 @@ export default function GameScreen() {
         onExit={exitToLobby}
       />
 
-      {/* ── Revive modal ────────────────────────────────────────────────── */}
-      <Modal visible={reviveVisible} transparent animationType="fade" onRequestClose={() => { setReviveVisible(false); finishGame(); }}>
-        <View style={styles.reviveBackdrop}>
-          <View style={styles.reviveCard}>
-            <View style={styles.reviveIcon}>
-              <Ionicons name="time-outline" size={52} color={GameColors.accentGold} />
-            </View>
-            <Text style={styles.reviveTitle}>Time's Up!</Text>
-            <Text style={styles.reviveBody}>Watch a short ad to get{'\n'}30 more seconds.</Text>
-            <GradientButton
-              title={reviveLoading ? 'Loading ad…' : '▶  Watch Ad  +30s'}
-              onPress={handleRevive}
-              disabled={reviveLoading}
-              style={styles.reviveBtn}
-            />
-            <TouchableOpacity onPress={() => { setReviveVisible(false); finishGame(); }} style={styles.reviveDecline}>
-              <Text style={styles.reviveDeclineText}>No thanks, see results</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </AnimatedBackground>
   );
 }
@@ -521,13 +467,4 @@ const styles = StyleSheet.create({
   answerText: { ...Typography.small, flex: 1, fontFamily: 'Inter_600SemiBold' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
   loadingText: { ...Typography.caption, color: GameColors.textSecondary },
-  // Revive modal
-  reviveBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.88)', alignItems: 'center', justifyContent: 'center', padding: 28 },
-  reviveCard: { width: '100%', borderRadius: 28, padding: 28, alignItems: 'center', backgroundColor: GameColors.card, borderWidth: 1, borderColor: GameColors.cardBorder, gap: 16, shadowColor: GameColors.accentGold, shadowOpacity: 0.25, shadowRadius: 20, elevation: 12 },
-  reviveIcon: { width: 96, height: 96, borderRadius: 48, borderWidth: 2, borderColor: GameColors.accentGold, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,215,0,0.08)' },
-  reviveTitle: { ...Typography.header, color: GameColors.textWhite, fontSize: 26 },
-  reviveBody: { ...Typography.caption, color: GameColors.textSecondary, textAlign: 'center', lineHeight: 22 },
-  reviveBtn: { width: '100%' },
-  reviveDecline: { paddingVertical: 8, paddingHorizontal: 16 },
-  reviveDeclineText: { ...Typography.small, color: GameColors.textSecondary },
 });

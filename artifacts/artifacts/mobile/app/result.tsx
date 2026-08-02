@@ -51,7 +51,13 @@ export default function ResultScreen() {
     updateMissionProgress,
     refreshDailyMissions,
   } = useUserStore();
-  const { adsRemoved, showInterstitial, showRewarded } = useAdStore();
+  const {
+    canShowDoubleReward,
+    incrementSessionCounter,
+    resetSessionCounter,
+    showRewarded,
+    isAdFreePassActive,
+  } = useAdStore();
   const { playEffect } = useAudio();
 
   const [doubledByAd, setDoubledByAd] = useState(false);
@@ -79,6 +85,13 @@ export default function ResultScreen() {
   const baseXP  = xpEarned + XP_COMPLETION_BONUS + (isPerfect ? XP_PERFECT_BONUS : 0);
   const totalXP = doubleXPActive ? baseXP * 2 : baseXP;
 
+  // ── Double Reward button visibility (spec §7.2 + §7.3) ──────────────────
+  // The counter always gates availability — even ad-free pass holders must reach
+  // the threshold before the offer appears (spec §7.3: "counter still functions").
+  // Pass status only controls whether an ad is shown (instant vs watched).
+  const adFreeActive    = isAdFreePassActive();
+  const doubleAvailable = !doubledByAd && canShowDoubleReward();
+
   // ── Record result + entrance animation ────────────────────────────────────
   useEffect(() => {
     // Refresh missions before updating progress (ensures today's missions are loaded)
@@ -104,6 +117,11 @@ export default function ResultScreen() {
     if (maxStreakThisGame >= 5)         updateMissionProgress('get_combo', maxStreakThisGame);
     updateMissionProgress('play_category', 1, selectedCategory);
 
+    // ── Advance session counter (spec §7.2) ──────────────────────────────
+    // Every completed session increments the counter, enabling the double-
+    // reward button once it reaches the threshold.
+    incrementSessionCounter();
+
     Haptics.notificationAsync(
       isVictory ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning,
     );
@@ -115,30 +133,51 @@ export default function ResultScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Interstitial after 3.5 s delay ────────────────────────────────────────
-  useEffect(() => {
-    if (adsRemoved) return;
-    const t = setTimeout(() => { showInterstitial(); }, 3500);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ── Double coins via rewarded ad ──────────────────────────────────────────
-  const handleDoubleCoins = useCallback(async () => {
+  // ── Double Rewards handler (spec §7.2) ────────────────────────────────────
+  // Doubles both coins AND XP earned this session.
+  // Ad-free pass: applies instantly without showing an ad.
+  // Normal: watches a rewarded ad first.
+  const handleDoubleRewards = useCallback(async () => {
     if (doubleLoading || doubledByAd) return;
+
+    if (adFreeActive) {
+      // Ad-Free Pass — grant instantly, counter still resets (spec §7.3)
+      addCoins(totalCoins);
+      addXP(totalXP);
+      resetSessionCounter();
+      setDoubledByAd(true);
+      playEffect('coin');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return;
+    }
+
     setDoubleLoading(true);
     try {
       const rewarded = await showRewarded();
       if (rewarded) {
         addCoins(totalCoins); // adds the same amount again → doubled
+        addXP(totalXP);       // doubles XP too (spec §7.2)
+        resetSessionCounter(); // reset counter after successful watch
         setDoubledByAd(true);
         playEffect('coin');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
+      // On decline the counter is NOT reset — it carries over (spec §7.2)
     } finally {
       setDoubleLoading(false);
     }
-  }, [addCoins, totalCoins, doubleLoading, doubledByAd, playEffect, showRewarded]);
+  }, [
+    adFreeActive,
+    addCoins,
+    addXP,
+    totalCoins,
+    totalXP,
+    doubleLoading,
+    doubledByAd,
+    playEffect,
+    showRewarded,
+    resetSessionCounter,
+  ]);
 
   const trophyStyle  = useAnimatedStyle(() => ({ transform: [{ scale: trophyScale.value }] }));
   const contentStyle = useAnimatedStyle(() => ({
@@ -156,6 +195,17 @@ export default function ResultScreen() {
 
   const topPad = Platform.OS === 'web' ? 58 : insets.top + 18;
   const botPad = Platform.OS === 'web' ? 28 : insets.bottom + 18;
+
+  // Display values — update once doubled
+  const displayCoins = doubledByAd ? totalCoins * 2 : totalCoins;
+  const displayXP    = doubledByAd ? totalXP * 2    : totalXP;
+
+  // Double-reward button label
+  const doubleLabel = adFreeActive
+    ? '⚡ Double Rewards (Ad-Free)'
+    : doubleLoading
+    ? 'Loading ad…'
+    : '▶  Watch Ad • Double Rewards';
 
   return (
     <AnimatedBackground>
@@ -198,24 +248,24 @@ export default function ResultScreen() {
             <Text style={styles.scoreLabel}>FINAL SCORE</Text>
             <Text style={styles.scoreValue}>{score}</Text>
             <View style={styles.statsGrid}>
-              <Stat icon="checkmark-circle-outline" label="Correct"  value={`${correctAnswers}/${totalQuestions}`} color={GameColors.accentGreen} />
-              <Stat icon="analytics-outline"        label="Accuracy" value={`${accuracy}%`}                       color={GameColors.accentGold}  />
-              <Stat icon="flash-outline"            label="XP Earned" value={`+${totalXP}`}                       color="#CE93D8" />
+              <Stat icon="checkmark-circle-outline" label="Correct"   value={`${correctAnswers}/${totalQuestions}`}                  color={GameColors.accentGreen}  />
+              <Stat icon="analytics-outline"        label="Accuracy"  value={`${accuracy}%`}                                         color={GameColors.accentGold}   />
+              <Stat icon="flash-outline"            label="XP Earned" value={doubledByAd ? `+${displayXP} ×2` : `+${displayXP}`}    color="#CE93D8" />
               <Stat
                 icon="cash-outline"
                 label="Coins"
-                value={doubledByAd ? `+${totalCoins * 2}` : `+${totalCoins}`}
+                value={doubledByAd ? `+${displayCoins} ×2` : `+${displayCoins}`}
                 color={GameColors.accentOrange}
               />
             </View>
           </View>
           <View style={styles.buttons}>
             <GradientButton title="Play Again" onPress={playAgain} testID="play-again-button" />
-            {!adsRemoved && !doubledByAd && (
+            {doubleAvailable && (
               <SecondaryButton
-                title={doubleLoading ? 'Loading ad…' : '▶  Watch Ad • Double Coins'}
-                onPress={handleDoubleCoins}
-                borderColor={GameColors.accentOrange}
+                title={doubleLabel}
+                onPress={handleDoubleRewards}
+                borderColor={adFreeActive ? GameColors.accentGold : GameColors.accentOrange}
                 disabled={doubleLoading}
               />
             )}
