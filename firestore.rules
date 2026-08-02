@@ -1,0 +1,46 @@
+// BlurQuiz — Firestore Security Rules
+// Deploy via: Firebase Console → Firestore Database → Rules tab → paste & publish
+// OR: firebase deploy --only firestore:rules  (requires Firebase CLI)
+//
+// Rule summary:
+//  players/{userId}       — owner can write; any authenticated user can read (for leaderboard)
+//  game_sessions/{id}     — owner can create; no client-side updates/deletes (server only)
+//  config/{key}           — public read; no client writes (Admin SDK only)
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Player profiles ───────────────────────────────────────────────────────
+    // Authenticated users can read any profile (needed for leaderboard lookups).
+    // Only the owning UID may write their own document.
+    match /players/{userId} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── Game sessions ─────────────────────────────────────────────────────────
+    // Players may create sessions where playerId matches their own UID.
+    // No client-side updates or deletes — aggregate stats are updated server-side
+    // via the Admin SDK (POST /api/sessions).
+    match /game_sessions/{sessionId} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.playerId == request.auth.uid;
+      allow update, delete: if false;  // server-only via Admin SDK
+    }
+
+    // ── Economy config ────────────────────────────────────────────────────────
+    // Public read so the mobile app can fetch without auth.
+    // No client writes — only the API server may modify via Admin SDK.
+    match /config/{key} {
+      allow read:  if true;
+      allow write: if false;
+    }
+
+    // ── Deny everything else ─────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

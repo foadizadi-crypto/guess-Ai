@@ -12,6 +12,7 @@ import { useEffect, useRef } from 'react';
 import { useUserStore } from '@/store/userStore';
 import { initAuth } from '@/services/authService';
 import { savePlayerProfile } from '@/services/firestoreService';
+import { fetchAndApplyRemoteConfig } from '@/services/remoteConfigService';
 
 export function useFirestoreSync(): void {
   const initializedRef = useRef(false);
@@ -20,13 +21,18 @@ export function useFirestoreSync(): void {
   const { username, coins, gems, xp, level, isPremium, selectedAvatarId, statistics } =
     useUserStore();
 
-  // ── Boot: anonymous sign-in ───────────────────────────────────────────────
+  // ── Boot: anonymous sign-in + remote config fetch ────────────────────────
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
-    initAuth().catch((err) =>
-      console.warn('[FirestoreSync] initAuth failed:', err),
-    );
+
+    // Run both in parallel — remote config doesn't need auth
+    Promise.all([
+      initAuth().catch((err) =>
+        console.warn('[FirestoreSync] initAuth failed:', err),
+      ),
+      fetchAndApplyRemoteConfig(),
+    ]);
   }, []);
 
   // ── Sync on economy state change ─────────────────────────────────────────

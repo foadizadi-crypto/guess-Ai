@@ -72,7 +72,50 @@ export const GAME_CONFIG = {
   session_timer_seconds:  120,  // countdown timer per question
   questions_per_session:   20,  // questions in a single game session
 
-} as const;
+};
+
+// ─── Remote config overlay ────────────────────────────────────────────────────
+// Call applyRemoteConfig() on startup to merge live API values over the defaults
+// above.  All helper functions below automatically pick up the updated values
+// because they reference GAME_CONFIG by variable, not by snapshot copy.
+//
+// Key mapping: the API uses short snake_case keys; a few differ from the names
+// above — the mapping lives in services/remoteConfigService.ts.
+
+export function applyRemoteConfig(remote: Record<string, string>): void {
+  const n = (key: string): number | undefined => {
+    const v = remote[key];
+    if (v === undefined) return undefined;
+    const parsed = Number(v);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  // XP formula (API keys differ slightly)
+  const coeff = n('xp_formula_coefficient');
+  const exp   = n('xp_formula_exponent');
+  if (coeff !== undefined) GAME_CONFIG.xp_base_formula_coefficient = coeff;
+  if (exp   !== undefined) GAME_CONFIG.xp_base_formula_exponent    = exp;
+
+  // XP per answer
+  const fields: Array<keyof typeof GAME_CONFIG> = [
+    'xp_correct_easy', 'xp_correct_medium', 'xp_correct_hard', 'xp_wrong',
+    'xp_session_complete_bonus', 'xp_perfect_game_bonus',
+    'clarity_correct_increment',
+    'clarity_wrong_penalty_easy', 'clarity_wrong_penalty_medium', 'clarity_wrong_penalty_hard',
+    'initial_blur_easy', 'initial_blur_medium', 'initial_blur_hard',
+    'combo_tier_1_min', 'combo_tier_1_bonus',
+    'combo_tier_2_min', 'combo_tier_2_bonus',
+    'combo_tier_3_min', 'combo_tier_3_bonus',
+    'combo_tier_4_min', 'combo_tier_4_bonus',
+    'super_combo_threshold', 'super_combo_multiplier',
+    'max_level',
+  ];
+
+  for (const key of fields) {
+    const val = n(key);
+    if (val !== undefined) (GAME_CONFIG as Record<string, number>)[key] = val;
+  }
+}
 
 // ─── Derived helpers (computed from config, not raw tunables) ─────────────────
 
