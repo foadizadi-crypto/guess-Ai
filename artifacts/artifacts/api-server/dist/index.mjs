@@ -57042,22 +57042,27 @@ var CONFIG_SEEDS = [
 // src/routes/config.ts
 var router3 = (0, import_express3.Router)();
 router3.get("/config", async (_req, res) => {
-  const db = getFirestore();
-  const snapshot = await db.collection("config").get();
-  if (snapshot.empty) {
-    await upsertSeeds(db);
-    const seeded = {};
-    CONFIG_SEEDS.forEach((s) => {
-      seeded[s.key] = s.value;
-    });
-    res.json(seeded);
-    return;
-  }
-  const config = {};
-  snapshot.forEach((docSnap) => {
-    config[docSnap.id] = docSnap.data().value;
+  const defaults3 = {};
+  CONFIG_SEEDS.forEach((s) => {
+    defaults3[s.key] = s.value;
   });
-  res.json(config);
+  try {
+    const db = getFirestore();
+    const snapshot = await db.collection("config").get();
+    if (snapshot.empty) {
+      await upsertSeeds(db);
+      res.json(defaults3);
+      return;
+    }
+    const config = {};
+    snapshot.forEach((docSnap) => {
+      config[docSnap.id] = docSnap.data().value;
+    });
+    res.json(config);
+  } catch (err) {
+    logger.warn({ err }, "Firestore unavailable \u2014 returning hardcoded config defaults");
+    res.json(defaults3);
+  }
 });
 router3.post("/config/seed", async (_req, res) => {
   const db = getFirestore();

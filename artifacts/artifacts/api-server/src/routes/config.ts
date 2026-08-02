@@ -11,28 +11,38 @@ import { Router, type Request, type Response } from "express";
 import type { Firestore } from "firebase-admin/firestore";
 import { getFirestore } from "../lib/firebaseAdmin";
 import { CONFIG_SEEDS } from "../lib/configSeeds";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
 // ─── GET /api/config ──────────────────────────────────────────────────────────
 router.get("/config", async (_req: Request, res: Response) => {
-  const db = getFirestore();
-  const snapshot = await db.collection("config").get();
+  // Always compute the hardcoded defaults — used as fallback if Firestore is unavailable
+  const defaults: Record<string, string> = {};
+  CONFIG_SEEDS.forEach((s) => { defaults[s.key] = s.value; });
 
-  // Auto-seed on first access
-  if (snapshot.empty) {
-    await upsertSeeds(db);
-    const seeded: Record<string, string> = {};
-    CONFIG_SEEDS.forEach((s) => { seeded[s.key] = s.value; });
-    res.json(seeded);
-    return;
+  try {
+    const db = getFirestore();
+    const snapshot = await db.collection("config").get();
+
+    // Auto-seed on first access
+    if (snapshot.empty) {
+      await upsertSeeds(db);
+      res.json(defaults);
+      return;
+    }
+
+    const config: Record<string, string> = {};
+    snapshot.forEach((docSnap) => {
+      config[docSnap.id] = (docSnap.data() as { value: string }).value;
+    });
+    res.json(config);
+  } catch (err) {
+    // Firestore unavailable (API not yet enabled, cold start, etc.)
+    // Return hardcoded defaults so the mobile app always gets valid values.
+    logger.warn({ err }, "Firestore unavailable — returning hardcoded config defaults");
+    res.json(defaults);
   }
-
-  const config: Record<string, string> = {};
-  snapshot.forEach((docSnap) => {
-    config[docSnap.id] = (docSnap.data() as { value: string }).value;
-  });
-  res.json(config);
 });
 
 // ─── POST /api/config/seed ────────────────────────────────────────────────────
