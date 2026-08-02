@@ -97,9 +97,15 @@ class IAPService {
     }
   }
 
+  private grantAdFreePass(): void {
+    const { useAdStore } = require('@/store/adStore');
+    useAdStore.getState().removeAds();
+  }
+
   async purchase(sku: string): Promise<boolean> {
     if (this.isMockMode) {
       await new Promise<void>((r) => setTimeout(r, 900));
+      if (sku === IAP_SKUS.REMOVE_ADS) this.grantAdFreePass();
       return true;
     }
     if (!this.connected) await this.init();
@@ -122,7 +128,9 @@ class IAPService {
     if (this.isMockMode) return false;
     try {
       const purchases = await _iap!.getAvailablePurchases();
-      return (purchases ?? []).some((p: any) => (p.productId ?? p.sku) === IAP_SKUS.REMOVE_ADS);
+      const found = (purchases ?? []).some((p: any) => (p.productId ?? p.sku) === IAP_SKUS.REMOVE_ADS);
+      if (found) this.grantAdFreePass();
+      return found;
     } catch { return false; }
   }
 

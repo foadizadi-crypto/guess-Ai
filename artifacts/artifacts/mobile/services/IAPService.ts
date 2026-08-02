@@ -60,8 +60,12 @@ class IAPService {
     return skus.map((s) => MOCK_PRODUCTS[s]).filter(Boolean) as IAPProduct[];
   }
 
-  async purchase(_sku: string): Promise<boolean> {
+  async purchase(sku: string): Promise<boolean> {
     await new Promise<void>((r) => setTimeout(r, 900));
+    if (sku === IAP_SKUS.REMOVE_ADS) {
+      const { useAdStore } = require('@/store/adStore');
+      useAdStore.getState().removeAds();
+    }
     return true;
   }
 
