@@ -20824,27 +20824,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router4;
+    module.exports = Router6;
     module.exports.Route = Route;
-    function Router4(options) {
-      if (!(this instanceof Router4)) {
-        return new Router4(options);
+    function Router6(options) {
+      if (!(this instanceof Router6)) {
+        return new Router6(options);
       }
       const opts = options || {};
-      function router4(req, res, next) {
-        router4.handle(req, res, next);
+      function router6(req, res, next) {
+        router6.handle(req, res, next);
       }
-      Object.setPrototypeOf(router4, this);
-      router4.caseSensitive = opts.caseSensitive;
-      router4.mergeParams = opts.mergeParams;
-      router4.params = {};
-      router4.strict = opts.strict;
-      router4.stack = [];
-      return router4;
+      Object.setPrototypeOf(router6, this);
+      router6.caseSensitive = opts.caseSensitive;
+      router6.mergeParams = opts.mergeParams;
+      router6.params = {};
+      router6.strict = opts.strict;
+      router6.stack = [];
+      return router6;
     }
-    Router4.prototype = function() {
+    Router6.prototype = function() {
     };
-    Router4.prototype.param = function param(name, fn) {
+    Router6.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20864,7 +20864,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router4.prototype.handle = function handle(req, res, callback) {
+    Router6.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20991,7 +20991,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router4.prototype.use = function use(handler) {
+    Router6.prototype.use = function use(handler) {
       let offset = 0;
       let path6 = "/";
       if (typeof handler !== "function") {
@@ -21024,7 +21024,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router4.prototype.route = function route(path6) {
+    Router6.prototype.route = function route(path6) {
       const route2 = new Route(path6);
       const layer = new Layer(path6, {
         sensitive: this.caseSensitive,
@@ -21039,7 +21039,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router4.prototype[method] = function(path6) {
+      Router6.prototype[method] = function(path6) {
         const route = this.route(path6);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21222,13 +21222,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve4 = __require("node:path").resolve;
     var once = require_once();
-    var Router4 = require_router();
+    var Router6 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router4 = null;
+      var router6 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21237,13 +21237,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router4 === null) {
-            router4 = new Router4({
+          if (router6 === null) {
+            router6 = new Router6({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router4;
+          return router6;
         }
       });
     };
@@ -21314,15 +21314,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router4 = this.router;
+      var router6 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router4.use(path6, fn2);
+          return router6.use(path6, fn2);
         }
         debug(".use app under %s", path6);
         fn2.mountpath = path6;
         fn2.parent = this;
-        router4.use(path6, function mounted_app(req, res, next) {
+        router6.use(path6, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23907,7 +23907,7 @@ var require_express = __commonJS({
     var EventEmitter = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router4 = require_router();
+    var Router6 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23929,8 +23929,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router4.Route;
-    exports.Router = Router4;
+    exports.Route = Router6.Route;
+    exports.Router = Router6;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -41338,12 +41338,12 @@ var init_sdk = __esm({
 });
 
 // src/app.ts
-var import_express4 = __toESM(require_express2(), 1);
+var import_express6 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 
 // src/routes/index.ts
-var import_express3 = __toESM(require_express2(), 1);
+var import_express5 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -56968,14 +56968,168 @@ router2.get("/ai-status", (_req, res) => {
 });
 var ai_default = router2;
 
-// src/routes/index.ts
+// src/routes/config.ts
+var import_express3 = __toESM(require_express2(), 1);
+
+// src/lib/firebaseAdmin.ts
+import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { getFirestore as _getFirestore } from "firebase-admin/firestore";
+var _app = null;
+var _db = null;
+function getApp() {
+  if (_app) return _app;
+  const raw = process.env["FIREBASE_SERVICE_ACCOUNT_JSON"];
+  if (!raw) throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON secret is not set.");
+  const existing = getApps();
+  if (existing.length > 0) {
+    _app = existing[0];
+  } else {
+    _app = initializeApp({ credential: cert(JSON.parse(raw)) });
+    logger.info("Firebase Admin SDK initialized");
+  }
+  return _app;
+}
+function getFirestore() {
+  if (_db) return _db;
+  _db = _getFirestore(getApp());
+  return _db;
+}
+
+// src/lib/configSeeds.ts
+var CONFIG_SEEDS = [
+  // XP Formula
+  { key: "xp_formula_coefficient", value: "1.2", description: "Coefficient: coefficient \xD7 level ^ exponent" },
+  { key: "xp_formula_exponent", value: "1.4", description: "Exponent in level XP formula" },
+  // XP per answer
+  { key: "xp_correct_easy", value: "10", description: "XP for a correct answer on Easy" },
+  { key: "xp_correct_medium", value: "15", description: "XP for a correct answer on Medium" },
+  { key: "xp_correct_hard", value: "25", description: "XP for a correct answer on Hard" },
+  { key: "xp_wrong", value: "2", description: "XP for a wrong answer" },
+  // Session bonuses
+  { key: "xp_session_complete_bonus", value: "50", description: "XP bonus for finishing any session" },
+  { key: "xp_perfect_game_bonus", value: "100", description: "XP bonus for a perfect game (20/20)" },
+  // Combo tiers (streak thresholds)
+  { key: "combo_tier_1_min", value: "3", description: "Streak for Mini-combo" },
+  { key: "combo_tier_1_bonus", value: "3", description: "Bonus XP/answer at Mini-combo" },
+  { key: "combo_tier_2_min", value: "5", description: "Streak for Combo" },
+  { key: "combo_tier_2_bonus", value: "5", description: "Bonus XP/answer at Combo" },
+  { key: "combo_tier_3_min", value: "8", description: "Streak for Super Combo" },
+  { key: "combo_tier_3_bonus", value: "8", description: "Bonus XP/answer at Super Combo" },
+  { key: "combo_tier_4_min", value: "12", description: "Streak for Ultra Combo" },
+  { key: "combo_tier_4_bonus", value: "12", description: "Bonus XP/answer at Ultra Combo" },
+  // Blur / clarity mechanics
+  { key: "clarity_correct_increment", value: "5", description: "Blur removed on correct answer" },
+  { key: "clarity_wrong_penalty_easy", value: "3", description: "Blur added on wrong answer (Easy)" },
+  { key: "clarity_wrong_penalty_medium", value: "5", description: "Blur added on wrong answer (Medium)" },
+  { key: "clarity_wrong_penalty_hard", value: "7", description: "Blur added on wrong answer (Hard)" },
+  { key: "initial_blur_easy", value: "50", description: "Starting blur on Easy (0=clear, 100=fully blurred)" },
+  { key: "initial_blur_medium", value: "80", description: "Starting blur on Medium" },
+  { key: "initial_blur_hard", value: "100", description: "Starting blur on Hard" },
+  // Ad system
+  { key: "daily_ad_cooldown_hours", value: "4", description: "Hours between Daily Gift lobby ad claims" },
+  { key: "double_reward_session_threshold", value: "3", description: "Sessions before Double Rewards button appears" },
+  // Coin rates
+  { key: "coins_per_correct_answer", value: "1", description: "Coins per correct answer" },
+  { key: "coins_perfect_game_bonus", value: "25", description: "Bonus coins for a perfect game" },
+  { key: "daily_gift_coins_min", value: "50", description: "Min coins from Daily Gift" },
+  { key: "daily_gift_coins_max", value: "150", description: "Max coins from Daily Gift" },
+  { key: "daily_gift_consumable_chance", value: "0.1", description: "Probability of bonus consumable from Daily Gift" },
+  // Level system
+  { key: "max_level", value: "500", description: "Highest achievable player level" },
+  { key: "daily_xp_cap", value: "500", description: "Max XP earnable per day (anti-farming)" }
+];
+
+// src/routes/config.ts
 var router3 = (0, import_express3.Router)();
-router3.use(health_default);
-router3.use(ai_default);
-var routes_default = router3;
+router3.get("/config", async (_req, res) => {
+  const db = getFirestore();
+  const snapshot = await db.collection("config").get();
+  if (snapshot.empty) {
+    await upsertSeeds(db);
+    const seeded = {};
+    CONFIG_SEEDS.forEach((s) => {
+      seeded[s.key] = s.value;
+    });
+    res.json(seeded);
+    return;
+  }
+  const config = {};
+  snapshot.forEach((docSnap) => {
+    config[docSnap.id] = docSnap.data().value;
+  });
+  res.json(config);
+});
+router3.post("/config/seed", async (_req, res) => {
+  const db = getFirestore();
+  await upsertSeeds(db);
+  res.json({ ok: true, seeded: CONFIG_SEEDS.length });
+});
+async function upsertSeeds(db) {
+  const batch = db.batch();
+  for (const seed of CONFIG_SEEDS) {
+    const ref = db.collection("config").doc(seed.key);
+    batch.set(ref, {
+      value: seed.value,
+      description: seed.description,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }, { merge: true });
+  }
+  await batch.commit();
+}
+var config_default = router3;
+
+// src/routes/sessions.ts
+var import_express4 = __toESM(require_express2(), 1);
+import { FieldValue } from "firebase-admin/firestore";
+var router4 = (0, import_express4.Router)();
+router4.post("/sessions", async (req, res) => {
+  const body = req.body;
+  const { playerId, difficulty, category } = body;
+  if (!playerId || !difficulty || !category) {
+    res.status(400).json({ error: "playerId, difficulty, and category are required" });
+    return;
+  }
+  const db = getFirestore();
+  const sessionRef = body.sessionId ? db.collection("game_sessions").doc(body.sessionId) : db.collection("game_sessions").doc();
+  const batch = db.batch();
+  batch.set(sessionRef, {
+    playerId,
+    difficulty,
+    category,
+    correctAnswers: body.correctAnswers ?? 0,
+    wrongAnswers: body.wrongAnswers ?? 0,
+    maxCombo: body.maxCombo ?? 0,
+    xpEarned: body.xpEarned ?? 0,
+    coinsEarned: body.coinsEarned ?? 0,
+    score: body.score ?? 0,
+    startTime: body.startTime ?? null,
+    endTime: body.endTime ?? null,
+    wasAbandoned: body.wasAbandoned ?? false,
+    recordedAt: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  const playerRef = db.collection("players").doc(playerId);
+  batch.set(playerRef, {
+    totalGamesPlayed: FieldValue.increment(1),
+    totalCorrectAnswers: FieldValue.increment(body.correctAnswers ?? 0),
+    totalXpEarned: FieldValue.increment(body.xpEarned ?? 0),
+    totalCoinsEarned: FieldValue.increment(body.coinsEarned ?? 0),
+    lastPlayedAt: (/* @__PURE__ */ new Date()).toISOString()
+  }, { merge: true });
+  await batch.commit();
+  res.json({ ok: true, sessionId: sessionRef.id });
+});
+var sessions_default = router4;
+
+// src/routes/index.ts
+var router5 = (0, import_express5.Router)();
+router5.use(health_default);
+router5.use(ai_default);
+router5.use(config_default);
+router5.use(sessions_default);
+var routes_default = router5;
 
 // src/app.ts
-var app = (0, import_express4.default)();
+var app = (0, import_express6.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -56996,8 +57150,8 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use(import_express4.default.json());
-app.use(import_express4.default.urlencoded({ extended: true }));
+app.use(import_express6.default.json());
+app.use(import_express6.default.urlencoded({ extended: true }));
 app.use("/api", routes_default);
 app.use((err, _req, res, _next) => {
   const status = err && typeof err === "object" && "status" in err && typeof err.status === "number" ? err.status : 500;

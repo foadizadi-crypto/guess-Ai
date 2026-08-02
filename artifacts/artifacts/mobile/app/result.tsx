@@ -22,6 +22,8 @@ import {
   COINS_PERFECT_GAME_BONUS,
 } from '@/constants/economy';
 import type { MissionType } from '@/types';
+import { recordGameSession } from '@/services/firestoreService';
+import { getPlayerId } from '@/services/authService';
 
 const CONFETTI = ['#FFD700', '#00E676', '#FF6B35', '#CE93D8', '#64B5F6', '#FF1744'];
 
@@ -40,6 +42,8 @@ export default function ResultScreen() {
     doubleXPActive,
     lastGameWasTimedOut,
     maxStreakThisGame,
+    totalWrong,
+    gameSession,
     resetGame,
   } = useGameStore();
   const {
@@ -121,6 +125,29 @@ export default function ResultScreen() {
     // Every completed session increments the counter, enabling the double-
     // reward button once it reaches the threshold.
     incrementSessionCounter();
+
+    // ── Record session to Firestore (Task 6) ─────────────────────────────
+    // Fire-and-forget: errors are logged but never block the UI.
+    const uid = getPlayerId();
+    if (uid && gameSession) {
+      recordGameSession(
+        uid,
+        {
+          difficulty:     selectedDifficulty,
+          category:       selectedCategory,
+          correctAnswers,
+          wrongAnswers:   totalWrong,
+          maxCombo:       maxStreakThisGame,
+          xpEarned:       totalXP,   // final amount including bonuses
+          coinsEarned:    totalCoins,
+          score,
+          startTime:      gameSession.startTime,
+          endTime:        gameSession.endTime ?? Date.now(),
+          wasAbandoned:   false,
+        },
+        gameSession.id,
+      );
+    }
 
     Haptics.notificationAsync(
       isVictory ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning,

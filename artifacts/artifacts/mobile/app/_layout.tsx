@@ -6,8 +6,15 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Stack } from 'expo-router';
 import { GameColors } from '@/theme/colors';
+import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 
 const queryClient = new QueryClient();
+
+/** Runs Firestore anonymous-auth init + player profile sync in the background. */
+function FirestoreSyncProvider() {
+  useFirestoreSync();
+  return null;
+}
 
 function RootLayoutNav() {
   return (
@@ -44,6 +51,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
+              <FirestoreSyncProvider />
               <RootLayoutNav />
             </KeyboardProvider>
           </GestureHandlerRootView>
