@@ -20824,27 +20824,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router6;
+    module.exports = Router7;
     module.exports.Route = Route;
-    function Router6(options) {
-      if (!(this instanceof Router6)) {
-        return new Router6(options);
+    function Router7(options) {
+      if (!(this instanceof Router7)) {
+        return new Router7(options);
       }
       const opts = options || {};
-      function router6(req, res, next) {
-        router6.handle(req, res, next);
+      function router7(req, res, next) {
+        router7.handle(req, res, next);
       }
-      Object.setPrototypeOf(router6, this);
-      router6.caseSensitive = opts.caseSensitive;
-      router6.mergeParams = opts.mergeParams;
-      router6.params = {};
-      router6.strict = opts.strict;
-      router6.stack = [];
-      return router6;
+      Object.setPrototypeOf(router7, this);
+      router7.caseSensitive = opts.caseSensitive;
+      router7.mergeParams = opts.mergeParams;
+      router7.params = {};
+      router7.strict = opts.strict;
+      router7.stack = [];
+      return router7;
     }
-    Router6.prototype = function() {
+    Router7.prototype = function() {
     };
-    Router6.prototype.param = function param(name, fn) {
+    Router7.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20864,7 +20864,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router6.prototype.handle = function handle(req, res, callback) {
+    Router7.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20991,7 +20991,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router6.prototype.use = function use(handler) {
+    Router7.prototype.use = function use(handler) {
       let offset = 0;
       let path6 = "/";
       if (typeof handler !== "function") {
@@ -21024,7 +21024,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router6.prototype.route = function route(path6) {
+    Router7.prototype.route = function route(path6) {
       const route2 = new Route(path6);
       const layer = new Layer(path6, {
         sensitive: this.caseSensitive,
@@ -21039,7 +21039,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router6.prototype[method] = function(path6) {
+      Router7.prototype[method] = function(path6) {
         const route = this.route(path6);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21222,13 +21222,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve4 = __require("node:path").resolve;
     var once = require_once();
-    var Router6 = require_router();
+    var Router7 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router6 = null;
+      var router7 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21237,13 +21237,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router6 === null) {
-            router6 = new Router6({
+          if (router7 === null) {
+            router7 = new Router7({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router6;
+          return router7;
         }
       });
     };
@@ -21314,15 +21314,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router6 = this.router;
+      var router7 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router6.use(path6, fn2);
+          return router7.use(path6, fn2);
         }
         debug(".use app under %s", path6);
         fn2.mountpath = path6;
         fn2.parent = this;
-        router6.use(path6, function mounted_app(req, res, next) {
+        router7.use(path6, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23907,7 +23907,7 @@ var require_express = __commonJS({
     var EventEmitter = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router6 = require_router();
+    var Router7 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23929,8 +23929,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router6.Route;
-    exports.Router = Router6;
+    exports.Route = Router7.Route;
+    exports.Router = Router7;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -41338,12 +41338,12 @@ var init_sdk = __esm({
 });
 
 // src/app.ts
-var import_express6 = __toESM(require_express2(), 1);
+var import_express7 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 
 // src/routes/index.ts
-var import_express5 = __toESM(require_express2(), 1);
+var import_express6 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -57125,16 +57125,94 @@ router4.post("/sessions", async (req, res) => {
 });
 var sessions_default = router4;
 
-// src/routes/index.ts
+// src/routes/leaderboard.ts
+var import_express5 = __toESM(require_express2(), 1);
 var router5 = (0, import_express5.Router)();
-router5.use(health_default);
-router5.use(ai_default);
-router5.use(config_default);
-router5.use(sessions_default);
-var routes_default = router5;
+function startOfWeekMs() {
+  const now = /* @__PURE__ */ new Date();
+  const day = now.getUTCDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + diffToMonday));
+  return monday.getTime();
+}
+router5.get("/leaderboard", async (req, res) => {
+  const type = req.query["type"] ?? "global";
+  const limit3 = Math.min(Number(req.query["limit"] ?? 50), 100);
+  try {
+    const db = getFirestore();
+    let entries = [];
+    if (type === "weekly") {
+      const weekStart = startOfWeekMs();
+      const snap = await db.collection("game_sessions").where("startTime", ">=", weekStart).get();
+      const totals = /* @__PURE__ */ new Map();
+      snap.forEach((doc) => {
+        const d = doc.data();
+        if (!d.playerId) return;
+        totals.set(d.playerId, (totals.get(d.playerId) ?? 0) + (d.xpEarned ?? 0));
+      });
+      if (totals.size === 0) {
+        res.json([]);
+        return;
+      }
+      const playerIds = [...totals.keys()];
+      const batches = [];
+      for (let i = 0; i < playerIds.length; i += 30) {
+        batches.push(playerIds.slice(i, i + 30));
+      }
+      const playerMap = /* @__PURE__ */ new Map();
+      for (const batch of batches) {
+        const playerSnap = await db.collection("players").where("__name__", "in", batch).get();
+        playerSnap.forEach((doc) => {
+          const d = doc.data();
+          playerMap.set(doc.id, {
+            username: d.username ?? "Player",
+            level: d.level ?? 1,
+            avatarId: d.selectedAvatarId ?? "avatar_1"
+          });
+        });
+      }
+      const sorted = [...totals.entries()].sort(([, a], [, b]) => b - a).slice(0, limit3);
+      entries = sorted.map(([userId, xp], i) => ({
+        rank: i + 1,
+        userId,
+        username: playerMap.get(userId)?.username ?? "Player",
+        level: playerMap.get(userId)?.level ?? 1,
+        avatarId: playerMap.get(userId)?.avatarId ?? "avatar_1",
+        xp
+      }));
+    } else {
+      const snap = await db.collection("players").orderBy("xp", "desc").limit(limit3).get();
+      entries = snap.docs.map((doc, i) => {
+        const d = doc.data();
+        return {
+          rank: i + 1,
+          userId: doc.id,
+          username: d.username ?? "Player",
+          xp: d.xp ?? 0,
+          level: d.level ?? 1,
+          avatarId: d.selectedAvatarId ?? "avatar_1"
+        };
+      });
+    }
+    res.json(entries);
+  } catch (err) {
+    logger.warn({ err }, "Firestore unavailable \u2014 returning empty leaderboard");
+    res.json([]);
+  }
+});
+var leaderboard_default = router5;
+
+// src/routes/index.ts
+var router6 = (0, import_express6.Router)();
+router6.use(health_default);
+router6.use(ai_default);
+router6.use(config_default);
+router6.use(sessions_default);
+router6.use(leaderboard_default);
+var routes_default = router6;
 
 // src/app.ts
-var app = (0, import_express6.default)();
+var app = (0, import_express7.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -57155,8 +57233,8 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use(import_express6.default.json());
-app.use(import_express6.default.urlencoded({ extended: true }));
+app.use(import_express7.default.json());
+app.use(import_express7.default.urlencoded({ extended: true }));
 app.use("/api", routes_default);
 app.use((err, _req, res, _next) => {
   const status = err && typeof err === "object" && "status" in err && typeof err.status === "number" ? err.status : 500;
