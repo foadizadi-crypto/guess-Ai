@@ -120,8 +120,8 @@ export default function LobbyScreen() {
   const {
     username, coins, xp, level, selectedAvatarId,
     bestScore, dailyReward, claimDailyReward,
+    addCoins, addConsumable,
   } = useUserStore();
-  const { addCoins, addConsumable } = useUserStore((s) => ({ addCoins: s.addCoins, addConsumable: s.addConsumable }));
   const {
     isDailyAdAvailable,
     setLastDailyAdClaimed,
