@@ -14,7 +14,6 @@ import { useAudioStore } from '@/store/audioStore';
 import { useAdStore } from '@/store/adStore';
 import { iapService, IAP_SKUS } from '@/services/IAPService';
 import { useRTL } from '@/hooks/useRTL';
-import type { Language } from '@/types';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -32,11 +31,6 @@ export default function SettingsScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     action();
   };
-
-  const langs: { code: Language; label: string; flag: string }[] = [
-    { code: 'en', label: 'English', flag: '🇺🇸' },
-    { code: 'fa', label: 'فارسی', flag: '🇮🇷' },
-  ];
 
   return (
     <AnimatedBackground>
@@ -109,32 +103,6 @@ export default function SettingsScreen() {
               />
             </View>
             <Ionicons name="volume-high-outline" size={18} color={GameColors.textSecondary} />
-          </View>
-        </GlassCard>
-
-        {/* Language */}
-        <Text style={[styles.sectionLabel, { textAlign }]}>Language</Text>
-        <GlassCard style={styles.card} padding={12}>
-          <View style={styles.langRow}>
-            {langs.map((lang) => {
-              const active = settings.language === lang.code;
-              return (
-                <TouchableOpacity
-                  key={lang.code}
-                  style={[styles.langBtn, active && styles.langBtnActive]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    updateSettings({ language: lang.code });
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.langFlag}>{lang.flag}</Text>
-                  <Text style={[styles.langLabel, active && styles.langLabelActive]}>
-                    {lang.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
           </View>
         </GlassCard>
 
@@ -296,26 +264,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sliderTrack: { flex: 1 },
-  langRow: { flexDirection: 'row', gap: 10 },
-  langBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: GameColors.border,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-  },
-  langBtnActive: {
-    borderColor: GameColors.accentGold,
-    backgroundColor: 'rgba(255,215,0,0.12)',
-  },
-  langFlag: { fontSize: 18 },
-  langLabel: { ...Typography.caption, color: GameColors.textSecondary, fontFamily: 'Inter_500Medium' },
-  langLabelActive: { color: GameColors.accentGold, fontFamily: 'Inter_600SemiBold' },
   removeAdsBtn: {
     flexDirection: 'row',
     alignItems: 'center',

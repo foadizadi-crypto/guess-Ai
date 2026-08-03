@@ -34,7 +34,7 @@ export type AppScreen =
   | 'dailyReward'
   | 'settings';
 
-export type Language = 'en' | 'fa';
+export type Language = 'en';
 
 // ─── Game ──────────────────────────────────────────────────────────────────
 
