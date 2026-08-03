@@ -120,6 +120,9 @@ export interface Achievement {
   title: string;
   description: string;
   icon: string;
+  color?: string;
+  rewardCoins?: number;
+  rewardXP?: number;
   unlocked?: boolean;
   unlockedAt?: string | null;
 }

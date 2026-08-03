@@ -14,6 +14,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import type { Achievement } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -79,6 +80,32 @@ export async function loadPlayerProfile(uid: string): Promise<FirestorePlayer | 
   } catch (err) {
     console.warn('[Firestore] loadPlayerProfile failed:', err);
     return null;
+  }
+}
+
+// ─── Achievements ─────────────────────────────────────────────────────────────
+
+/**
+ * Persist the player's full achievement list to Firestore.
+ * Only stores id + unlock status; display metadata stays client-side.
+ */
+export async function saveAchievements(
+  uid: string,
+  achievements: Achievement[],
+): Promise<void> {
+  try {
+    const payload = achievements.map(({ id, unlocked, unlockedAt }) => ({
+      id,
+      unlocked: unlocked ?? false,
+      unlockedAt: unlockedAt ?? null,
+    }));
+    await setDoc(
+      doc(db, 'players', uid),
+      { achievements: payload, updatedAt: serverTimestamp() },
+      { merge: true },
+    );
+  } catch (err) {
+    console.warn('[Firestore] saveAchievements failed:', err);
   }
 }
 

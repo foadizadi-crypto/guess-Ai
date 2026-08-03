@@ -113,6 +113,7 @@ export default function LobbyScreen() {
     username, coins, xp, level, selectedAvatarId,
     bestScore, dailyReward, claimDailyReward,
     addCoins, addConsumable,
+    hasNewAchievement,
   } = useUserStore();
   const {
     isDailyAdAvailable,
@@ -387,6 +388,16 @@ export default function LobbyScreen() {
                 color={dailyClaimed ? GameColors.textSecondary : GameColors.accentGreen}
                 onPress={() => navigateTo(ROUTES.DAILY_REWARD)}
                 badge={!dailyClaimed}
+              />
+
+              {/* Achievements */}
+              <ActionCard
+                icon="ribbon-outline"
+                label="Achievements"
+                sublabel="Your badges"
+                color="#CE93D8"
+                onPress={() => navigateTo(ROUTES.ACHIEVEMENTS)}
+                badge={hasNewAchievement}
               />
             </View>
           </Animated.View>

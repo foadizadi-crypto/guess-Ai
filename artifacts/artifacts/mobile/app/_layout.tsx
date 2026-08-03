@@ -39,6 +39,7 @@ function RootLayoutNav() {
       <Stack.Screen name="profile" />
       <Stack.Screen name="daily-reward" />
       <Stack.Screen name="settings" />
+      <Stack.Screen name="achievements" />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     </Stack>
   );

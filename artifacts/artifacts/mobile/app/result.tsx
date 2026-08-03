@@ -22,8 +22,10 @@ import {
   COINS_PERFECT_GAME_BONUS,
 } from '@/constants/economy';
 import type { MissionType } from '@/types';
-import { recordGameSession } from '@/services/firestoreService';
+import { recordGameSession, saveAchievements } from '@/services/firestoreService';
 import { getPlayerId } from '@/services/authService';
+import { AchievementToast } from '@/components/AchievementToast';
+import type { AchievementDef } from '@/constants/achievements';
 
 const CONFETTI = ['#FFD700', '#00E676', '#FF6B35', '#CE93D8', '#64B5F6', '#FF1744'];
 
@@ -54,6 +56,7 @@ export default function ResultScreen() {
     updateStatistics,
     updateMissionProgress,
     refreshDailyMissions,
+    checkAndUnlockAchievements,
   } = useUserStore();
   const {
     canShowDoubleReward,
@@ -66,6 +69,7 @@ export default function ResultScreen() {
 
   const [doubledByAd, setDoubledByAd] = useState(false);
   const [doubleLoading, setDoubleLoading] = useState(false);
+  const [achievementQueue, setAchievementQueue] = useState<AchievementDef[]>([]);
 
   const trophyScale = useSharedValue(0);
   const contentOpacity = useSharedValue(0);
@@ -147,6 +151,22 @@ export default function ResultScreen() {
         },
         gameSession.id,
       );
+    }
+
+    // ── Achievement checking ──────────────────────────────────────────────
+    // Must run AFTER updateStatistics so the store reflects the latest stats.
+    const newlyUnlocked = checkAndUnlockAchievements({
+      isPerfectGame: isPerfect,
+      maxComboThisGame: maxStreakThisGame,
+    });
+    if (newlyUnlocked.length > 0) {
+      setAchievementQueue(newlyUnlocked);
+      // Persist unlock state to Firestore (fire-and-forget)
+      const uidForAchievements = getPlayerId();
+      if (uidForAchievements) {
+        const updatedAchievements = useUserStore.getState().achievements;
+        saveAchievements(uidForAchievements, updatedAchievements).catch(() => {});
+      }
     }
 
     Haptics.notificationAsync(
@@ -303,6 +323,11 @@ export default function ResultScreen() {
           </View>
         </Animated.View>
       </View>
+      {/* Achievement unlock toasts */}
+      <AchievementToast
+        queue={achievementQueue}
+        onItemShown={() => setAchievementQueue((prev) => prev.slice(1))}
+      />
     </AnimatedBackground>
   );
 }

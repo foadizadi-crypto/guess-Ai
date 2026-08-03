@@ -10,7 +10,6 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
-import { ACHIEVEMENTS } from '@/constants';
 import { calculateXPProgress, formatScore, xpInCurrentLevel, xpForCurrentLevel } from '@/utils';
 
 export default function ProfileScreen() {
@@ -22,14 +21,6 @@ export default function ProfileScreen() {
   const winRate = statistics.totalGamesPlayed ? Math.round((statistics.totalWins / statistics.totalGamesPlayed) * 100) : 0;
   const topPad = Platform.OS === 'web' ? 62 : insets.top + 12;
   const bottomPad = Platform.OS === 'web' ? 28 : insets.bottom + 24;
-  const unlocked = (id: string) => {
-    if (id === 'first-win') return statistics.totalWins >= 1;
-    if (id === 'sharp-eye') return statistics.totalCorrectAnswers >= 10;
-    if (id === 'streak-master') return statistics.longestStreak >= 7;
-    if (id === 'collector') return avatars.filter((avatar) => avatar.unlocked).length >= 5;
-    if (id === 'high-roller') return statistics.totalCoinsEarned >= 1000;
-    return statistics.totalGamesPlayed >= 25;
-  };
 
   const stats = [
     ['game-controller-outline', 'Games Played', `${statistics.totalGamesPlayed}`],
@@ -63,22 +54,6 @@ export default function ProfileScreen() {
             </View>
           ))}
         </View>
-        <Text style={styles.sectionTitle}>Achievements</Text>
-        <View style={styles.achievementGrid}>
-          {ACHIEVEMENTS.map((achievement) => {
-            const isUnlocked = unlocked(achievement.id);
-            return (
-              <View key={achievement.id} style={[styles.achievement, isUnlocked && styles.achievementUnlocked]}>
-                <View style={[styles.achievementIcon, isUnlocked && styles.achievementIconUnlocked]}>
-                  <Ionicons name={achievement.icon as keyof typeof Ionicons.glyphMap} size={25} color={isUnlocked ? GameColors.accentGold : GameColors.textSecondary} />
-                </View>
-                <Text style={[styles.achievementTitle, !isUnlocked && styles.lockedText]}>{achievement.title}</Text>
-                <Text style={styles.achievementDesc}>{isUnlocked ? 'Unlocked' : achievement.description}</Text>
-                {!isUnlocked && <Ionicons name="lock-closed" size={12} color={GameColors.textSecondary} style={styles.lock} />}
-              </View>
-            );
-          })}
-        </View>
         <Text style={styles.footerNote}>15 categories · one blurred image at a time.</Text>
       </ScrollView>
     </AnimatedBackground>
@@ -101,14 +76,5 @@ const styles = StyleSheet.create({
   statCard: { width: '31.8%', minHeight: 92, flexGrow: 1, padding: 11, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.055)', borderWidth: 1, borderColor: GameColors.border, gap: 5 },
   statLabel: { color: GameColors.textSecondary, fontSize: 10 },
   statValue: { color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 15 },
-  achievementGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  achievement: { width: '31.8%', minHeight: 124, flexGrow: 1, alignItems: 'center', padding: 10, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.035)', borderWidth: 1, borderColor: GameColors.border, position: 'relative' },
-  achievementUnlocked: { backgroundColor: 'rgba(255,215,0,0.08)', borderColor: 'rgba(255,215,0,0.35)' },
-  achievementIcon: { width: 45, height: 45, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 7 },
-  achievementIconUnlocked: { backgroundColor: 'rgba(255,215,0,0.18)' },
-  achievementTitle: { color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 11, textAlign: 'center' },
-  achievementDesc: { color: GameColors.textSecondary, fontSize: 9, textAlign: 'center', marginTop: 4 },
-  lockedText: { color: GameColors.textSecondary },
-  lock: { position: 'absolute', top: 7, right: 7 },
   footerNote: { color: GameColors.textSecondary, textAlign: 'center', fontSize: 11, marginTop: 20 },
 });

@@ -15,6 +15,7 @@ export const ROUTES = {
   PROFILE: '/profile',
   DAILY_REWARD: '/daily-reward',
   SETTINGS: '/settings',
+  ACHIEVEMENTS: '/achievements',
 } as const;
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];

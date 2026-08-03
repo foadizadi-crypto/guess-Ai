@@ -196,17 +196,7 @@ export const DEFAULT_POWER_UPS: PowerUpInventory = {
   'double-xp': 0,
 };
 
-// ─── Achievements — spec-driven pool ──────────────────────────────────────
-
-export const ACHIEVEMENTS = [
-  { id: 'first-win',      title: 'First Win',       description: 'Win your first game',             icon: 'trophy-outline'        as const },
-  { id: 'sharp-eye',      title: 'Sharp Eye',        description: 'Get 10 correct answers',          icon: 'eye-outline'           as const },
-  { id: 'streak-master',  title: 'Streak Master',    description: 'Reach a 7-answer combo streak',   icon: 'flame-outline'         as const },
-  { id: 'collector',      title: 'Collector',        description: 'Own 5 avatars',                   icon: 'people-outline'        as const },
-  { id: 'high-roller',    title: 'High Roller',      description: 'Earn 1,000 coins total',          icon: 'cash-outline'          as const },
-  { id: 'quiz-veteran',   title: 'Quiz Veteran',     description: 'Play 25 games',                   icon: 'medal-outline'         as const },
-  { id: 'perfect-game',   title: 'Perfect Game',     description: 'Score 20/20 in a game',           icon: 'star-outline'          as const },
-  { id: 'combo-king',     title: 'Combo King',       description: 'Reach a 12-answer Ultra Combo',   icon: 'flash-outline'         as const },
-  { id: 'century',        title: 'Century',          description: 'Answer 100 questions correctly',  icon: 'checkmark-circle-outline' as const },
-  { id: 'dedicated',      title: 'Dedicated',        description: 'Play 7 days in a row',            icon: 'calendar-outline'      as const },
-] as const;
+// ─── Achievements — re-exported from dedicated module ─────────────────────────
+export { ACHIEVEMENTS } from '@/constants/achievements';
+export type { AchievementDef, AchievementCheckContext } from '@/constants/achievements';
+export { checkAchievementCondition } from '@/constants/achievements';

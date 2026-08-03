@@ -12,7 +12,8 @@ import type {
   UserSettings,
   UserStatistics,
 } from '@/types';
-import { ACHIEVEMENTS, DEFAULT_AVATARS, DAILY_REWARDS, DEFAULT_POWER_UPS } from '@/constants';
+import { ACHIEVEMENTS, DEFAULT_AVATARS, DAILY_REWARDS, DEFAULT_POWER_UPS, checkAchievementCondition } from '@/constants';
+import type { AchievementDef } from '@/constants/achievements';
 import { getLevelReward } from '@/constants/levelRewards';
 import { type ConsumableId, CONSUMABLE_PRICES } from '@/constants/shopData';
 import { getDailyMissions, getTodayUTC, type MissionType } from '@/constants/missions';
@@ -57,6 +58,7 @@ interface UserState {
   bestScore: number;
   dailyReward: DailyReward;
   achievements: Achievement[];
+  hasNewAchievement: boolean; // red-dot badge on lobby button
   settings: UserSettings;
   statistics: UserStatistics;
 
@@ -99,6 +101,8 @@ interface UserState {
   claimMissionReward: (missionId: string) => boolean;
   setPremium: (value: boolean) => void;
   resetUser: () => void;
+  checkAndUnlockAchievements: (ctx: { isPerfectGame?: boolean; maxComboThisGame?: number }) => AchievementDef[];
+  clearNewAchievementBadge: () => void;
 }
 
 // ─── Defaults ─────────────────────────────────────────────────────────────
@@ -149,6 +153,7 @@ export const useUserStore = create<UserState>()(
       bestScore: 0,
       dailyReward: { ...defaultDailyReward },
       achievements: ACHIEVEMENTS.map((a) => ({ ...a, unlocked: false, unlockedAt: null })),
+      hasNewAchievement: false,
       settings: { ...defaultSettings },
       statistics: { ...defaultStatistics },
       dailyXPEarned: 0,
@@ -476,7 +481,44 @@ export const useUserStore = create<UserState>()(
       },
 
       // ── Achievement checking ──────────────────────────────────────────
-      // Called from result screen after updateStatistics
+
+      checkAndUnlockAchievements: (ctx) => {
+        const { achievements, statistics, avatars } = get();
+        const newlyUnlocked: AchievementDef[] = [];
+        let coinsToAdd = 0;
+
+        const updatedAchievements = achievements.map((stored) => {
+          if (stored.unlocked) return stored;
+          const def = ACHIEVEMENTS.find((a) => a.id === stored.id);
+          if (!def) return stored;
+          const conditionMet = checkAchievementCondition(def.id, {
+            stats: statistics,
+            avatars,
+            isPerfectGame: ctx.isPerfectGame,
+            maxComboThisGame: ctx.maxComboThisGame,
+          });
+          if (!conditionMet) return stored;
+          coinsToAdd += def.rewardCoins;
+          newlyUnlocked.push(def);
+          return { ...stored, unlocked: true, unlockedAt: new Date().toISOString() };
+        });
+
+        if (newlyUnlocked.length > 0) {
+          set((state) => ({
+            achievements: updatedAchievements,
+            hasNewAchievement: true,
+            coins: state.coins + coinsToAdd,
+            statistics: {
+              ...state.statistics,
+              totalCoinsEarned: state.statistics.totalCoinsEarned + coinsToAdd,
+            },
+          }));
+        }
+
+        return newlyUnlocked;
+      },
+
+      clearNewAchievementBadge: () => set({ hasNewAchievement: false }),
 
       // ── Settings ──────────────────────────────────────────────────────
 
@@ -510,6 +552,7 @@ export const useUserStore = create<UserState>()(
           bestScore: 0,
           dailyReward: { ...defaultDailyReward },
           achievements: ACHIEVEMENTS.map((a) => ({ ...a, unlocked: false, unlockedAt: null })),
+          hasNewAchievement: false,
           settings: { ...defaultSettings },
           statistics: { ...defaultStatistics },
           dailyXPEarned: 0,
@@ -535,9 +578,11 @@ export const useUserStore = create<UserState>()(
           consumables: { ...DEFAULT_CONSUMABLES, ...(saved.consumables ?? {}) },
           dailyReward:  { ...defaultDailyReward,  ...(saved.dailyReward  ?? {}) },
           statistics:   { ...defaultStatistics,   ...(saved.statistics   ?? {}) },
-          achievements: saved.achievements?.length
-            ? saved.achievements
-            : ACHIEVEMENTS.map((a) => ({ ...a, unlocked: false, unlockedAt: null })),
+          achievements: ACHIEVEMENTS.map((def) => {
+            const saved_a = (saved.achievements ?? []).find((sa: Achievement) => sa.id === def.id);
+            return { ...def, unlocked: saved_a?.unlocked ?? false, unlockedAt: saved_a?.unlockedAt ?? null };
+          }),
+          hasNewAchievement: false, // always start fresh — badge clears on each app launch
           gems:                    saved.gems                    ?? 0,
           multiplierSessionsLeft:  saved.multiplierSessionsLeft  ?? 0,
           unclaimedLevelRewards:   saved.unclaimedLevelRewards   ?? [],
