@@ -5,5 +5,5 @@ generated = []
 id = "Q-j1KJZsywArQCy9Jt9CQ"
 uri = "file://screenshots/expo-qr.png"
 type = "image"
-title = "Expo QR Code — scan with Expo Go"
-description = "Open Expo Go on your phone and scan this to load the latest BlurQuiz build."
+title = "Fresh QR Code — scan with Expo Go"
+description = "Open Expo Go on your phone and scan to load BlurQuiz."
