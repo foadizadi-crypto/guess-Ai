@@ -85,17 +85,9 @@ interface BottomNavItem {
   icon: keyof typeof Ionicons.glyphMap;
   activeIcon: keyof typeof Ionicons.glyphMap;
   route?: string;
-  isHome?: boolean;
 }
 
 const BOTTOM_NAV: BottomNavItem[] = [
-  {
-    id: 'home',
-    label: 'Home',
-    icon: 'home-outline',
-    activeIcon: 'home',
-    isHome: true,
-  },
   {
     id: 'profile',
     label: 'Profile',
@@ -145,7 +137,7 @@ export default function LobbyScreen() {
   const [dailyModalVisible, setDailyModalVisible] = useState(false);
   const [dailyClaimed, setDailyClaimed] = useState(isToday(dailyReward.lastClaimed));
   const [adLoading, setAdLoading] = useState(false);
-  const [activeNav, setActiveNav] = useState<string>('home');
+  const [activeNav, setActiveNav] = useState<string>('');
   const [, forceUpdate] = useState(0); // used to refresh cooldown timer display
 
   // ── Staggered entrance animations ────────────────────────────────────────
@@ -300,30 +292,17 @@ export default function LobbyScreen() {
         >
           {/* ── Top bar ──────────────────────────────────────────────────── */}
           <Animated.View style={[styles.topBar, headerStyle]}>
-            {/* Menu icon */}
-            <TouchableOpacity
-              style={styles.iconBtn}
-              onPress={() => navigateTo(ROUTES.SETTINGS)}
-              activeOpacity={0.75}
-            >
-              <Ionicons name="menu-outline" size={24} color={GameColors.textWhite} />
-            </TouchableOpacity>
+            {/* Left spacer — mirrors topRight to keep logo centred */}
+            <View style={styles.topSpacer} />
 
             {/* Logo */}
             <View style={styles.logoWrap}>
               <Text style={styles.logoText}>BlurQuiz</Text>
             </View>
 
-            {/* Right cluster: coins + settings */}
+            {/* Right cluster: coins */}
             <View style={styles.topRight}>
               <CoinDisplay amount={coins} size="small" animate />
-              <TouchableOpacity
-                style={styles.iconBtn}
-                onPress={() => navigateTo(ROUTES.SETTINGS)}
-                activeOpacity={0.75}
-              >
-                <Ionicons name="settings-outline" size={22} color={GameColors.textSecondary} />
-              </TouchableOpacity>
             </View>
           </Animated.View>
 
@@ -588,6 +567,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 12,
   },
   topRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  topSpacer: { minWidth: 80 }, // mirrors topRight width to keep logo centred
 
   // ── User card ──────────────────────────────────────────────────────────
   userCard: {
