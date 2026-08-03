@@ -1,4 +1,5 @@
 import type { Difficulty, Question } from '@/types';
+import { GAME_CONFIG } from '@/constants/gameConfig';
 
 export const DIFFICULTY_CONFIG: Record<
   Difficulty,
@@ -40,10 +41,18 @@ export const getAvatarAbility = (avatarId: string): AvatarAbility => {
 export const getStartingClarity = (difficulty: Difficulty, ability: AvatarAbility): number =>
   Math.min(100, 100 - DIFFICULTY_CONFIG[difficulty].blurPercent + (ability === 'blur-buster' ? 20 : 0));
 
-/** How much the reveal % changes per answer, by difficulty. */
+/** How much the reveal % changes per answer.
+ *  Correct: always +clarity_correct_increment (default 5) regardless of difficulty.
+ *  Wrong:   penalty depends on difficulty (easy 3 / medium 5 / hard 7), negated.
+ *  Values come from GAME_CONFIG so remote config overrides apply automatically.
+ */
 export const getRevealDelta = (difficulty: Difficulty, correct: boolean): number => {
-  if (correct) return difficulty === 'hard' ? 3 : difficulty === 'medium' ? 4 : 5;
-  return difficulty === 'hard' ? -3 : difficulty === 'medium' ? -2 : -1;
+  if (correct) return GAME_CONFIG.clarity_correct_increment;
+  const penalty =
+    difficulty === 'hard'   ? GAME_CONFIG.clarity_wrong_penalty_hard   :
+    difficulty === 'medium' ? GAME_CONFIG.clarity_wrong_penalty_medium :
+                              GAME_CONFIG.clarity_wrong_penalty_easy;
+  return -penalty;
 };
 
 export const getStartingTime = (ability: AvatarAbility): number => 120 + (ability === 'time-master' ? 5 : 0);
