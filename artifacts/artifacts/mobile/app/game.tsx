@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import Animated, {
   Easing,
+  interpolateColor,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
@@ -78,8 +79,18 @@ export default function GameScreen() {
   const [paused, setPaused] = useState(false);
   const [superComboVisible, setSuperComboVisible] = useState(false);
   const [hintUsed, setHintUsed] = useState(false);
+  // ── New state for blur/darkness feedback, segment history, countdown ─────
+  const [countdown, setCountdown] = useState(-1);          // -1 = active, 0 = "GO!", 1-3 = ticking
+  const [darkness, setDarkness] = useState(0);             // 0-70, accumulates on wrong answers
+  const [answerHistory, setAnswerHistory] = useState<('correct' | 'wrong')[]>([]);
   const endedRef = useRef(false);
+  const countdownStarted = useRef(false);
   const shakeX = useSharedValue(0);
+  // Flash overlay: opacity + color (1=green correct, 0=red wrong)
+  const flashOpacity = useSharedValue(0);
+  const flashGreen = useSharedValue(1);
+  // Countdown number animation
+  const cdScale = useSharedValue(1.5);
   const clarityProgress = Math.min(100, Math.max(0, clarity));
   const currentQuestion = questions[questionIndex];
   const config = DIFFICULTY_CONFIG[difficulty];
@@ -132,9 +143,36 @@ export default function GameScreen() {
     if (!gameSession) startSession(difficulty, category);
   }, [category, difficulty, gameSession, startSession]);
 
+  // ── Start countdown once questions finish loading ──────────────────────────
+  useEffect(() => {
+    if (!loading && questions.length > 0 && !countdownStarted.current) {
+      countdownStarted.current = true;
+      setCountdown(3);
+    }
+  }, [loading, questions.length]);
+
+  // ── Countdown ticker: 3→2→1→0("GO!")→-1(active) ───────────────────────────
+  useEffect(() => {
+    if (countdown <= -1) return;
+    if (countdown === 0) {
+      const t = setTimeout(() => setCountdown(-1), 700);
+      return () => clearTimeout(t);
+    }
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
+
+  // ── Animate countdown number on each tick ─────────────────────────────────
+  useEffect(() => {
+    if (countdown > -1) {
+      cdScale.value = 1.5;
+      cdScale.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) });
+    }
+  }, [countdown, cdScale]);
+
   // ── Main timer countdown ───────────────────────────────────────────────────
   useEffect(() => {
-    if (!isTimerRunning || paused || loading || feedback || endedRef.current) return;
+    if (!isTimerRunning || paused || loading || feedback || endedRef.current || countdown > -1) return;
     const interval = setInterval(() => {
       const next = Math.max(0, timer - 1);
       setTimer(next);
@@ -163,6 +201,27 @@ export default function GameScreen() {
       setFeedback(correct ? 'correct' : 'wrong');
       setIsTimerRunning(false);
       recordAnswer(correct, points);
+
+      // ── Track answer history for segment bar ─────────────────────────────
+      setAnswerHistory((prev) => {
+        const next = [...prev];
+        next[questionIndex] = correct ? 'correct' : 'wrong';
+        return next;
+      });
+
+      // ── Accumulate darkness on wrong answers (per difficulty) ─────────────
+      if (!correct) {
+        const penaltyAmount = difficulty === 'hard' ? 7 : difficulty === 'medium' ? 5 : 3;
+        setDarkness((prev) => Math.min(70, prev + penaltyAmount));
+      }
+
+      // ── Flash green/red tint on image ────────────────────────────────────
+      flashGreen.value = correct ? 1 : 0;
+      flashOpacity.value = withSequence(
+        withTiming(0.45, { duration: 80 }),
+        withTiming(0, { duration: 500 }),
+      );
+
       Haptics.notificationAsync(
         correct ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error,
       );
@@ -256,9 +315,13 @@ export default function GameScreen() {
 
   const restart = useCallback(() => {
     endedRef.current = false;
+    countdownStarted.current = true; // questions already loaded; trigger countdown manually
     setPaused(false);
     setSelectedAnswer(null);
     setFeedback(null);
+    setDarkness(0);
+    setAnswerHistory([]);
+    setCountdown(3);
     startSession(difficulty, category);
   }, [category, difficulty, startSession]);
 
@@ -274,6 +337,17 @@ export default function GameScreen() {
   }));
   const timerStyle = useAnimatedStyle(() => ({
     opacity: timer < 30 ? withSequence(withTiming(0.45, { duration: 500 }), withTiming(1, { duration: 500 })) : 1,
+  }));
+  const flashOverlayStyle = useAnimatedStyle(() => ({
+    opacity: flashOpacity.value,
+    backgroundColor: interpolateColor(
+      flashGreen.value,
+      [0, 1],
+      ['rgba(255,23,68,1)', 'rgba(0,230,118,1)'],
+    ),
+  }));
+  const cdStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: cdScale.value }],
   }));
 
   const blurRadius = useMemo(() => Math.max(0, Math.round((100 - clarityProgress) / 5)), [clarityProgress]);
@@ -304,7 +378,9 @@ export default function GameScreen() {
                 key={index}
                 style={[
                   styles.segment,
-                  index < questionIndex && styles.segmentDone,
+                  index < questionIndex && (
+                    answerHistory[index] === 'wrong' ? styles.segmentWrong : styles.segmentDone
+                  ),
                   index === questionIndex && { backgroundColor: config.color },
                 ]}
               />
@@ -347,6 +423,18 @@ export default function GameScreen() {
                   <Text style={styles.superComboAnnounceText}>⚡ SUPER COMBO! ×2.5 XP</Text>
                 </View>
               )}
+              {/* Dark overlay — accumulates on wrong answers */}
+              {darkness > 0 && (
+                <View
+                  pointerEvents="none"
+                  style={[StyleSheet.absoluteFillObject, { backgroundColor: `rgba(0,0,0,${darkness / 100})` }]}
+                />
+              )}
+              {/* Flash tint — green on correct, red on wrong */}
+              <Animated.View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFillObject, flashOverlayStyle]}
+              />
             </Animated.View>
 
             <GlassCard style={styles.questionCard}>
@@ -396,7 +484,7 @@ export default function GameScreen() {
                       isSelected && feedback === 'wrong' && styles.wrongButton,
                     ]}
                     onPress={() => answerQuestion(index)}
-                    disabled={Boolean(feedback)}
+                    disabled={Boolean(feedback) || countdown > -1}
                     activeOpacity={0.8}
                   >
                     <View style={[styles.answerLetter, { borderColor: color }]}>
@@ -411,6 +499,24 @@ export default function GameScreen() {
           </>
         )}
       </View>
+
+      {/* ── Countdown overlay ─────────────────────────────────────────────── */}
+      {countdown > -1 && !loading && (
+        <View style={styles.countdownOverlay}>
+          <Animated.Text
+            style={[
+              styles.countdownNumber,
+              cdStyle,
+              countdown === 0 && { color: GameColors.accentGreen },
+            ]}
+          >
+            {countdown === 0 ? 'GO!' : String(countdown)}
+          </Animated.Text>
+          <Text style={styles.countdownSub}>
+            {countdown === 0 ? 'Have fun!' : 'Get ready…'}
+          </Text>
+        </View>
+      )}
 
       <PauseMenu
         visible={paused}
@@ -439,6 +545,7 @@ const styles = StyleSheet.create({
   segmentTrack: { flex: 1, flexDirection: 'row', gap: 3 },
   segment: { flex: 1, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)' },
   segmentDone: { backgroundColor: GameColors.accentGreen },
+  segmentWrong: { backgroundColor: GameColors.accentRed },
   imageWrap: { flex: 1, minHeight: 240, maxHeight: 330, borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: GameColors.cardBorder, backgroundColor: GameColors.backgroundSecondary },
   image: { width: '100%', height: '100%', resizeMode: 'cover' },
   imageBadge: { position: 'absolute', left: 14, top: 14, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, backgroundColor: 'rgba(13,2,33,0.75)', flexDirection: 'row', gap: 5, alignItems: 'center' },
@@ -467,4 +574,28 @@ const styles = StyleSheet.create({
   answerText: { ...Typography.small, flex: 1, fontFamily: 'Inter_600SemiBold' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
   loadingText: { ...Typography.caption, color: GameColors.textSecondary },
+  // ── Countdown ─────────────────────────────────────────────────────────────
+  countdownOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(13,2,33,0.82)',
+    zIndex: 100,
+  },
+  countdownNumber: {
+    fontSize: 96,
+    fontFamily: 'Inter_700Bold',
+    color: GameColors.textWhite,
+    textShadowColor: GameColors.glow,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 32,
+    lineHeight: 110,
+  },
+  countdownSub: {
+    ...Typography.caption,
+    color: GameColors.textSecondary,
+    marginTop: 8,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
 });
