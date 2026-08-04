@@ -1,0 +1,141 @@
+
+📦 PHASE 3 — ACHIEVEMENTS + JACKPOT WHEEL
+
+---
+
+TASK: Implement Achievement System and Spin Wheel (Jackpot).
+
+---
+
+1. Achievement System
+
+Data Structure
+
+```json
+{
+  "id": "first_win",
+  "name": "First Win",
+  "description": "Win your first game",
+  "conditionType": "wins",
+  "conditionValue": 1,
+  "rewardCoins": 100,
+  "rewardXP": 50,
+  "icon": "first_win_icon",
+  "rarity": "common"
+}
+```
+
+---
+
+Achievement Categories
+
+Category Examples
+Beginner First Win, First Perfect Game, First Combo
+Skill Sharp Eye, Combo King, Blur Master, Hard Mode Master
+Progress Quiz Veteran, Century, Dedicated
+Collection First Cosmetic, Collector, Rare Hunter
+
+---
+
+Reward Balance
+
+Rarity Coins XP
+Common 100 50
+Rare 500 200
+Epic 1000 500
+Legendary Gems + Exclusive Cosmetic —
+
+---
+
+Logic (After Every Session)
+
+1. Check all achievement conditions.
+2. If condition met and not already unlocked → unlock.
+3. Grant rewards.
+4. Save achievement ID in player data.
+5. Show unlock popup.
+
+---
+
+2. Jackpot Spin Wheel
+
+Wheel Structure
+
+· 8 Sections:
+  · 4 Small Rewards 
+  · 1 gem pack 50 
+  · 1 10,000 coin 
+
+---
+
+Reward Pool (Configurable)
+
+Reward Chance
+50 Coins 30%
+100 Coins 25%
+Error Nullifier 15%
+Time Boost 10%
+5 Gems 8%
+Rare Sticker 5%
+500 Coins 5%
+Jackpot 2%
+
+All chances must be configurable.
+
+---
+
+Jackpot Rules
+
+· Multiplier: 5x Base Reward
+· Maximum Reward: Configurable (prevent economy break)
+
+---
+
+Spin Rules
+
+Spin Type Cost Limit
+Free Spin 0 1 every 24 hours
+Extra Spin 100 Coins Maximum 5 per day
+
+---
+
+Database Storage
+
+Spin History:
+
+```json
+{
+  "playerId": "uuid",
+  "rewardType": "coins",
+  "rewardAmount": 100,
+  "timestamp": "2026-01-01T00:00:00Z"
+}
+```
+
+Player Fields:
+
+· lastSpinDate (timestamp)
+· extraSpinsToday (integer)
+
+---
+
+3. Spin UI
+
+Display currently the button is locate at the bottom right of the screen and player after touching take to e new page.
+
+· Wheel animation (visual)
+· Daily spin button (free)
+· Extra spin button (100 Coins)
+· Countdown timer (until next free spin)
+
+---
+
+🧾 FINAL DEVELOPMENT RULES (MUST FOLLOW)
+
+IMPORTANT:
+
+1. All economy values, prices, rewards, probabilities, unlock conditions, and cosmetic data must be configurable.
+2. Nothing should be hardcoded.
+3. The system must support adding new items, achievements, rewards, and events without changing core game logic.
+4. Use a single config file (JSON) or database table as the source of truth.
+5. All changes to the economy must be applied by updating the config file (no code changes).

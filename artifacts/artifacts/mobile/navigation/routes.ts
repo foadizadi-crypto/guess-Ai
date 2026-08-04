@@ -16,6 +16,9 @@ export const ROUTES = {
   DAILY_REWARD: '/daily-reward',
   SETTINGS: '/settings',
   ACHIEVEMENTS: '/achievements',
+  COLLECTIONS:  '/collections',
+  COLLECTION_DETAIL: '/collection-detail',
+  SPIN:         '/spin',
 } as const;
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];

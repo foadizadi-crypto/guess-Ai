@@ -63,7 +63,7 @@ export const CONSUMABLE_ITEMS: ConsumableItem[] = [
     id: 'error_nullifier',
     name: 'Error Nullifier',
     description: 'Your next wrong answer will NOT reduce image clarity. Single use.',
-    price: 120,
+    price: 200,
     currency: 'coins',
     useTiming: 'before_session',
   },

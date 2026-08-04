@@ -1,2 +1,3 @@
 - [Imported workspace layout](imported-workspace-layout.md) — Imported archives may nest packages one level deeper than their lockfile paths; normalize workspace and TypeScript references before verification.
 - [Native module platform split](native-module-platform-split.md) — Packages like AdMob/IAP must use .native.ts + .ts Metro split; runtime Platform guards don't prevent bundling on web.
+- [BlurQuiz component props](blurquiz-component-props.md) — CoinDisplay uses `amount` prop (not `coins`); firestoreService edits must be appended at true file end, never mid-function.

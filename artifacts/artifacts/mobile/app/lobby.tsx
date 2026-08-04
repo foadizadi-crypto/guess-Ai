@@ -36,7 +36,8 @@ import { useAdStore, DAILY_AD_COOLDOWN_MS } from '@/store/adStore';
 import { useAudio } from '@/hooks/useAudio';
 import { ROUTES } from '@/navigation/routes';
 import { calculateXPProgress, formatScore, isToday, xpInCurrentLevel, xpForCurrentLevel } from '@/utils';
-import { GAME_CONSTANTS } from '@/constants';
+import { GAME_CONSTANTS, DEFAULT_AVATARS } from '@/constants';
+import { RARITY_COLORS } from '@/constants/shopConfig';
 import type { ConsumableId } from '@/constants/shopData';
 
 // ─── Sub-components ───────────────────────────────────────────────────────
@@ -148,8 +149,9 @@ export default function LobbyScreen() {
   const userCardOp = useSharedValue(0);
   const actionsY = useSharedValue(40);
   const actionsOp = useSharedValue(0);
-  const fabScale = useSharedValue(0);
-  const fabPulse = useSharedValue(1);
+  const fabScale    = useSharedValue(0);
+  const fabPulse    = useSharedValue(1);
+  const avatarFloat = useSharedValue(0);
 
   useEffect(() => {
     headerY.value = withTiming(0, { duration: 420, easing: Easing.out(Easing.cubic) });
@@ -162,6 +164,19 @@ export default function LobbyScreen() {
     actionsOp.value = withDelay(280, withTiming(1, { duration: 440 }));
 
     fabScale.value = withDelay(500, withSpring(1, { damping: 10, stiffness: 120 }));
+
+    // Hero avatar float
+    avatarFloat.value = withDelay(
+      600,
+      withRepeat(
+        withSequence(
+          withTiming(-7, { duration: 2000, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0,  { duration: 2000, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        false,
+      ),
+    );
 
     // FAB pulse
     fabPulse.value = withDelay(
@@ -275,6 +290,13 @@ export default function LobbyScreen() {
   const fabStyle = useAnimatedStyle(() => ({
     transform: [{ scale: fabScale.value * fabPulse.value }],
   }));
+  const avatarFloatStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: avatarFloat.value }],
+  }));
+
+  // Current avatar definition (for name, rarity, ability)
+  const currentAvatar = DEFAULT_AVATARS.find((a) => a.id === selectedAvatarId) ?? DEFAULT_AVATARS[0];
+  const rarityColor   = RARITY_COLORS[currentAvatar.rarity.toLowerCase()] ?? GameColors.accentGold;
 
   const topPad = Platform.OS === 'web' ? 60 : insets.top;
   const botPad = Platform.OS === 'web' ? 80 : insets.bottom + 60; // space for bottom nav
@@ -337,6 +359,50 @@ export default function LobbyScreen() {
             </View>
           </Animated.View>
 
+          {/* ── Hero Avatar ──────────────────────────────────────────────── */}
+          <Animated.View style={[styles.heroAvatarWrap, actionsStyle]}>
+            <TouchableOpacity
+              style={[styles.heroAvatarCard, { borderColor: `${rarityColor}55` }]}
+              onPress={() => navigateTo(ROUTES.SHOP)}
+              activeOpacity={0.85}
+            >
+              {/* Rarity glow behind avatar */}
+              <View style={[styles.heroAvatarGlow, { backgroundColor: `${rarityColor}18` }]} />
+
+              {/* Floating avatar */}
+              <Animated.View style={avatarFloatStyle}>
+                <AvatarFrame
+                  imageKey={currentAvatar.imageKey}
+                  size={88}
+                  showLevel
+                  level={level}
+                />
+              </Animated.View>
+
+              {/* Name + rarity */}
+              <View style={styles.heroAvatarMeta}>
+                <Text style={styles.heroAvatarName}>{currentAvatar.name}</Text>
+                <View style={[styles.heroRarityBadge, { backgroundColor: `${rarityColor}22` }]}>
+                  <Text style={[styles.heroRarityText, { color: rarityColor }]}>
+                    {currentAvatar.rarity.toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Ability */}
+              <Text style={styles.heroAbility}>
+                <Ionicons name="flash-outline" size={11} color={rarityColor} />
+                {'  '}{currentAvatar.ability}
+              </Text>
+
+              {/* Change button */}
+              <View style={[styles.heroChangeBtn, { borderColor: `${rarityColor}55` }]}>
+                <Ionicons name="swap-horizontal-outline" size={13} color={rarityColor} />
+                <Text style={[styles.heroChangeBtnText, { color: rarityColor }]}>Change Avatar</Text>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+
           {/* ── Main action buttons ───────────────────────────────────────── */}
           <Animated.View style={[styles.actionsWrap, actionsStyle]}>
             {/* Play Now — full width, prominent */}
@@ -360,7 +426,7 @@ export default function LobbyScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* Secondary actions row */}
+            {/* Secondary actions row 1 */}
             <View style={styles.secondaryRow}>
               {/* Shop */}
               <ActionCard
@@ -389,7 +455,10 @@ export default function LobbyScreen() {
                 onPress={() => navigateTo(ROUTES.DAILY_REWARD)}
                 badge={!dailyClaimed}
               />
+            </View>
 
+            {/* Secondary actions row 2 */}
+            <View style={styles.secondaryRow}>
               {/* Achievements */}
               <ActionCard
                 icon="ribbon-outline"
@@ -399,6 +468,15 @@ export default function LobbyScreen() {
                 onPress={() => navigateTo(ROUTES.ACHIEVEMENTS)}
                 badge={hasNewAchievement}
               />
+
+              {/* Collections */}
+              <ActionCard
+                icon="albums-outline"
+                label="Collections"
+                sublabel="Cosmetics & gear"
+                color="#64B5F6"
+                onPress={() => navigateTo(ROUTES.COLLECTIONS)}
+              />
             </View>
           </Animated.View>
 
@@ -406,9 +484,9 @@ export default function LobbyScreen() {
 
         {/* ── Daily Gift FAB (spec §7.1) ────────────────────────────────── */}
         <DailyGiftFab
-          onPress={handleDailyGift}
-          loading={adLoading}
-          available={isDailyAdAvailable()}
+          onPress={() => navigateTo(ROUTES.SPIN)}
+          loading={false}
+          available={true}
           adFree={isAdFreePassActive()}
           style={[styles.fabWrap, fabStyle, { bottom: botPad + 16 }]}
         />
@@ -611,6 +689,74 @@ const styles = StyleSheet.create({
     color: GameColors.accentGold,
     fontFamily: 'Inter_700Bold',
     fontWeight: '700',
+  },
+
+  // ── Hero Avatar ────────────────────────────────────────────────────────
+  heroAvatarWrap: { alignItems: 'center' },
+  heroAvatarCard: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  heroAvatarGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 24,
+  },
+  heroAvatarMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  heroAvatarName: {
+    color: GameColors.textWhite,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 18,
+    letterSpacing: 0.3,
+  },
+  heroRarityBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  heroRarityText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 9,
+    letterSpacing: 1,
+  },
+  heroAbility: {
+    color: GameColors.textSecondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 12,
+  },
+  heroChangeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    marginTop: 2,
+  },
+  heroChangeBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
   },
 
   // ── Actions ────────────────────────────────────────────────────────────

@@ -1,0 +1,164 @@
+📦 PHASE 2 — IAP + COSMETIC COLLECTIONS
+
+---
+
+TASK: Implement IAP Architecture and Cosmetic Collection System.
+
+---
+
+1. IAP System
+
+Supported Platforms:
+
+· Google Play Billing
+· Apple IAP
+
+Test Mode: Must support test purchases.
+
+Products:
+
+Product Price
+100 Gems $1.99
+500 Gems $4.99
+1200 Gems $9.99
+Ad-Free Pass (7 Days) $0.99
+Ad-Free Pass (Lifetime) $4.99
+Starter Pack $2.00
+Season Pass $5.00 (Future)
+
+---
+
+2. Purchase Flow
+
+After Successful Purchase:
+
+1. Verify transaction with platform.
+2. Grant reward (gems or pass).
+3. Save purchase history in database.
+4. Prevent duplicate rewards.
+
+Database Schema:
+
+```json
+{
+  "transactionId": "unique",
+  "productId": "product_123",
+  "date": "timestamp",
+  "status": "completed"
+}
+```
+
+---
+
+3. Cosmetic Collections
+
+All cosmetics must be data-driven and expandable (no hardcoded limits).
+
+---
+
+Avatar Collection
+
+Target: 50+
+
+Examples: AI Robot, Panda, Fox, Owl, Detective, Alien, Astronaut, Dragon, Legend, Crystal, Ghost, Wizard
+
+---
+
+Frame Collection
+
+Target: 10+
+
+Examples: Bronze, Silver, Gold, Diamond, Neon, Fire, Ice, Galaxy, Animated, Royal
+
+---
+
+Theme Collection
+
+Target: 7+
+
+Examples: Classic, Dark, Cyber, Neon, Space, Forest, Golden
+
+---
+
+Entrance Effects
+
+Target: 6+
+
+Examples: Lightning, Fire, Smoke, Stars, Rainbow, Portal
+
+---
+
+Badge Collection
+
+Target: 5+
+
+Examples: Bronze, Silver, Gold, Platinum, Diamond
+
+---
+
+Title Collection
+
+Target: 10+
+
+Examples: Rookie, Explorer, Detective, Blur Hunter, Genius, Master, Champion, Legend, The Clarity Legend
+
+---
+
+Particle Effects
+
+Target: 4+
+
+Examples: Fire Aura, Lightning Aura, Rainbow Aura, Galaxy Aura
+
+---
+
+4. Cosmetic Data Structure
+
+```json
+{
+  "id": "avatar_fox",
+  "name": "Fox",
+  "type": "avatar",
+  "rarity": "rare",
+  "icon": "fox_icon",
+  "preview": "fox_preview",
+  "price": 50,
+  "currency": "gems",
+  "unlockType": "shop"
+}
+```
+
+Supported Unlock Types:
+
+· shop
+· level
+· achievement
+· event
+· season
+· special
+
+---
+
+5. Collection UI
+
+Display for Each Collection:
+
+```
+Avatar Collection
+12 / 50 Unlocked
+
+[Grid of Items]
+
+Item: Fox
+Status: Locked
+Price: 50 Gems
+[Unlock Button]
+```
+
+```
+Item: Panda
+Status: Owned
+[Equip Button]
+```
+
+---

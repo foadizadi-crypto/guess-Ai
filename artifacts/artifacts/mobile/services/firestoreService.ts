@@ -12,6 +12,7 @@ import {
   setDoc,
   getDoc,
   serverTimestamp,
+  collection,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Achievement } from '@/types';
@@ -109,6 +110,54 @@ export async function saveAchievements(
   }
 }
 
+// ─── Purchase history (Phase 2 §2) ────────────────────────────────────────────
+
+export interface PurchaseRecord {
+  transactionId: string;
+  productId: string;
+  date: string;         // ISO timestamp
+  status: 'completed' | 'pending' | 'failed';
+  gemsGranted?: number;
+  coinsGranted?: number;
+}
+
+/**
+ * Save a completed purchase to Firestore.
+ * Path: `players/{uid}/purchases/{transactionId}`
+ * Fire-and-forget — never throws to the UI.
+ */
+export async function savePurchaseHistory(
+  uid: string,
+  record: PurchaseRecord,
+): Promise<void> {
+  try {
+    await setDoc(
+      doc(collection(db, 'players', uid, 'purchases'), record.transactionId),
+      record,
+      { merge: false },
+    );
+  } catch (err) {
+    console.warn('[Firestore] savePurchaseHistory failed:', err);
+  }
+}
+
+/**
+ * Check whether a transactionId has already been recorded.
+ * Used for duplicate-grant prevention.
+ * Returns false on network error (safe default: allow grant, client is source of truth).
+ */
+export async function hasPurchase(uid: string, transactionId: string): Promise<boolean> {
+  try {
+    const snap = await getDoc(
+      doc(collection(db, 'players', uid, 'purchases'), transactionId),
+    );
+    return snap.exists();
+  } catch (err) {
+    console.warn('[Firestore] hasPurchase failed:', err);
+    return false;
+  }
+}
+
 // ─── Game sessions ────────────────────────────────────────────────────────────
 
 /**
@@ -153,5 +202,31 @@ export async function recordGameSession(
   } catch (err) {
     // API write failure is non-fatal — direct Firestore write already succeeded
     console.warn('[Firestore] recordGameSession (API) failed:', err);
+  }
+}
+
+// ─── Spin wheel history ───────────────────────────────────────────────────────
+
+export interface SpinHistoryEntry {
+  playerId:     string;
+  rewardId:     string;
+  rewardType:   string;
+  rewardAmount: number;
+  timestamp:    string; // ISO 8601
+}
+
+/**
+ * Append one spin result to `players/{uid}/spinHistory/{auto-id}`.
+ * Fire-and-forget — never throws.
+ */
+export async function saveSpinHistory(
+  uid:   string,
+  entry: Omit<SpinHistoryEntry, 'playerId'>,
+): Promise<void> {
+  try {
+    const ref = doc(collection(db, 'players', uid, 'spinHistory'));
+    await setDoc(ref, { ...entry, playerId: uid });
+  } catch (err) {
+    console.warn('[Firestore] saveSpinHistory failed:', err);
   }
 }

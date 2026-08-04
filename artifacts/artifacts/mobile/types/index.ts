@@ -102,6 +102,29 @@ export interface UserSettings {
   theme: 'dark';
 }
 
+// ─── Unified Shop (Phase 1 — §2 Item System) ──────────────────────────────
+
+export type ItemCategory = 'consumable' | 'cosmetic' | 'collectible';
+export type ItemRarity   = 'common' | 'rare' | 'epic' | 'legendary';
+export type ShopCurrencyType = 'coins' | 'gems';
+export type UnlockType   = 'shop' | 'level' | 'achievement' | 'event' | 'season' | 'special';
+
+/** Canonical data-driven item structure. All shop items follow this shape. */
+export interface UnifiedShopItem {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: ItemCategory;
+  rarity: ItemRarity;
+  currencyType: ShopCurrencyType;
+  price: number;
+  unlockType: UnlockType;
+  /** Runtime state — derived from store, never stored in config */
+  owned?: boolean;
+  equipped?: boolean;
+}
+
 // ─── Shop ──────────────────────────────────────────────────────────────────
 
 export type PowerUpId = 'hint' | 'reveal-blur' | 'skip-question' | 'double-xp';

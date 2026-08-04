@@ -1,7 +1,18 @@
-import React, { useEffect, useState } from 'react';
+/**
+ * shop.tsx — Phase 1 Economy + Shop Core
+ *
+ * Two primary tabs driven entirely by shopConfig (no hardcoded item data):
+ *   • Coin Shop  — consumables, avatars, power-ups (all bought with coins)
+ *   • Gem Shop   — premium cosmetics (bought with gems)
+ *
+ * Each tab has a scrollable filter bar: All / Owned / Locked / Rare / Epic / Legendary
+ * Item cards display: icon, name, description, rarity badge, price, action button.
+ *
+ * Spec: Phase 1 §3–§6
+ */
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   Alert,
-  Dimensions,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,22 +25,39 @@ import Animated, {
   useSharedValue,
   withSequence,
   withSpring,
-  withTiming,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedBackground } from '@/components/AnimatedBackground';
-import { AvatarFrame } from '@/components/AvatarFrame';
 import { BackButton } from '@/components/BackButton';
 import { CoinDisplay } from '@/components/CoinDisplay';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
 import { useAdStore } from '@/store/adStore';
-import { iapService, IAP_SKUS } from '@/services/IAPService';
+import { iapService, IAP_SKUS, SKU_GEMS } from '@/services/IAPService';
+import { savePurchaseHistory } from '@/services/firestoreService';
+import { getPlayerId } from '@/services/authService';
+import { useAudio } from '@/hooks/useAudio';
+import { COIN_PACKAGES } from '@/constants';
+import {
+  ALL_COIN_SHOP_ITEMS,
+  GEM_SHOP_ITEMS,
+  RARITY_COLORS,
+} from '@/constants/shopConfig';
+import type { UnifiedShopItem } from '@/types';
+import type { ConsumableId } from '@/constants/shopData';
+import type { PowerUpId } from '@/types';
 
-// Maps COIN_PACKAGES id → IAP product SKU
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const TABS    = ['Coin Shop', 'Gem Shop'] as const;
+const FILTERS = ['All', 'Owned', 'Locked', 'Rare', 'Epic', 'Legendary'] as const;
+type FilterKey = typeof FILTERS[number];
+
+const POWER_UP_IDS = new Set(['hint', 'reveal-blur', 'skip-question', 'double-xp']);
+
 const COIN_PACK_SKUS: Record<string, string> = {
   'coins-100':  IAP_SKUS.COINS_100,
   'coins-500':  IAP_SKUS.COINS_500,
@@ -37,287 +65,478 @@ const COIN_PACK_SKUS: Record<string, string> = {
   'coins-2500': IAP_SKUS.COINS_2500,
   'coins-5000': IAP_SKUS.COINS_5000,
 };
-import { COIN_PACKAGES, DEFAULT_AVATARS, POWER_UPS } from '@/constants';
-import { useAudio } from '@/hooks/useAudio';
-import type { Avatar, PowerUpId } from '@/types';
 
-const TAB_NAMES = ['Avatars', 'Power Ups', 'Coins'];
-const TAB_WIDTH = (Dimensions.get('window').width - 40) / 3;
-const rarityColors: Record<string, string> = {
-  Common: GameColors.textSecondary,
-  Rare: '#64B5F6',
-  Epic: '#CE93D8',
-  Legendary: GameColors.accentGold,
-};
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type RuntimeItem = UnifiedShopItem & { quantity?: number };
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ShopScreen() {
-  const insets = useSafeAreaInsets();
-  const [tab, setTab] = useState(0);
-  const [floating, setFloating] = useState<string | null>(null);
-  const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
-  const indicator = useSharedValue(0);
-  const coinPulse = useSharedValue(1);
+  const insets    = useSafeAreaInsets();
+  const topPad    = Platform.OS === 'web' ? 62 : insets.top + 12;
+  const bottomPad = Platform.OS === 'web' ? 28 : insets.bottom + 24;
   const { playEffect } = useAudio();
-  const coins = useUserStore((s) => s.coins);
-  const avatars = useUserStore((s) => s.avatars);
+
+  const [tab,      setTab]      = useState(0);
+  const [filter,   setFilter]   = useState<FilterKey>('All');
+  const [floating, setFloating] = useState<string | null>(null);
+  const [loading,  setLoading]  = useState<string | null>(null);
+
+  // ── Store ────────────────────────────────────────────────────────────────
+  const coins           = useUserStore((s) => s.coins);
+  const gems            = useUserStore((s) => s.gems);
+  const avatars         = useUserStore((s) => s.avatars);
+  const consumables     = useUserStore((s) => s.consumables);
+  const powerUps        = useUserStore((s) => s.powerUps);
+  const gemCosmetics    = useUserStore((s) => s.gemCosmetics);
   const selectedAvatarId = useUserStore((s) => s.selectedAvatarId);
-  const powerUps = useUserStore((s) => s.powerUps);
-  const unlockAvatar = useUserStore((s) => s.unlockAvatar);
-  const selectAvatar = useUserStore((s) => s.selectAvatar);
-  const buyPowerUp = useUserStore((s) => s.buyPowerUp);
+  const buyConsumable   = useUserStore((s) => s.buyConsumable);
+  const buyPowerUp      = useUserStore((s) => s.buyPowerUp);
+  const unlockAvatar    = useUserStore((s) => s.unlockAvatar);
+  const selectAvatar    = useUserStore((s) => s.selectAvatar);
+  const buyGemCosmetic  = useUserStore((s) => s.buyGemCosmetic);
+  const equipGemCosmetic = useUserStore((s) => s.equipGemCosmetic);
   const mockPurchaseCoins = useUserStore((s) => s.mockPurchaseCoins);
+  const addGems           = useUserStore((s) => s.addGems);
 
   const { isAdFreePassActive, removeAds, adFreePassExpiry } = useAdStore();
   const adFreeActive = isAdFreePassActive();
 
-  useEffect(() => {
-    indicator.value = withSpring(tab * TAB_WIDTH, { damping: 18, stiffness: 180 });
-  }, [indicator, tab]);
-
-  const indicatorStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: indicator.value }],
-  }));
+  // Animated coin pulse on purchase
+  const coinPulse = useSharedValue(1);
   const coinStyle = useAnimatedStyle(() => ({ transform: [{ scale: coinPulse.value }] }));
 
-  const showPurchase = (message: string) => {
-    setFloating(message);
+  const showPurchase = useCallback((msg: string) => {
+    setFloating(msg);
     coinPulse.value = withSequence(withSpring(1.18), withSpring(1));
-    setTimeout(() => setFloating(null), 1100);
-  };
+    setTimeout(() => setFloating(null), 1200);
+  }, [coinPulse]);
 
-  const buyAvatar = (avatar: Avatar) => {
-    if (avatar.unlocked) {
-      selectAvatar(avatar.id);
+  // ── Ownership / quantity helpers ─────────────────────────────────────────
+
+  const getRuntime = useCallback((item: UnifiedShopItem): RuntimeItem => {
+    // Avatar
+    if (item.id.startsWith('avatar_')) {
+      const av = avatars.find((a) => a.id === item.id);
+      return { ...item, owned: av?.unlocked ?? false, equipped: selectedAvatarId === item.id };
+    }
+    // Consumable (spec items)
+    if (item.id in consumables) {
+      const qty = consumables[item.id as ConsumableId];
+      return { ...item, owned: qty > 0, equipped: false, quantity: qty };
+    }
+    // Power-up
+    if (POWER_UP_IDS.has(item.id)) {
+      const qty = powerUps[item.id as PowerUpId] ?? 0;
+      return { ...item, owned: qty > 0, equipped: false, quantity: qty };
+    }
+    // Gem cosmetic
+    const gem = gemCosmetics[item.id];
+    return { ...item, owned: gem?.owned ?? false, equipped: gem?.equipped ?? false };
+  }, [avatars, consumables, powerUps, gemCosmetics, selectedAvatarId]);
+
+  // ── Filtered items for current tab ───────────────────────────────────────
+
+  const displayItems = useMemo<RuntimeItem[]>(() => {
+    const base  = (tab === 0 ? ALL_COIN_SHOP_ITEMS : GEM_SHOP_ITEMS).map(getRuntime);
+    const key   = filter.toLowerCase();
+    if (key === 'all')    return base;
+    if (key === 'owned')  return base.filter((i) => i.owned);
+    if (key === 'locked') return base.filter((i) => !i.owned);
+    return base.filter((i) => i.rarity === key); // rare / epic / legendary
+  }, [tab, filter, getRuntime]);
+
+  // ── Purchase handlers ────────────────────────────────────────────────────
+
+  const handlePress = useCallback((item: RuntimeItem) => {
+    const isAvatar = item.id.startsWith('avatar_');
+    const isGem    = item.currencyType === 'gems';
+    const isPowerUp = POWER_UP_IDS.has(item.id);
+
+    // ── Avatar: equip if owned ──────────────────────────────────────────
+    if (isAvatar && item.owned) {
+      selectAvatar(item.id);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      showPurchase('Equipped');
+      showPurchase('Equipped!');
       return;
     }
-    const success = unlockAvatar(avatar.id);
-    Haptics.notificationAsync(
-      success ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error,
-    );
-    if (success) {
-      playEffect('purchase');
-      showPurchase(`-${avatar.cost} coins`);
-    } else {
-      Alert.alert('Not enough coins', `You need ${avatar.cost} coins to unlock ${avatar.name}.`);
+    // ── Avatar: purchase ───────────────────────────────────────────────
+    if (isAvatar) {
+      if (item.price === 0) { selectAvatar(item.id); showPurchase('Equipped!'); return; }
+      const ok = unlockAvatar(item.id);
+      Haptics.notificationAsync(ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error);
+      if (ok) { playEffect('purchase'); showPurchase(`−${item.price} 🪙`); }
+      else Alert.alert('Not enough coins', `You need ${item.price} coins to unlock ${item.name}.`);
+      return;
     }
-  };
-
-  const buyAdFreePass = async () => {
-    if (adFreeActive || purchaseLoading) return;
-    setPurchaseLoading('remove_ads');
-    try {
-      const ok = await iapService.purchase(IAP_SKUS.REMOVE_ADS);
-      if (ok) {
-        removeAds(); // lifetime pass — no expiry
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        playEffect('purchase');
-        showPurchase('Ad-Free activated!');
-      }
-    } catch (err) {
-      if (__DEV__) console.warn('[Shop] remove_ads purchase error', err);
-    } finally {
-      setPurchaseLoading(null);
+    // ── Gem cosmetic: equip if owned ────────────────────────────────────
+    if (isGem && item.owned) {
+      equipGemCosmetic(item.id);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      showPurchase(item.equipped ? 'Unequipped' : 'Equipped!');
+      return;
     }
-  };
-
-  const restorePurchases = async () => {
-    if (purchaseLoading) return;
-    setPurchaseLoading('restore');
-    try {
-      const restored = await iapService.restoreAdsRemoved();
-      if (restored) {
-        removeAds();
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        showPurchase('Purchases restored');
-      } else {
-        Alert.alert('Nothing to restore', 'No previous Ad-Free Pass purchase found for this account.');
-      }
-    } catch {
-      Alert.alert('Restore failed', 'Could not reach the store. Please try again.');
-    } finally {
-      setPurchaseLoading(null);
+    // ── Gem cosmetic: purchase ──────────────────────────────────────────
+    if (isGem) {
+      const ok = buyGemCosmetic(item.id);
+      Haptics.notificationAsync(ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error);
+      if (ok) { playEffect('purchase'); showPurchase(`−${item.price} 💎`); }
+      else Alert.alert('Not enough gems', `You need ${item.price} gems to unlock ${item.name}.`);
+      return;
     }
-  };
+    // ── Power-up ────────────────────────────────────────────────────────
+    if (isPowerUp) {
+      const ok = buyPowerUp(item.id as PowerUpId);
+      Haptics.notificationAsync(ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error);
+      if (ok) { playEffect('purchase'); showPurchase(`−${item.price} 🪙`); }
+      else Alert.alert('Not enough coins', 'Earn more coins by playing games or claiming daily rewards.');
+      return;
+    }
+    // ── Consumable ──────────────────────────────────────────────────────
+    const ok = buyConsumable(item.id as ConsumableId);
+    Haptics.notificationAsync(ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error);
+    if (ok) { playEffect('purchase'); showPurchase(`−${item.price} 🪙`); }
+    else Alert.alert('Not enough coins', 'Earn more coins by playing games or claiming daily rewards.');
+  }, [selectAvatar, unlockAvatar, buyGemCosmetic, equipGemCosmetic, buyPowerUp, buyConsumable, playEffect, showPurchase]);
 
-  const buyPower = (id: PowerUpId, name: string) => {
-    const success = buyPowerUp(id);
-    Haptics.notificationAsync(
-      success ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error,
-    );
-    if (success) {
-      playEffect('purchase');
-      showPurchase('Power-up added');
-    } else Alert.alert('Not enough coins', 'Earn more coins by playing games or claiming rewards.');
-  };
-
-  const topPad = Platform.OS === 'web' ? 62 : insets.top + 12;
-  const bottomPad = Platform.OS === 'web' ? 28 : insets.bottom + 24;
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
     <AnimatedBackground>
+      {/* Purchase confirmation toast */}
+      {floating ? <Text style={styles.floating}>{floating}</Text> : null}
+
       <ScrollView
         contentContainerStyle={[styles.container, { paddingTop: topPad, paddingBottom: bottomPad }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Header ──────────────────────────────────────────────────────── */}
         <View style={styles.header}>
           <BackButton />
           <Text style={styles.title}>Shop</Text>
-          <Animated.View style={coinStyle}>
-            <CoinDisplay amount={coins} size="small" animate />
-          </Animated.View>
+          <View style={styles.currencyRow}>
+            <Animated.View style={coinStyle}>
+              <CoinDisplay amount={coins} size="small" animate />
+            </Animated.View>
+            <View style={styles.gemPill}>
+              <Ionicons name="diamond-outline" size={13} color="#CE93D8" />
+              <Text style={styles.gemText}>{gems}</Text>
+            </View>
+          </View>
         </View>
+
+        {/* ── Tabs ────────────────────────────────────────────────────────── */}
         <View style={styles.tabs}>
-          {TAB_NAMES.map((name, index) => (
-            <TouchableOpacity key={name} style={styles.tab} onPress={() => setTab(index)}>
+          {TABS.map((name, i) => (
+            <TouchableOpacity
+              key={name}
+              style={[styles.tabBtn, tab === i && styles.tabBtnActive]}
+              onPress={() => { setTab(i); setFilter('All'); }}
+            >
               <Ionicons
-                name={index === 0 ? 'people-outline' : index === 1 ? 'flash-outline' : 'cash-outline'}
-                size={18}
-                color={tab === index ? GameColors.accentGold : GameColors.textSecondary}
+                name={i === 0 ? 'cash-outline' : 'diamond-outline'}
+                size={15}
+                color={tab === i ? GameColors.backgroundPrimary : GameColors.textSecondary}
               />
-              <Text style={[styles.tabText, tab === index && styles.tabTextActive]}>{name}</Text>
+              <Text style={[styles.tabText, tab === i && styles.tabTextActive]}>{name}</Text>
             </TouchableOpacity>
           ))}
-          <Animated.View style={[styles.indicator, indicatorStyle]} />
         </View>
 
-        {floating && <Text style={styles.floating}>{floating}</Text>}
+        {/* ── Filter bar ──────────────────────────────────────────────────── */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterBar}
+          contentContainerStyle={styles.filterContent}
+        >
+          {FILTERS.map((f) => (
+            <TouchableOpacity
+              key={f}
+              style={[styles.chip, filter === f && styles.chipActive]}
+              onPress={() => setFilter(f)}
+            >
+              <Text style={[styles.chipText, filter === f && styles.chipTextActive]}>{f}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-        {tab === 0 && (
+        {/* ── Item grid ───────────────────────────────────────────────────── */}
+        {displayItems.length > 0 ? (
           <View style={styles.grid}>
-            {DEFAULT_AVATARS.map((catalogAvatar) => {
-              const avatar = avatars.find((item) => item.id === catalogAvatar.id) ?? catalogAvatar;
-              const equipped = selectedAvatarId === avatar.id;
-              const color = rarityColors[avatar.rarity ?? 'Common'];
-              return (
-                <View key={avatar.id} style={[styles.avatarCard, equipped && styles.equippedCard]}>
-                  <View style={[styles.avatarImage, { borderColor: color }]}>
-                    <AvatarFrame imageKey={avatar.imageKey} size={70} locked={!avatar.unlocked} />
-                  </View>
-                  <Text style={styles.avatarName} numberOfLines={1}>{avatar.name}</Text>
-                  <Text style={[styles.rarity, { color }]}>{avatar.rarity}</Text>
-                  <Text style={styles.ability} numberOfLines={2}>{avatar.ability}</Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.actionButton,
-                      equipped && styles.equippedButton,
-                      !avatar.unlocked && coins < avatar.cost && styles.disabledButton,
-                    ]}
-                    onPress={() => buyAvatar(avatar)}
-                    disabled={!avatar.unlocked && coins < avatar.cost}
-                  >
-                    {equipped ? <Ionicons name="checkmark" size={16} color={GameColors.backgroundPrimary} /> : null}
-                    <Text style={styles.actionText}>
-                      {equipped ? 'Equipped' : avatar.unlocked ? 'Equip' : `${avatar.cost} coins`}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        {tab === 1 && (
-          <View style={styles.list}>
-            {POWER_UPS.map((item) => (
-              <View key={item.id} style={styles.powerCard}>
-                <View style={styles.powerIcon}><Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={26} color={GameColors.accentGold} /></View>
-                <View style={styles.powerCopy}>
-                  <Text style={styles.powerName}>{item.name}</Text>
-                  <Text style={styles.powerDesc}>{item.description}</Text>
-                  <Text style={styles.inventory}>Owned: {powerUps[item.id]}</Text>
-                </View>
-                <TouchableOpacity style={styles.buySmall} onPress={() => buyPower(item.id, item.name)}>
-                  <Text style={styles.buySmallText}>{item.cost}</Text>
-                  <Ionicons name="logo-bitcoin" size={14} color={GameColors.backgroundPrimary} />
-                </TouchableOpacity>
-              </View>
+            {displayItems.map((item) => (
+              <ItemCard
+                key={item.id}
+                item={item}
+                balance={item.currencyType === 'coins' ? coins : gems}
+                onPress={() => handlePress(item)}
+              />
             ))}
           </View>
+        ) : (
+          <View style={styles.emptyWrap}>
+            <Ionicons name="search-outline" size={40} color={GameColors.textSecondary} />
+            <Text style={styles.emptyText}>No items match this filter</Text>
+          </View>
         )}
 
-        {tab === 2 && (
-          <View style={styles.list}>
-            <Text style={styles.sectionHint}>
-              {iapService.isMockMode ? 'Mock purchase · no payment processed' : 'Real purchase via App Store / Play Store'}
+        {/* ── Buy More Coins (Coin Shop only) ─────────────────────────────── */}
+        {tab === 0 && (
+          <View style={styles.iapSection}>
+            <View style={styles.iapDivider}>
+              <View style={styles.iapLine} />
+              <Text style={styles.iapLabel}>Buy More Coins</Text>
+              <View style={styles.iapLine} />
+            </View>
+            <Text style={styles.iapHint}>
+              {iapService.isMockMode
+                ? 'Mock purchase · no payment processed'
+                : 'Real purchase via App Store / Play Store'}
             </Text>
 
-            {/* ── Ad-Free Pass card ──────────────────────────────────────── */}
-            <View style={[styles.adFreeCard, adFreeActive && styles.adFreeCardActive]}>
-              <View style={styles.adFreeLeft}>
-                <View style={styles.adFreeIconWrap}>
-                  <Ionicons
-                    name={adFreeActive ? 'shield-checkmark' : 'shield-outline'}
-                    size={28}
-                    color={adFreeActive ? GameColors.accentGold : '#CE93D8'}
-                  />
-                </View>
-                <View style={styles.adFreeCopy}>
-                  <Text style={styles.adFreeTitle}>Ad-Free Pass</Text>
-                  <Text style={styles.adFreeDesc}>
-                    {adFreeActive
-                      ? adFreePassExpiry
-                        ? `Active · expires ${new Date(adFreePassExpiry).toLocaleDateString()}`
-                        : 'Active · Lifetime'
-                      : 'Enjoy all rewards without watching ads'}
-                  </Text>
-                </View>
+            {/* Ad-Free Pass */}
+            <TouchableOpacity
+              style={[styles.iapCard, adFreeActive && styles.iapCardOwned, loading === 'remove_ads' && styles.iapCardLoading]}
+              onPress={async () => {
+                if (adFreeActive || loading) return;
+                setLoading('remove_ads');
+                try {
+                  const { success, transactionId } = await iapService.purchase(IAP_SKUS.REMOVE_ADS);
+                  if (success) {
+                    removeAds(); playEffect('purchase'); showPurchase('Ad-Free activated!');
+                    if (transactionId) { const uid = getPlayerId(); if (uid) savePurchaseHistory(uid, { transactionId, productId: IAP_SKUS.REMOVE_ADS, date: new Date().toISOString(), status: 'completed' }); }
+                  }
+                } catch { /* silent */ } finally { setLoading(null); }
+              }}
+              disabled={adFreeActive || loading === 'remove_ads'}
+            >
+              <View style={styles.iapIcon}>
+                <Ionicons
+                  name={adFreeActive ? 'shield-checkmark' : 'shield-outline'}
+                  size={24}
+                  color={adFreeActive ? GameColors.accentGold : '#CE93D8'}
+                />
               </View>
-              <TouchableOpacity
-                style={[
-                  styles.adFreeBtn,
-                  adFreeActive && styles.adFreeBtnOwned,
-                  purchaseLoading === 'remove_ads' && { opacity: 0.6 },
-                ]}
-                onPress={buyAdFreePass}
-                disabled={adFreeActive || purchaseLoading === 'remove_ads'}
-              >
-                <Text style={[styles.adFreeBtnText, adFreeActive && styles.adFreeBtnTextOwned]}>
-                  {purchaseLoading === 'remove_ads' ? '…' : adFreeActive ? 'Owned ✓' : '$2.99'}
+              <View style={styles.iapCopy}>
+                <Text style={styles.iapName}>Ad-Free Pass</Text>
+                <Text style={styles.iapDesc} numberOfLines={1}>
+                  {adFreeActive
+                    ? adFreePassExpiry
+                      ? `Active · expires ${new Date(adFreePassExpiry).toLocaleDateString()}`
+                      : 'Active · Lifetime'
+                    : 'All rewards without watching ads'}
                 </Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+              <Text style={[styles.iapPrice, adFreeActive && { color: GameColors.accentGold }]}>
+                {loading === 'remove_ads' ? '…' : adFreeActive ? '✓' : '$2.99'}
+              </Text>
+            </TouchableOpacity>
 
-            {COIN_PACKAGES.map((pack, index) => (
+            {/* Coin packs */}
+            {COIN_PACKAGES.map((pack, idx) => (
               <TouchableOpacity
                 key={pack.id}
-                style={[styles.coinCard, index === 2 && styles.popularCard, purchaseLoading === pack.id && { opacity: 0.6 }]}
-                disabled={!!purchaseLoading}
+                style={[styles.iapCard, idx === 2 && styles.iapCardPopular, loading === pack.id && styles.iapCardLoading]}
+                disabled={!!loading}
                 onPress={async () => {
-                  setPurchaseLoading(pack.id);
+                  setLoading(pack.id);
                   try {
-                    const ok = await iapService.purchase(COIN_PACK_SKUS[pack.id] ?? pack.id);
+                    const sku = COIN_PACK_SKUS[pack.id] ?? pack.id;
+                    const { success: ok, transactionId: txId } = await iapService.purchase(sku);
                     if (ok) {
-                      mockPurchaseCoins(pack.amount);
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                      playEffect('coin');
-                      showPurchase(`+${pack.amount} coins`);
+                      mockPurchaseCoins(pack.amount); playEffect('coin'); showPurchase(`+${pack.amount} 🪙`);
+                      if (txId) { const uid = getPlayerId(); if (uid) savePurchaseHistory(uid, { transactionId: txId, productId: sku, date: new Date().toISOString(), status: 'completed', coinsGranted: pack.amount }); }
                     }
-                  } catch (err) {
-                    if (__DEV__) console.warn('[Shop] purchase error', err);
-                  } finally {
-                    setPurchaseLoading(null);
-                  }
+                  } catch { /* silent */ } finally { setLoading(null); }
                 }}
               >
-                <View style={styles.coinPackIcon}><Ionicons name="logo-bitcoin" size={25} color={GameColors.accentGold} /></View>
-                <Text style={styles.coinAmount}>{pack.amount.toLocaleString()} Coins</Text>
-                <Text style={styles.coinPrice}>{pack.price}</Text>
-                {index === 2 && <Text style={styles.popularLabel}>BEST VALUE</Text>}
+                <View style={styles.iapIcon}>
+                  <Ionicons name="logo-bitcoin" size={24} color={GameColors.accentGold} />
+                </View>
+                <View style={styles.iapCopy}>
+                  <Text style={styles.iapName}>{pack.amount.toLocaleString()} Coins</Text>
+                  {idx === 2 && <Text style={styles.bestValue}>BEST VALUE</Text>}
+                </View>
+                <Text style={styles.iapPrice}>{pack.price}</Text>
               </TouchableOpacity>
             ))}
 
-            {/* ── Restore purchases ──────────────────────────────────────── */}
             <TouchableOpacity
-              style={[styles.restoreBtn, purchaseLoading === 'restore' && { opacity: 0.6 }]}
-              onPress={restorePurchases}
-              disabled={!!purchaseLoading}
+              style={[styles.restoreBtn, loading === 'restore' && { opacity: 0.6 }]}
+              onPress={async () => {
+                if (loading) return;
+                setLoading('restore');
+                try {
+                  const ok = await iapService.restoreAdsRemoved();
+                  if (ok) { removeAds(); showPurchase('Purchases restored'); }
+                  else Alert.alert('Nothing to restore', 'No previous Ad-Free Pass purchase found.');
+                } catch { Alert.alert('Restore failed', 'Could not reach the store. Please try again.'); }
+                finally { setLoading(null); }
+              }}
+              disabled={!!loading}
             >
               <Ionicons name="refresh-outline" size={14} color={GameColors.textSecondary} />
               <Text style={styles.restoreText}>
-                {purchaseLoading === 'restore' ? 'Restoring…' : 'Restore Purchases'}
+                {loading === 'restore' ? 'Restoring…' : 'Restore Purchases'}
               </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── Get Gems (Gem Shop only) ─────────────────────────────────────── */}
+        {tab === 1 && (
+          <View style={styles.iapSection}>
+            <View style={styles.iapDivider}>
+              <View style={styles.iapLine} />
+              <Text style={styles.iapLabel}>Get Gems</Text>
+              <View style={styles.iapLine} />
+            </View>
+            <Text style={styles.iapHint}>
+              {iapService.isMockMode ? 'Mock purchase · no payment processed' : 'Real purchase via App Store / Play Store'}
+            </Text>
+
+            {/* Gem packs */}
+            {([
+              { sku: IAP_SKUS.GEMS_100,  gems: SKU_GEMS[IAP_SKUS.GEMS_100]  ?? 100,  price: '$1.99',  popular: false },
+              { sku: IAP_SKUS.GEMS_500,  gems: SKU_GEMS[IAP_SKUS.GEMS_500]  ?? 500,  price: '$4.99',  popular: true  },
+              { sku: IAP_SKUS.GEMS_1200, gems: SKU_GEMS[IAP_SKUS.GEMS_1200] ?? 1200, price: '$9.99',  popular: false },
+            ] as const).map((pack) => (
+              <TouchableOpacity
+                key={pack.sku}
+                style={[styles.iapCard, pack.popular && styles.iapCardPopular, loading === pack.sku && styles.iapCardLoading]}
+                disabled={!!loading}
+                onPress={async () => {
+                  setLoading(pack.sku);
+                  try {
+                    const { success, transactionId } = await iapService.purchase(pack.sku);
+                    if (success) {
+                      addGems(pack.gems); playEffect('purchase'); showPurchase(`+${pack.gems} 💎`);
+                      if (transactionId) { const uid = getPlayerId(); if (uid) savePurchaseHistory(uid, { transactionId, productId: pack.sku, date: new Date().toISOString(), status: 'completed', gemsGranted: pack.gems }); }
+                    }
+                  } catch { /* silent */ } finally { setLoading(null); }
+                }}
+              >
+                <View style={styles.iapIcon}>
+                  <Ionicons name="diamond-outline" size={22} color="#CE93D8" />
+                </View>
+                <View style={styles.iapCopy}>
+                  <Text style={styles.iapName}>{pack.gems.toLocaleString()} Gems</Text>
+                  {pack.popular && <Text style={styles.bestValue}>POPULAR</Text>}
+                </View>
+                <Text style={[styles.iapPrice, { color: '#CE93D8' }]}>
+                  {loading === pack.sku ? '…' : pack.price}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            {/* Ad-Free 7-day */}
+            <TouchableOpacity
+              style={[styles.iapCard, loading === IAP_SKUS.ADFREE_7DAY && styles.iapCardLoading]}
+              disabled={!!loading || adFreeActive}
+              onPress={async () => {
+                if (adFreeActive || loading) return;
+                setLoading(IAP_SKUS.ADFREE_7DAY);
+                try {
+                  const { success, transactionId } = await iapService.purchase(IAP_SKUS.ADFREE_7DAY);
+                  if (success) {
+                    removeAds(); playEffect('purchase'); showPurchase('7-day Ad-Free!');
+                    if (transactionId) { const uid = getPlayerId(); if (uid) savePurchaseHistory(uid, { transactionId, productId: IAP_SKUS.ADFREE_7DAY, date: new Date().toISOString(), status: 'completed' }); }
+                  }
+                } catch { /* silent */ } finally { setLoading(null); }
+              }}
+            >
+              <View style={styles.iapIcon}>
+                <Ionicons name="shield-half-outline" size={22} color={adFreeActive ? GameColors.accentGold : GameColors.textSecondary} />
+              </View>
+              <View style={styles.iapCopy}>
+                <Text style={styles.iapName}>Ad-Free 7 Days</Text>
+                <Text style={styles.iapDesc}>No ads for a full week</Text>
+              </View>
+              <Text style={styles.iapPrice}>{loading === IAP_SKUS.ADFREE_7DAY ? '…' : adFreeActive ? '✓' : '$0.99'}</Text>
+            </TouchableOpacity>
+
+            {/* Ad-Free Lifetime */}
+            <TouchableOpacity
+              style={[styles.iapCard, adFreeActive && styles.iapCardOwned, loading === IAP_SKUS.ADFREE_LIFETIME && styles.iapCardLoading]}
+              disabled={!!loading || adFreeActive}
+              onPress={async () => {
+                if (adFreeActive || loading) return;
+                setLoading(IAP_SKUS.ADFREE_LIFETIME);
+                try {
+                  const { success, transactionId } = await iapService.purchase(IAP_SKUS.ADFREE_LIFETIME);
+                  if (success) {
+                    removeAds(); playEffect('purchase'); showPurchase('Ad-Free forever!');
+                    if (transactionId) { const uid = getPlayerId(); if (uid) savePurchaseHistory(uid, { transactionId, productId: IAP_SKUS.ADFREE_LIFETIME, date: new Date().toISOString(), status: 'completed' }); }
+                  }
+                } catch { /* silent */ } finally { setLoading(null); }
+              }}
+            >
+              <View style={styles.iapIcon}>
+                <Ionicons name={adFreeActive ? 'shield-checkmark' : 'shield-outline'} size={22} color={adFreeActive ? GameColors.accentGold : '#CE93D8'} />
+              </View>
+              <View style={styles.iapCopy}>
+                <Text style={styles.iapName}>Ad-Free Lifetime</Text>
+                <Text style={styles.iapDesc}>{adFreeActive ? 'Active — enjoy the silence' : 'Never see an ad again'}</Text>
+              </View>
+              <Text style={[styles.iapPrice, adFreeActive && { color: GameColors.accentGold }]}>
+                {loading === IAP_SKUS.ADFREE_LIFETIME ? '…' : adFreeActive ? '✓' : '$4.99'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Starter Pack */}
+            <TouchableOpacity
+              style={[styles.iapCard, styles.iapCardPopular, loading === IAP_SKUS.STARTER_PACK && styles.iapCardLoading]}
+              disabled={!!loading}
+              onPress={async () => {
+                setLoading(IAP_SKUS.STARTER_PACK);
+                try {
+                  const { success, transactionId } = await iapService.purchase(IAP_SKUS.STARTER_PACK);
+                  if (success) {
+                    mockPurchaseCoins(500); addGems(100); playEffect('purchase'); showPurchase('Starter Pack!');
+                    if (transactionId) { const uid = getPlayerId(); if (uid) savePurchaseHistory(uid, { transactionId, productId: IAP_SKUS.STARTER_PACK, date: new Date().toISOString(), status: 'completed', coinsGranted: 500, gemsGranted: 100 }); }
+                  }
+                } catch { /* silent */ } finally { setLoading(null); }
+              }}
+            >
+              <View style={styles.iapIcon}>
+                <Ionicons name="gift-outline" size={22} color={GameColors.accentGold} />
+              </View>
+              <View style={styles.iapCopy}>
+                <Text style={styles.iapName}>Starter Pack</Text>
+                <Text style={styles.iapDesc}>500 Coins + 100 Gems · Best first purchase</Text>
+              </View>
+              <Text style={styles.iapPrice}>{loading === IAP_SKUS.STARTER_PACK ? '…' : '$2.00'}</Text>
+            </TouchableOpacity>
+
+            {/* Season Pass (coming soon) */}
+            <View style={[styles.iapCard, { opacity: 0.45 }]}>
+              <View style={styles.iapIcon}>
+                <Ionicons name="calendar-outline" size={22} color={GameColors.textSecondary} />
+              </View>
+              <View style={styles.iapCopy}>
+                <Text style={styles.iapName}>Season Pass</Text>
+                <Text style={styles.iapDesc}>Exclusive season rewards — coming soon</Text>
+              </View>
+              <Text style={styles.iapPrice}>$5.00</Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.restoreBtn, loading === 'restore' && { opacity: 0.6 }]}
+              onPress={async () => {
+                if (loading) return;
+                setLoading('restore');
+                try {
+                  const ok = await iapService.restoreAdsRemoved();
+                  if (ok) { removeAds(); showPurchase('Purchases restored'); }
+                  else Alert.alert('Nothing to restore', 'No previous Ad-Free purchase found.');
+                } catch { Alert.alert('Restore failed', 'Could not reach the store. Please try again.'); }
+                finally { setLoading(null); }
+              }}
+              disabled={!!loading}
+            >
+              <Ionicons name="refresh-outline" size={14} color={GameColors.textSecondary} />
+              <Text style={styles.restoreText}>{loading === 'restore' ? 'Restoring…' : 'Restore Purchases'}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -326,92 +545,198 @@ export default function ShopScreen() {
   );
 }
 
+// ─── Item Card ────────────────────────────────────────────────────────────────
+
+interface CardProps {
+  item: RuntimeItem;
+  balance: number;
+  onPress: () => void;
+}
+
+const ItemCard: React.FC<CardProps> = ({ item, balance, onPress }) => {
+  const rarityColor = RARITY_COLORS[item.rarity] ?? GameColors.textSecondary;
+  const canAfford   = balance >= item.price;
+  const isAvatar    = item.id.startsWith('avatar_');
+  const isGem       = item.currencyType === 'gems';
+  const isStackable = !isAvatar && !isGem; // consumables / power-ups can be bought again
+
+  // ── Button label & style ─────────────────────────────────────────────────
+  let label: string;
+  let btnVariant: 'buy' | 'equip' | 'equipped' | 'disabled';
+
+  if (item.equipped) {
+    label = 'Equipped ✓';
+    btnVariant = 'equipped';
+  } else if (item.owned && (isAvatar || isGem)) {
+    label = 'Equip';
+    btnVariant = 'equip';
+  } else if (item.price === 0) {
+    label = 'Free · Equip';
+    btnVariant = canAfford ? 'buy' : 'disabled';
+  } else {
+    const currency = isGem ? '💎' : '🪙';
+    label = `${item.price} ${currency}`;
+    btnVariant = canAfford ? 'buy' : 'disabled';
+  }
+
+  const btnStyle =
+    btnVariant === 'equipped' ? styles.btnEquipped :
+    btnVariant === 'equip'    ? styles.btnEquip    :
+    btnVariant === 'disabled' ? styles.btnDisabled :
+    styles.btnBuy;
+
+  const btnTextStyle = btnVariant === 'equipped' ? styles.btnTextEquipped :
+                       btnVariant === 'equip'    ? styles.btnTextEquip    :
+                       btnVariant === 'disabled' ? styles.btnTextDisabled :
+                       styles.btnTextBuy;
+
+  return (
+    <View style={[styles.card, { borderColor: `${rarityColor}44` }]}>
+      {/* Icon area */}
+      <View style={[styles.cardIconWrap, { backgroundColor: `${rarityColor}18` }]}>
+        <Ionicons
+          name={item.icon as React.ComponentProps<typeof Ionicons>['name']}
+          size={30}
+          color={item.owned ? rarityColor : GameColors.textSecondary}
+        />
+        {/* Quantity badge for stackable items */}
+        {item.quantity !== undefined && item.quantity > 0 && (
+          <View style={[styles.qtyBadge, { backgroundColor: rarityColor }]}>
+            <Text style={styles.qtyText}>{item.quantity}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Name */}
+      <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
+
+      {/* Rarity badge */}
+      <View style={[styles.rarityBadge, { backgroundColor: `${rarityColor}22` }]}>
+        <Text style={[styles.rarityText, { color: rarityColor }]}>
+          {item.rarity.toUpperCase()}
+        </Text>
+      </View>
+
+      {/* Description */}
+      <Text style={styles.cardDesc} numberOfLines={3}>{item.description}</Text>
+
+      {/* Action button */}
+      <TouchableOpacity
+        style={[styles.cardBtn, btnStyle]}
+        onPress={onPress}
+        disabled={btnVariant === 'disabled'}
+        activeOpacity={0.75}
+      >
+        <Text style={[styles.cardBtnText, btnTextStyle]}>{label}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: 20, minHeight: '100%' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
-  title: { ...Typography.header, color: GameColors.textWhite, fontSize: 28 },
-  tabs: { height: 54, flexDirection: 'row', position: 'relative', borderBottomWidth: 1, borderBottomColor: GameColors.border, marginBottom: 20 },
-  tab: { width: TAB_WIDTH, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
-  tabText: { ...Typography.small, color: GameColors.textSecondary, fontFamily: 'Inter_600SemiBold' },
-  tabTextActive: { color: GameColors.accentGold },
-  indicator: { position: 'absolute', bottom: -2, left: 0, width: TAB_WIDTH, height: 3, borderRadius: 2, backgroundColor: GameColors.accentGold },
-  floating: { position: 'absolute', top: 122, alignSelf: 'center', zIndex: 4, color: GameColors.accentGreen, fontFamily: 'Inter_700Bold', fontSize: 16 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
-  avatarCard: { width: '48%', backgroundColor: 'rgba(255,255,255,0.055)', borderRadius: 18, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: GameColors.border },
-  equippedCard: { borderColor: GameColors.accentGold, backgroundColor: 'rgba(255,215,0,0.09)' },
-  avatarImage: { borderWidth: 2, borderRadius: 50, padding: 2, marginBottom: 8 },
-  avatarName: { color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 15 },
-  rarity: { fontFamily: 'Inter_600SemiBold', fontSize: 11, marginTop: 2 },
-  ability: { color: GameColors.textSecondary, fontSize: 11, textAlign: 'center', minHeight: 32, marginVertical: 8 },
-  actionButton: { minHeight: 34, width: '100%', borderRadius: 10, backgroundColor: GameColors.accentGold, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 },
-  equippedButton: { backgroundColor: GameColors.accentGreen },
-  disabledButton: { opacity: 0.35 },
-  actionText: { color: GameColors.backgroundPrimary, fontFamily: 'Inter_700Bold', fontSize: 11 },
-  list: { gap: 12 },
-  sectionHint: { color: GameColors.textSecondary, textAlign: 'center', fontSize: 12, marginBottom: 4 },
-  powerCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: GameColors.border },
-  powerIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,215,0,0.12)', alignItems: 'center', justifyContent: 'center' },
-  powerCopy: { flex: 1, gap: 3 },
-  powerName: { color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 16 },
-  powerDesc: { color: GameColors.textSecondary, fontSize: 12 },
-  inventory: { color: GameColors.accentGreen, fontFamily: 'Inter_600SemiBold', fontSize: 12 },
-  buySmall: { minWidth: 70, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10, backgroundColor: GameColors.accentGold, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 3 },
-  buySmallText: { color: GameColors.backgroundPrimary, fontFamily: 'Inter_700Bold' },
-  coinCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, padding: 15, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: GameColors.border },
-  popularCard: { borderColor: GameColors.accentGold },
-  coinPackIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,215,0,0.12)', alignItems: 'center', justifyContent: 'center' },
-  coinAmount: { flex: 1, color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 17 },
-  coinPrice: { color: GameColors.accentGold, fontFamily: 'Inter_700Bold', fontSize: 16 },
-  popularLabel: { position: 'absolute', top: -9, right: 14, color: GameColors.backgroundPrimary, backgroundColor: GameColors.accentGold, fontFamily: 'Inter_700Bold', fontSize: 9, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
+  container: { paddingHorizontal: 18, gap: 16 },
 
-  // ── Ad-Free Pass ────────────────────────────────────────────────────────
-  adFreeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  // Header
+  header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  title:       { ...Typography.header, color: GameColors.textWhite, fontSize: 26 },
+  currencyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  gemPill:     { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, backgroundColor: 'rgba(206,147,216,0.15)', borderWidth: 1, borderColor: 'rgba(206,147,216,0.35)' },
+  gemText:     { color: '#CE93D8', fontFamily: 'Inter_700Bold', fontSize: 13 },
+
+  // Tabs
+  tabs:        { flexDirection: 'row', gap: 10 },
+  tabBtn:      { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: 14, borderWidth: 1, borderColor: GameColors.border, backgroundColor: 'rgba(255,255,255,0.04)' },
+  tabBtnActive:{ backgroundColor: GameColors.accentGold, borderColor: GameColors.accentGold },
+  tabText:     { ...Typography.small, color: GameColors.textSecondary, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  tabTextActive: { color: GameColors.backgroundPrimary, fontFamily: 'Inter_700Bold' },
+
+  // Filter bar
+  filterBar:    { flexGrow: 0 },
+  filterContent:{ flexDirection: 'row', gap: 8, paddingRight: 4 },
+  chip:         { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: GameColors.border, backgroundColor: 'rgba(255,255,255,0.04)' },
+  chipActive:   { backgroundColor: 'rgba(255,215,0,0.15)', borderColor: 'rgba(255,215,0,0.5)' },
+  chipText:     { ...Typography.small, color: GameColors.textSecondary, fontFamily: 'Inter_600SemiBold', fontSize: 12 },
+  chipTextActive:{ color: GameColors.accentGold, fontFamily: 'Inter_700Bold' },
+
+  // Grid
+  grid:         { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+
+  // Item card
+  card: {
+    width: '47%',
+    flexGrow: 1,
+    flexBasis: '44%',
+    backgroundColor: 'rgba(255,255,255,0.045)',
     borderRadius: 18,
-    padding: 16,
-    backgroundColor: 'rgba(206,147,216,0.08)',
-    borderWidth: 1.5,
-    borderColor: '#CE93D8',
-    gap: 12,
-  },
-  adFreeCardActive: {
-    backgroundColor: 'rgba(255,215,0,0.07)',
-    borderColor: GameColors.accentGold,
-  },
-  adFreeLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  adFreeIconWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  adFreeCopy: { flex: 1, gap: 3 },
-  adFreeTitle: { color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 16 },
-  adFreeDesc: { color: GameColors.textSecondary, fontSize: 12, fontFamily: 'Inter_500Medium' },
-  adFreeBtn: {
-    minWidth: 72,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: '#CE93D8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  adFreeBtnOwned: { backgroundColor: 'rgba(255,215,0,0.18)', borderWidth: 1, borderColor: GameColors.accentGold },
-  adFreeBtnText: { color: GameColors.backgroundPrimary, fontFamily: 'Inter_700Bold', fontSize: 14 },
-  adFreeBtnTextOwned: { color: GameColors.accentGold },
-
-  // ── Restore purchases ───────────────────────────────────────────────────
-  restoreBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderWidth: 1,
+    padding: 14,
     gap: 6,
-    paddingVertical: 14,
+    alignItems: 'center',
   },
+  cardIconWrap: {
+    width: 60, height: 60, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+    position: 'relative',
+    marginBottom: 2,
+  },
+  qtyBadge: {
+    position: 'absolute', top: -4, right: -4,
+    minWidth: 18, height: 18, borderRadius: 9,
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  qtyText:  { color: '#000', fontFamily: 'Inter_700Bold', fontSize: 10 },
+  cardName: { color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 13, textAlign: 'center' },
+  rarityBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  rarityText:  { fontFamily: 'Inter_700Bold', fontSize: 9, letterSpacing: 0.8 },
+  cardDesc: {
+    color: GameColors.textSecondary, fontSize: 10, textAlign: 'center',
+    lineHeight: 14, minHeight: 42, fontFamily: 'Inter_400Regular',
+  },
+  cardBtn:     { width: '100%', paddingVertical: 9, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  btnBuy:      { backgroundColor: GameColors.accentGold },
+  btnEquip:    { backgroundColor: 'rgba(255,215,0,0.18)', borderWidth: 1, borderColor: 'rgba(255,215,0,0.5)' },
+  btnEquipped: { backgroundColor: 'rgba(0,230,118,0.15)', borderWidth: 1, borderColor: 'rgba(0,230,118,0.5)' },
+  btnDisabled: { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: GameColors.border },
+  cardBtnText:      { fontFamily: 'Inter_700Bold', fontSize: 12 },
+  btnTextBuy:       { color: GameColors.backgroundPrimary },
+  btnTextEquip:     { color: GameColors.accentGold },
+  btnTextEquipped:  { color: GameColors.accentGreen },
+  btnTextDisabled:  { color: GameColors.textSecondary },
+
+  // Empty state
+  emptyWrap: { paddingVertical: 48, alignItems: 'center', gap: 10 },
+  emptyText: { color: GameColors.textSecondary, fontFamily: 'Inter_500Medium', fontSize: 14 },
+
+  // Floating toast
+  floating: {
+    position: 'absolute', top: 108, alignSelf: 'center', zIndex: 10,
+    color: GameColors.accentGreen, fontFamily: 'Inter_700Bold', fontSize: 17,
+    textShadowColor: 'rgba(0,230,118,0.4)', textShadowRadius: 8,
+  },
+
+  // IAP section (Buy More Coins / Get Gems)
+  iapSection: { gap: 10, marginTop: 6 },
+  iapDivider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 2 },
+  iapLine:    { flex: 1, height: 1, backgroundColor: GameColors.border },
+  iapLabel:   { color: GameColors.textSecondary, fontFamily: 'Inter_600SemiBold', fontSize: 12, letterSpacing: 0.5 },
+  iapHint:    { color: GameColors.textSecondary, fontSize: 11, textAlign: 'center', fontFamily: 'Inter_400Regular' },
+  iapCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: 14, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.055)', borderWidth: 1, borderColor: GameColors.border,
+  },
+  iapCardOwned:   { backgroundColor: 'rgba(255,215,0,0.06)', borderColor: 'rgba(255,215,0,0.4)' },
+  iapCardPopular: { borderColor: GameColors.accentGold },
+  iapCardLoading: { opacity: 0.6 },
+  iapIcon:  { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.07)' },
+  iapCopy:  { flex: 1, gap: 3 },
+  iapName:  { color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  iapDesc:  { color: GameColors.textSecondary, fontSize: 11, fontFamily: 'Inter_400Regular' },
+  iapPrice: { color: GameColors.accentGold, fontFamily: 'Inter_700Bold', fontSize: 15 },
+  bestValue:{ color: GameColors.backgroundPrimary, backgroundColor: GameColors.accentGold, fontFamily: 'Inter_700Bold', fontSize: 9, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
+  restoreBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
   restoreText: { color: GameColors.textSecondary, fontFamily: 'Inter_500Medium', fontSize: 13 },
 });

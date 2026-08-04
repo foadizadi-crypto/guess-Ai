@@ -1,0 +1,121 @@
+📦 PHASE 1 — ECONOMY + SHOP CORE
+
+---
+
+TASK: Implement Economy System, Currencies, Shop, and Inventory Management.
+
+---
+
+1. Currency System
+
+Currency Type Earning Method Use Default
+Coins Free Gameplay, rewards, missions, events Consumables, basic items 0
+Gems Premium IAP (primary), special events (future) Premium cosmetics, exclusive items 0
+
+Data Source: All values must be read from a config file (JSON or database).
+No hardcoded values.
+
+---
+
+2. Item System (Data-Driven)
+
+Every item must follow this structure:
+
+```json
+{
+  "id": "unique_id",
+  "name": "Item Name",
+  "description": "Description",
+  "icon": "icon_name",
+  "category": "consumable | cosmetic | collectible",
+  "rarity": "common | rare | epic | legendary",
+  "currencyType": "coins | gems",
+  "price": 0,
+  "unlockType": "shop | level | achievement | event | season | special",
+  "owned": false,
+  "equipped": false
+}
+```
+
+All items (consumables, cosmetics, collectibles) must use this structure.
+
+---
+
+3. Consumable Items (Coin Shop)
+
+Item Price Effect
+Error Nullifier 200 Coins Prevents clarity loss on next wrong answer
+Clarity Bomb 200 Coins Instantly removes 15% blur
+Combo Shield 150 Coins Combo drops by 1 tier instead of reset
+Time Boost 100 Coins Adds +20 seconds to next session
+2x Multiplier 300 Coins Doubles Coins & XP for 3 sessions
+
+After purchase: Inventory quantity +1
+
+---
+
+4. Gem Shop (Premium Cosmetics)
+
+Item Price
+Premium Avatar 50 Gems
+Premium Frame 80 Gems
+Premium Theme 100 Gems
+Entrance Effect 60 Gems
+Premium Title 40 Gems
+Premium Badge 30 Gems
+
+All prices must be configurable.
+
+---
+
+5. Purchase Logic
+
+Flow:
+
+1. Check player balance.
+2. Deduct currency.
+3. Add item to inventory (quantity +1 for consumables).
+4. If cosmetic: unlock and allow equip.
+
+Item States:
+
+· LOCKED
+· OWNED
+· EQUIPPED
+
+---
+
+6. Shop UI
+
+Tabs:
+
+· Coin Shop
+· Gem Shop
+
+Each Item Displays:
+
+· Icon
+· Name
+· Description
+· Rarity
+· Price
+· Buy Button
+
+Filters:
+
+· All
+· Owned
+· Locked
+· Rare
+· Epic
+· Legendary
+
+---
+
+7. Data Storage Rule
+
+All shop items, prices, consumables, and cosmetic lists must be stored in a config file (JSON) or database table.
+The game must read from this source at runtime.
+No hardcoded items or prices anywhere in the code.
+
+---

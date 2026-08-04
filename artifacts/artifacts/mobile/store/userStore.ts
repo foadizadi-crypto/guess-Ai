@@ -14,6 +14,13 @@ import type {
 } from '@/types';
 import { ACHIEVEMENTS, DEFAULT_AVATARS, DAILY_REWARDS, DEFAULT_POWER_UPS, checkAchievementCondition } from '@/constants';
 import type { AchievementDef } from '@/constants/achievements';
+import { GEM_SHOP_ITEMS } from '@/constants/shopConfig';
+import { COSMETIC_BY_ID, type CosmeticType } from '@/constants/collections';
+import {
+  SPIN_CONFIG,
+  pickRewardIndex,
+  type SpinReward,
+} from '@/constants/spinConfig';
 import { getLevelReward } from '@/constants/levelRewards';
 import { type ConsumableId, CONSUMABLE_PRICES } from '@/constants/shopData';
 import { getDailyMissions, getTodayUTC, type MissionType } from '@/constants/missions';
@@ -103,6 +110,22 @@ interface UserState {
   resetUser: () => void;
   checkAndUnlockAchievements: (ctx: { isPerfectGame?: boolean; maxComboThisGame?: number }) => AchievementDef[];
   clearNewAchievementBadge: () => void;
+  gemCosmetics: Record<string, { owned: boolean; equipped: boolean }>;
+  buyGemCosmetic: (id: string) => boolean;
+  equipGemCosmetic: (id: string) => void;
+  // ── Phase 2 — Cosmetic collections ────────────────────────────────────
+  ownedCosmetics: Record<string, boolean>;
+  equippedCosmetics: Partial<Record<CosmeticType, string>>;
+  buyCosmetic: (id: string) => boolean;
+  equipCosmetic: (id: string) => void;
+  grantStarterPack: () => void;
+  // ── Phase 3 — Jackpot spin wheel ──────────────────────────────────────
+  lastSpinDate:    string | null;  // ISO timestamp of last FREE spin
+  extraSpinsToday: number;         // paid spins used today
+  lastExtraSpinDate: string | null; // YYYY-MM-DD UTC for daily reset
+  canFreeSpin:   () => boolean;
+  canExtraSpin:  () => boolean;
+  performSpin:   (isFree: boolean) => SpinReward | null;
 }
 
 // ─── Defaults ─────────────────────────────────────────────────────────────
@@ -154,6 +177,12 @@ export const useUserStore = create<UserState>()(
       dailyReward: { ...defaultDailyReward },
       achievements: ACHIEVEMENTS.map((a) => ({ ...a, unlocked: false, unlockedAt: null })),
       hasNewAchievement: false,
+      gemCosmetics: {},
+      ownedCosmetics: {},
+      equippedCosmetics: {},
+      lastSpinDate:       null,
+      extraSpinsToday:    0,
+      lastExtraSpinDate:  null,
       settings: { ...defaultSettings },
       statistics: { ...defaultStatistics },
       dailyXPEarned: 0,
@@ -483,9 +512,13 @@ export const useUserStore = create<UserState>()(
       // ── Achievement checking ──────────────────────────────────────────
 
       checkAndUnlockAchievements: (ctx) => {
-        const { achievements, statistics, avatars } = get();
+        const { achievements, statistics, avatars, ownedCosmetics } = get();
         const newlyUnlocked: AchievementDef[] = [];
         let coinsToAdd = 0;
+        let xpToAdd    = 0;
+        let gemsToAdd  = 0;
+
+        const ownedCosmeticsCount = Object.values(ownedCosmetics).filter(Boolean).length;
 
         const updatedAchievements = achievements.map((stored) => {
           if (stored.unlocked) return stored;
@@ -494,11 +527,14 @@ export const useUserStore = create<UserState>()(
           const conditionMet = checkAchievementCondition(def.id, {
             stats: statistics,
             avatars,
-            isPerfectGame: ctx.isPerfectGame,
+            ownedCosmeticsCount,
+            isPerfectGame:    ctx.isPerfectGame,
             maxComboThisGame: ctx.maxComboThisGame,
           });
           if (!conditionMet) return stored;
-          coinsToAdd += def.rewardCoins;
+          coinsToAdd += def.rewardCoins ?? 0;
+          xpToAdd    += def.rewardXP    ?? 0;
+          gemsToAdd  += def.rewardGems  ?? 0;
           newlyUnlocked.push(def);
           return { ...stored, unlocked: true, unlockedAt: new Date().toISOString() };
         });
@@ -508,6 +544,8 @@ export const useUserStore = create<UserState>()(
             achievements: updatedAchievements,
             hasNewAchievement: true,
             coins: state.coins + coinsToAdd,
+            xp:    state.xp    + xpToAdd,
+            gems:  state.gems  + gemsToAdd,
             statistics: {
               ...state.statistics,
               totalCoinsEarned: state.statistics.totalCoinsEarned + coinsToAdd,
@@ -519,6 +557,168 @@ export const useUserStore = create<UserState>()(
       },
 
       clearNewAchievementBadge: () => set({ hasNewAchievement: false }),
+
+      // ── Gem cosmetics (Phase 1 §4) ────────────────────────────────────
+
+      buyGemCosmetic: (id) => {
+        const item = GEM_SHOP_ITEMS.find((i) => i.id === id);
+        if (!item) return false;
+        const { gems, gemCosmetics } = get();
+        if (gemCosmetics[id]?.owned) return false; // already owned
+        if (gems < item.price) return false;
+        set((state) => ({
+          gems: state.gems - item.price,
+          gemCosmetics: { ...state.gemCosmetics, [id]: { owned: true, equipped: false } },
+        }));
+        return true;
+      },
+
+      equipGemCosmetic: (id) => {
+        set((state) => {
+          if (!state.gemCosmetics[id]?.owned) return state;
+          return {
+            gemCosmetics: {
+              ...state.gemCosmetics,
+              [id]: { ...state.gemCosmetics[id], equipped: !state.gemCosmetics[id].equipped },
+            },
+          };
+        });
+      },
+
+      // ── Phase 2 — Generic cosmetic collection actions ─────────────────
+
+      buyCosmetic: (id) => {
+        const item = COSMETIC_BY_ID.get(id);
+        if (!item) return false;
+        const state = get();
+        if (state.ownedCosmetics[id]) return false; // already owned
+        if (item.currency === 'free') {
+          set((s) => ({ ownedCosmetics: { ...s.ownedCosmetics, [id]: true } }));
+          return true;
+        }
+        if (item.currency === 'gems') {
+          if (state.gems < item.price) return false;
+          set((s) => ({
+            gems: s.gems - item.price,
+            ownedCosmetics: { ...s.ownedCosmetics, [id]: true },
+          }));
+          return true;
+        }
+        if (item.currency === 'coins') {
+          if (state.coins < item.price) return false;
+          set((s) => ({
+            coins: s.coins - item.price,
+            ownedCosmetics: { ...s.ownedCosmetics, [id]: true },
+          }));
+          return true;
+        }
+        return false;
+      },
+
+      equipCosmetic: (id) => {
+        const item = COSMETIC_BY_ID.get(id);
+        if (!item) return;
+        const state = get();
+        // For free items grant ownership implicitly on first equip
+        const isOwned = state.ownedCosmetics[id] || item.currency === 'free';
+        if (!isOwned) return;
+        set((s) => {
+          const alreadyEquipped = s.equippedCosmetics[item.type] === id;
+          return {
+            equippedCosmetics: {
+              ...s.equippedCosmetics,
+              [item.type]: alreadyEquipped ? undefined : id,
+            },
+          };
+        });
+      },
+
+      grantStarterPack: () => {
+        set((s) => ({
+          coins: s.coins + 500,
+          gems: s.gems + 100,
+          ownedCosmetics: { ...s.ownedCosmetics, frame_bronze: true },
+        }));
+      },
+
+      // ── Phase 3 — Jackpot spin wheel ──────────────────────────────────
+
+      canFreeSpin: () => {
+        const { lastSpinDate } = get();
+        if (!lastSpinDate) return true;
+        const elapsedHours = (Date.now() - new Date(lastSpinDate).getTime()) / 3_600_000;
+        return elapsedHours >= SPIN_CONFIG.freeSpinCooldownHours;
+      },
+
+      canExtraSpin: () => {
+        const { extraSpinsToday, lastExtraSpinDate } = get();
+        const today = getTodayUTCString();
+        const usedToday = lastExtraSpinDate === today ? extraSpinsToday : 0;
+        return usedToday < SPIN_CONFIG.extraSpinsPerDay;
+      },
+
+      performSpin: (isFree) => {
+        const s = get();
+        const today = getTodayUTCString();
+
+        if (isFree) {
+          if (!s.canFreeSpin()) return null;
+        } else {
+          const usedToday = s.lastExtraSpinDate === today ? s.extraSpinsToday : 0;
+          if (usedToday >= SPIN_CONFIG.extraSpinsPerDay) return null;
+          if (s.coins < SPIN_CONFIG.extraSpinCost) return null;
+        }
+
+        const rewards = SPIN_CONFIG.rewards as readonly SpinReward[];
+        const idx    = pickRewardIndex(rewards);
+        const reward = { ...rewards[idx] };
+
+        // Jackpot: multiply and cap
+        if (reward.isJackpot) {
+          reward.amount = Math.min(
+            reward.amount * SPIN_CONFIG.jackpotMultiplier,
+            SPIN_CONFIG.jackpotMaxReward,
+          );
+        }
+
+        set((cur) => {
+          const usedToday = cur.lastExtraSpinDate === today ? cur.extraSpinsToday : 0;
+          let newCoins = cur.coins;
+          if (!isFree) newCoins -= SPIN_CONFIG.extraSpinCost;
+
+          // Grant reward
+          let newGems  = cur.gems;
+          let newStats = cur.statistics;
+          let newConsumables = cur.consumables;
+          let newOwnedCosmetics = cur.ownedCosmetics;
+
+          if (reward.type === 'coins' || reward.type === 'jackpot') {
+            newCoins += reward.amount;
+            newStats  = { ...cur.statistics, totalCoinsEarned: cur.statistics.totalCoinsEarned + reward.amount };
+          } else if (reward.type === 'gems') {
+            newGems += reward.amount;
+          } else if (reward.type === 'consumable' && reward.itemId) {
+            const cid = reward.itemId as ConsumableId;
+            newConsumables = { ...cur.consumables, [cid]: (cur.consumables[cid] ?? 0) + reward.amount };
+          } else if (reward.type === 'cosmetic') {
+            // Grant sticker_classic as cosmetic spin reward
+            newOwnedCosmetics = { ...cur.ownedCosmetics, sticker_classic: true };
+          }
+
+          return {
+            coins:            newCoins,
+            gems:             newGems,
+            statistics:       newStats,
+            consumables:      newConsumables,
+            ownedCosmetics:   newOwnedCosmetics,
+            lastSpinDate:     isFree ? new Date().toISOString() : cur.lastSpinDate,
+            extraSpinsToday:  isFree ? cur.extraSpinsToday : usedToday + 1,
+            lastExtraSpinDate: isFree ? cur.lastExtraSpinDate : today,
+          };
+        });
+
+        return reward;
+      },
 
       // ── Settings ──────────────────────────────────────────────────────
 
@@ -553,6 +753,12 @@ export const useUserStore = create<UserState>()(
           dailyReward: { ...defaultDailyReward },
           achievements: ACHIEVEMENTS.map((a) => ({ ...a, unlocked: false, unlockedAt: null })),
           hasNewAchievement: false,
+          gemCosmetics: {},
+          ownedCosmetics: {},
+          equippedCosmetics: {},
+          lastSpinDate:      null,
+          extraSpinsToday:   0,
+          lastExtraSpinDate: null,
           settings: { ...defaultSettings },
           statistics: { ...defaultStatistics },
           dailyXPEarned: 0,
@@ -583,6 +789,12 @@ export const useUserStore = create<UserState>()(
             return { ...def, unlocked: saved_a?.unlocked ?? false, unlockedAt: saved_a?.unlockedAt ?? null };
           }),
           hasNewAchievement: false, // always start fresh — badge clears on each app launch
+          gemCosmetics:            saved.gemCosmetics            ?? {},
+          ownedCosmetics:          saved.ownedCosmetics          ?? {},
+          equippedCosmetics:       saved.equippedCosmetics       ?? {},
+          lastSpinDate:            saved.lastSpinDate            ?? null,
+          extraSpinsToday:         saved.extraSpinsToday         ?? 0,
+          lastExtraSpinDate:       saved.lastExtraSpinDate       ?? null,
           gems:                    saved.gems                    ?? 0,
           multiplierSessionsLeft:  saved.multiplierSessionsLeft  ?? 0,
           unclaimedLevelRewards:   saved.unclaimedLevelRewards   ?? [],
