@@ -57235,6 +57235,9 @@ app.use(
 app.use((0, import_cors.default)());
 app.use(import_express7.default.json());
 app.use(import_express7.default.urlencoded({ extended: true }));
+app.get("/", (_req, res) => {
+  res.json({ status: "ok", message: "BlurQuiz API Server is running \u{1F3AE}" });
+});
 app.use("/api", routes_default);
 app.use((err, _req, res, _next) => {
   const status = err && typeof err === "object" && "status" in err && typeof err.status === "number" ? err.status : 500;
