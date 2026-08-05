@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, Text, ViewStyle } from 'react-native';
+import { Image, StyleSheet, View, Text, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
@@ -13,8 +13,36 @@ interface AvatarFrameProps {
   locked?: boolean;
 }
 
+// ─── Avatar PNG map ────────────────────────────────────────────────────────────
+// Accepts both avatar_N ids (used by selectedAvatarId) and imageKey strings
+// (used by DEFAULT_AVATARS). Both map to the same character art PNG.
+const AVATAR_IMAGES: Record<string, ReturnType<typeof require>> = {
+  // by avatar id
+  avatar_1:        require('@/assets/avatars/AKASHA.png'),
+  avatar_2:        require('@/assets/avatars/AUREY.jpg'),
+  avatar_3:        require('@/assets/avatars/CELECTE.png'),
+  avatar_4:        require('@/assets/avatars/EVILA.png'),
+  avatar_5:        require('@/assets/avatars/EVILI.png'),
+  avatar_6:        require('@/assets/avatars/GIA.png'),
+  avatar_7:        require('@/assets/avatars/KOSMOS.png'),
+  avatar_8:        require('@/assets/avatars/LUNA.png'),
+  avatar_9:        require('@/assets/avatars/NOVA.png'),
+  avatar_10:       require('@/assets/avatars/ZEPHRE.png'),
+  // by imageKey (DEFAULT_AVATARS.imageKey)
+  wolf:            require('@/assets/avatars/AKASHA.png'),
+  hourglass:       require('@/assets/avatars/AUREY.jpg'),
+  sparkles:        require('@/assets/avatars/CELECTE.png'),
+  eye:             require('@/assets/avatars/EVILA.png'),
+  'shield-checkmark': require('@/assets/avatars/EVILI.png'),
+  clover:          require('@/assets/avatars/GIA.png'),
+  flame:           require('@/assets/avatars/KOSMOS.png'),
+  magnet:          require('@/assets/avatars/LUNA.png'),
+  sunny:           require('@/assets/avatars/NOVA.png'),
+  'hardware-chip': require('@/assets/avatars/ZEPHRE.png'),
+};
+
 export const AvatarFrame: React.FC<AvatarFrameProps> = ({
-  imageKey = 'person',
+  imageKey = 'wolf',
   level,
   size = 60,
   style,
@@ -23,6 +51,7 @@ export const AvatarFrame: React.FC<AvatarFrameProps> = ({
 }) => {
   const frameSize = size + 8;
   const borderRadius = frameSize / 2;
+  const avatarSource = AVATAR_IMAGES[imageKey];
 
   return (
     <View style={[{ width: frameSize, height: frameSize }, style]}>
@@ -49,29 +78,20 @@ export const AvatarFrame: React.FC<AvatarFrameProps> = ({
               backgroundColor: locked
                 ? 'rgba(176,176,176,0.15)'
                 : 'rgba(255,215,0,0.12)',
+              overflow: 'hidden',
             },
           ]}
         >
           {locked ? (
             <Ionicons name="lock-closed" size={size * 0.45} color={GameColors.textSecondary} />
-          ) : (
-            <Ionicons
-              name={({
-                wolf: 'paw',
-                hourglass: 'hourglass-outline',
-                sparkles: 'sparkles',
-                eye: 'eye',
-                'shield-checkmark': 'shield-checkmark',
-                clover: 'leaf',
-                flame: 'flame',
-                magnet: 'magnet',
-                sunny: 'sunny',
-                'hardware-chip': 'hardware-chip',
-                person: 'person',
-              }[imageKey] ?? 'person') as keyof typeof Ionicons.glyphMap}
-              size={size * 0.55}
-              color={GameColors.accentGold}
+          ) : avatarSource ? (
+            <Image
+              source={avatarSource}
+              style={{ width: size, height: size, borderRadius: size / 2 }}
+              resizeMode="cover"
             />
+          ) : (
+            <Ionicons name="person" size={size * 0.55} color={GameColors.accentGold} />
           )}
         </View>
       </View>

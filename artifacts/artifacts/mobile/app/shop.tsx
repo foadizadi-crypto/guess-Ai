@@ -13,6 +13,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -20,6 +21,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+// ─── Shop item PNG images ──────────────────────────────────────────────────────
+const SHOP_IMAGES: Record<string, ReturnType<typeof require>> = {
+  time_boost:    require('@/assets/shop/time_boost.png'),
+  combo_shield:  require('@/assets/shop/combo_shield.png'),
+  clarity_bomb:  require('@/assets/shop/clarity_bomb.png'),
+  error_nullifier: require('@/assets/shop/error_nullifier.png'),
+  multiplier_2x: require('@/assets/shop/x2_multiplier.png'),
+  rare_sticker:  require('@/assets/shop/rare_sticker.png'),
+};
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -594,11 +605,19 @@ const ItemCard: React.FC<CardProps> = ({ item, balance, onPress }) => {
     <View style={[styles.card, { borderColor: `${rarityColor}44` }]}>
       {/* Icon area */}
       <View style={[styles.cardIconWrap, { backgroundColor: `${rarityColor}18` }]}>
-        <Ionicons
-          name={item.icon as React.ComponentProps<typeof Ionicons>['name']}
-          size={30}
-          color={item.owned ? rarityColor : GameColors.textSecondary}
-        />
+        {SHOP_IMAGES[item.id] ? (
+          <Image
+            source={SHOP_IMAGES[item.id]}
+            style={[styles.itemImg, { opacity: item.owned || item.price === 0 ? 1 : 0.5 }]}
+            resizeMode="contain"
+          />
+        ) : (
+          <Ionicons
+            name={item.icon as React.ComponentProps<typeof Ionicons>['name']}
+            size={30}
+            color={item.owned ? rarityColor : GameColors.textSecondary}
+          />
+        )}
         {/* Quantity badge for stackable items */}
         {item.quantity !== undefined && item.quantity > 0 && (
           <View style={[styles.qtyBadge, { backgroundColor: rarityColor }]}>
@@ -681,6 +700,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginBottom: 2,
   },
+  itemImg: { width: 46, height: 46 },
   qtyBadge: {
     position: 'absolute', top: -4, right: -4,
     minWidth: 18, height: 18, borderRadius: 9,

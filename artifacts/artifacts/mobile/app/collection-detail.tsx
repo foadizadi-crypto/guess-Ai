@@ -9,6 +9,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,29 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+// ─── Badge PNG images ──────────────────────────────────────────────────────────
+const BADGE_IMAGES: Record<string, ReturnType<typeof require>> = {
+  badge_bronze:   require('@/assets/badges/badge_first_win.png'),
+  badge_silver:   require('@/assets/badges/badge_quiz_veteran.png'),
+  badge_gold:     require('@/assets/badges/badge_perfect_game.png'),
+  badge_platinum: require('@/assets/badges/badge_combo_king.png'),
+  badge_diamond:  require('@/assets/badges/badge_legend.png'),
+};
+
+// ─── Avatar PNG images (for avatar collection cards) ──────────────────────────
+const AVATAR_IMAGES: Record<string, ReturnType<typeof require>> = {
+  avatar_1:  require('@/assets/avatars/AKASHA.png'),
+  avatar_2:  require('@/assets/avatars/AUREY.jpg'),
+  avatar_3:  require('@/assets/avatars/CELECTE.png'),
+  avatar_4:  require('@/assets/avatars/EVILA.png'),
+  avatar_5:  require('@/assets/avatars/EVILI.png'),
+  avatar_6:  require('@/assets/avatars/GIA.png'),
+  avatar_7:  require('@/assets/avatars/KOSMOS.png'),
+  avatar_8:  require('@/assets/avatars/LUNA.png'),
+  avatar_9:  require('@/assets/avatars/NOVA.png'),
+  avatar_10: require('@/assets/avatars/ZEPHRE.png'),
+};
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -138,11 +162,25 @@ const ItemCard: React.FC<CardProps> = ({ item, balance, onAction }) => {
     <View style={[styles.card, { borderColor: `${rarityColor}44` }]}>
       {/* Icon area */}
       <View style={[styles.iconWrap, { backgroundColor: `${rarityColor}18` }]}>
-        <Ionicons
-          name={item.icon as React.ComponentProps<typeof Ionicons>['name']}
-          size={28}
-          color={item.owned ? rarityColor : GameColors.textSecondary}
-        />
+        {BADGE_IMAGES[item.id] ? (
+          <Image
+            source={BADGE_IMAGES[item.id]}
+            style={[styles.itemImg, { opacity: item.owned ? 1 : 0.35 }]}
+            resizeMode="contain"
+          />
+        ) : AVATAR_IMAGES[item.id] ? (
+          <Image
+            source={AVATAR_IMAGES[item.id]}
+            style={[styles.itemImgRound, { opacity: item.owned ? 1 : 0.4 }]}
+            resizeMode="cover"
+          />
+        ) : (
+          <Ionicons
+            name={item.icon as React.ComponentProps<typeof Ionicons>['name']}
+            size={28}
+            color={item.owned ? rarityColor : GameColors.textSecondary}
+          />
+        )}
         {item.equipped && (
           <View style={styles.equippedDot}>
             <Ionicons name="checkmark" size={8} color="#000" />
@@ -420,6 +458,8 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     position: 'relative', marginBottom: 2,
   },
+  itemImg:      { width: 42, height: 42 },
+  itemImgRound: { width: 50, height: 50, borderRadius: 25 },
   equippedDot: {
     position: 'absolute', bottom: -2, right: -2,
     width: 16, height: 16, borderRadius: 8,
