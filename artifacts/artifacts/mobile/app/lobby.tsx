@@ -8,7 +8,6 @@ import {
   Alert,
   BackHandler,
   ScrollView,
-  Animated as RNAnimated,
 } from 'react-native';
 import Animated, {
   useSharedValue,
