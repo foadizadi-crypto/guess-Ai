@@ -1,4 +1,12 @@
-import React, { useEffect, useCallback, useState, useRef } from 'react';
+/**
+ * lobby.tsx — Main Menu (redesigned to match reference UI)
+ *
+ * Layout: full-screen, no scroll.
+ *   • Header bar   — avatar chip + username, currency pills, settings
+ *   • Hero section — game title / floating avatar / right nav column / PLAY
+ *   • Bottom bar   — 5 nav tabs
+ */
+import React, { useEffect, useCallback, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,936 +15,679 @@ import {
   Platform,
   Alert,
   BackHandler,
-  ScrollView,
+  Dimensions,
 } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withDelay,
-  withSpring,
   withRepeat,
   withSequence,
   Easing,
 } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { AnimatedGradientBackground } from '@/components/AnimatedGradientBackground';
-import { CoinDisplay } from '@/components/CoinDisplay';
 import { AvatarFrame } from '@/components/AvatarFrame';
-import { ProgressBar } from '@/components/ProgressBar';
 import { DailyRewardModal } from '@/components/DailyRewardModal';
-import { GameColors } from '@/theme/colors';
-import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
-import { useAdStore, DAILY_AD_COOLDOWN_MS } from '@/store/adStore';
 import { useAudio } from '@/hooks/useAudio';
 import { ROUTES } from '@/navigation/routes';
-import { calculateXPProgress, formatScore, isToday, xpInCurrentLevel, xpForCurrentLevel } from '@/utils';
-import { GAME_CONSTANTS, DEFAULT_AVATARS } from '@/constants';
-import { RARITY_COLORS } from '@/constants/shopConfig';
-import type { ConsumableId } from '@/constants/shopData';
+import { isToday } from '@/utils';
+import { DEFAULT_AVATARS } from '@/constants';
 
-// ─── Sub-components ───────────────────────────────────────────────────────
+const { width: SW, height: SH } = Dimensions.get('window');
 
-interface MainActionBtn {
-  id: string;
-  label: string;
-  sublabel: string;
-  icon: keyof typeof Ionicons.glyphMap;
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const PURPLE      = '#8B5CF6';
+const PURPLE_MID  = '#6D28D9';
+const PURPLE_DARK = '#3B0764';
+const PURPLE_LT   = '#A78BFA';
+const GOLD        = '#FFD700';
+const BLUE_NEON   = '#38BDF8';
+const BG          = '#02000A';
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function formatNum(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+/** Top-bar currency pill */
+const Pill: React.FC<{
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   color: string;
-  route: string;
-  gradient?: boolean;
-}
-
-const MAIN_ACTIONS: MainActionBtn[] = [
-  {
-    id: 'play',
-    label: 'Play Now',
-    sublabel: 'Start a new game',
-    icon: 'play-circle',
-    color: GameColors.accentGold,
-    route: ROUTES.LEVEL_SELECT,
-    gradient: true,
-  },
-  {
-    id: 'shop',
-    label: 'Shop',
-    sublabel: 'Hints & upgrades',
-    icon: 'cart-outline',
-    color: GameColors.accentOrange,
-    route: ROUTES.SHOP,
-  },
-  {
-    id: 'leaderboard',
-    label: 'Leaderboard',
-    sublabel: 'Top players',
-    icon: 'trophy-outline',
-    color: '#CE93D8',
-    route: ROUTES.LEADERBOARD,
-  },
-];
-
-interface BottomNavItem {
-  id: string;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  activeIcon: keyof typeof Ionicons.glyphMap;
-  route?: string;
-}
-
-const BOTTOM_NAV: BottomNavItem[] = [
-  {
-    id: 'profile',
-    label: 'Profile',
-    icon: 'person-outline',
-    activeIcon: 'person',
-    route: ROUTES.PROFILE,
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    icon: 'settings-outline',
-    activeIcon: 'settings',
-    route: ROUTES.SETTINGS,
-  },
-];
-
-// ─── Screen ───────────────────────────────────────────────────────────────
-
-export default function LobbyScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const {
-    username, coins, xp, level, selectedAvatarId,
-    bestScore, dailyReward, claimDailyReward,
-    addCoins, addConsumable,
-    hasNewAchievement, equippedCosmetics,
-  } = useUserStore();
-  const {
-    isDailyAdAvailable,
-    setLastDailyAdClaimed,
-    showRewarded,
-    isAdFreePassActive,
-  } = useAdStore();
-  const { playEffect, playMusic, stopMusic } = useAudio();
-
-  // Play menu music whenever this screen is focused
-  useFocusEffect(
-    useCallback(() => {
-      playMusic('menu_music');
-      return () => { stopMusic(); };
-    }, [playMusic, stopMusic]),
-  );
-
-  const xpProgress = calculateXPProgress(xp);
-  const xpInLevel = xpInCurrentLevel(xp);
-  const xpLevelCap = xpForCurrentLevel(level);
-
-  const [dailyModalVisible, setDailyModalVisible] = useState(false);
-  const [dailyClaimed, setDailyClaimed] = useState(isToday(dailyReward.lastClaimed));
-  const [adLoading, setAdLoading] = useState(false);
-  const [activeNav, setActiveNav] = useState<string>('');
-  const [, forceUpdate] = useState(0); // used to refresh cooldown timer display
-
-  // ── Staggered entrance animations ────────────────────────────────────────
-  const headerY = useSharedValue(-40);
-  const headerOp = useSharedValue(0);
-  const userCardY = useSharedValue(30);
-  const userCardOp = useSharedValue(0);
-  const actionsY = useSharedValue(40);
-  const actionsOp = useSharedValue(0);
-  const fabScale    = useSharedValue(0);
-  const fabPulse    = useSharedValue(1);
-  const avatarFloat = useSharedValue(0);
-
-  useEffect(() => {
-    headerY.value = withTiming(0, { duration: 420, easing: Easing.out(Easing.cubic) });
-    headerOp.value = withTiming(1, { duration: 420 });
-
-    userCardY.value = withDelay(150, withTiming(0, { duration: 420, easing: Easing.out(Easing.cubic) }));
-    userCardOp.value = withDelay(150, withTiming(1, { duration: 420 }));
-
-    actionsY.value = withDelay(280, withTiming(0, { duration: 440, easing: Easing.out(Easing.cubic) }));
-    actionsOp.value = withDelay(280, withTiming(1, { duration: 440 }));
-
-    fabScale.value = withDelay(500, withSpring(1, { damping: 10, stiffness: 120 }));
-
-    // Hero avatar float
-    avatarFloat.value = withDelay(
-      600,
-      withRepeat(
-        withSequence(
-          withTiming(-7, { duration: 2000, easing: Easing.inOut(Easing.sin) }),
-          withTiming(0,  { duration: 2000, easing: Easing.inOut(Easing.sin) }),
-        ),
-        -1,
-        false,
-      ),
-    );
-
-    // FAB pulse
-    fabPulse.value = withDelay(
-      800,
-      withRepeat(
-        withSequence(
-          withTiming(1.08, { duration: 900, easing: Easing.inOut(Easing.sin) }),
-          withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }),
-        ),
-        -1,
-        false,
-      ),
-    );
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Hardware back → exit confirmation (Android) ───────────────────────────
-  useFocusEffect(
-    useCallback(() => {
-      if (Platform.OS !== 'android') return;
-      const handler = BackHandler.addEventListener('hardwareBackPress', () => {
-        Alert.alert(
-          'Exit Game',
-          'Are you sure you want to exit BlurQuiz?',
-          [
-            { text: 'Stay', style: 'cancel' },
-            {
-              text: 'Exit',
-              style: 'destructive',
-              onPress: () => BackHandler.exitApp(),
-            },
-          ],
-          { cancelable: true },
-        );
-        return true; // prevent default
-      });
-      return () => handler.remove();
-    }, []),
-  );
-
-  // ── Refresh cooldown display every 30 s while screen is focused ──────────
-  useFocusEffect(
-    useCallback(() => {
-      const timer = setInterval(() => forceUpdate((n) => n + 1), 30_000);
-      return () => clearInterval(timer);
-    }, []),
-  );
-
-  // ── Daily Gift handler (spec §7.1) ────────────────────────────────────────
-  // Cooldown: 4 hours.  Reward: 50-150 coins + 10% chance for a consumable.
-  // Ad-free pass: grant instantly without showing an ad.
-  const handleDailyGift = useCallback(async () => {
-    if (adLoading || !isDailyAdAvailable()) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setAdLoading(true);
-    try {
-      const adFreeActive = isAdFreePassActive();
-      const watched = adFreeActive ? true : await showRewarded();
-      if (watched) {
-        // Random coins 50-150 (spec §7.1)
-        const coins = Math.floor(Math.random() * 101) + 50;
-        addCoins(coins);
-        // 10% chance for a bonus consumable
-        if (Math.random() < 0.1) {
-          const bonus: ConsumableId = Math.random() < 0.5 ? 'time_boost' : 'error_nullifier';
-          addConsumable(bonus, 1);
-        }
-        setLastDailyAdClaimed();
-        playEffect('coin');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        forceUpdate((n) => n + 1); // refresh cooldown display immediately
-      }
-    } finally {
-      setAdLoading(false);
-    }
-  }, [adLoading, isDailyAdAvailable, isAdFreePassActive, showRewarded, addCoins, addConsumable, setLastDailyAdClaimed, playEffect]);
-
-  // ── Daily reward ─────────────────────────────────────────────────────────
-  const handleDailyReward = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setDailyModalVisible(true);
-  }, []);
-
-  const handleClaimReward = useCallback(() => {
-    claimDailyReward();
-    setDailyClaimed(true);
-  }, [claimDailyReward]);
-
-  // ── Navigation ────────────────────────────────────────────────────────────
-  const navigateTo = useCallback(
-    (route: string) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      router.push(route as any);
-    },
-    [router],
-  );
-
-  // ── Animated styles ───────────────────────────────────────────────────────
-  const headerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: headerY.value }],
-    opacity: headerOp.value,
-  }));
-  const userCardStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: userCardY.value }],
-    opacity: userCardOp.value,
-  }));
-  const actionsStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: actionsY.value }],
-    opacity: actionsOp.value,
-  }));
-  const fabStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: fabScale.value * fabPulse.value }],
-  }));
-  const avatarFloatStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: avatarFloat.value }],
-  }));
-
-  // Current avatar definition (for name, rarity, ability)
-  const currentAvatar = DEFAULT_AVATARS.find((a) => a.id === selectedAvatarId) ?? DEFAULT_AVATARS[0];
-  const rarityColor   = RARITY_COLORS[currentAvatar.rarity.toLowerCase()] ?? GameColors.accentGold;
-
-  const topPad = Platform.OS === 'web' ? 60 : insets.top;
-  const botPad = Platform.OS === 'web' ? 80 : insets.bottom + 60; // space for bottom nav
-
-  const nextReward =
-    GAME_CONSTANTS.DAILY_REWARD_BASE + (dailyReward.streak + 1) * GAME_CONSTANTS.DAILY_REWARD_STREAK_BONUS;
-
-  return (
-    <AnimatedGradientBackground>
-      <View style={styles.root}>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={[styles.container, { paddingTop: topPad, paddingBottom: botPad }]}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-        >
-          {/* ── Top bar ──────────────────────────────────────────────────── */}
-          <Animated.View style={[styles.topBar, headerStyle]}>
-            {/* Left spacer — mirrors topRight to keep logo centred */}
-            <View style={styles.topSpacer} />
-
-            {/* Logo */}
-            <View style={styles.logoWrap}>
-              <Text style={styles.logoText}>BlurQuiz</Text>
-            </View>
-
-            {/* Right cluster: coins */}
-            <View style={styles.topRight}>
-              <CoinDisplay amount={coins} size="small" animate />
-            </View>
-          </Animated.View>
-
-          {/* ── User card ────────────────────────────────────────────────── */}
-          <Animated.View style={userCardStyle}>
-            <View style={styles.userCard}>
-              <AvatarFrame imageKey={selectedAvatarId} frameId={equippedCosmetics?.frame} size={56} showLevel level={level} />
-
-              <View style={styles.userInfo}>
-                <Text style={styles.username} numberOfLines={1}>
-                  {username || 'Player'}
-                </Text>
-
-                <View style={styles.xpRow}>
-                  <Text style={styles.xpLabel}>Level {level}</Text>
-                  <Text style={styles.xpVal}>{xpInLevel}/{xpLevelCap === Infinity ? '∞' : xpLevelCap} XP</Text>
-                </View>
-
-                <ProgressBar
-                  progress={xpProgress}
-                  height={5}
-                  color={GameColors.accentGold}
-                  style={{ width: '100%' }}
-                />
-              </View>
-
-              <View style={styles.bestScoreWrap}>
-                <Text style={styles.bestScoreLabel}>Best</Text>
-                <Text style={styles.bestScoreVal}>{formatScore(bestScore)}</Text>
-              </View>
-            </View>
-          </Animated.View>
-
-          {/* ── Hero Avatar ──────────────────────────────────────────────── */}
-          <Animated.View style={[styles.heroAvatarWrap, actionsStyle]}>
-            <TouchableOpacity
-              style={[styles.heroAvatarCard, { borderColor: `${rarityColor}55` }]}
-              onPress={() => navigateTo(ROUTES.SHOP)}
-              activeOpacity={0.85}
-            >
-              {/* Rarity glow behind avatar */}
-              <View style={[styles.heroAvatarGlow, { backgroundColor: `${rarityColor}18` }]} />
-
-              {/* Floating avatar */}
-              <Animated.View style={avatarFloatStyle}>
-                <AvatarFrame
-                  imageKey={currentAvatar.imageKey}
-                  frameId={equippedCosmetics?.frame}
-                  size={88}
-                  showLevel
-                  level={level}
-                />
-              </Animated.View>
-
-              {/* Name + rarity */}
-              <View style={styles.heroAvatarMeta}>
-                <Text style={styles.heroAvatarName}>{currentAvatar.name}</Text>
-                <View style={[styles.heroRarityBadge, { backgroundColor: `${rarityColor}22` }]}>
-                  <Text style={[styles.heroRarityText, { color: rarityColor }]}>
-                    {currentAvatar.rarity.toUpperCase()}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Ability */}
-              <Text style={styles.heroAbility}>
-                <Ionicons name="flash-outline" size={11} color={rarityColor} />
-                {'  '}{currentAvatar.ability}
-              </Text>
-
-              {/* Change button */}
-              <View style={[styles.heroChangeBtn, { borderColor: `${rarityColor}55` }]}>
-                <Ionicons name="swap-horizontal-outline" size={13} color={rarityColor} />
-                <Text style={[styles.heroChangeBtnText, { color: rarityColor }]}>Change Avatar</Text>
-              </View>
-            </TouchableOpacity>
-          </Animated.View>
-
-          {/* ── Main action buttons ───────────────────────────────────────── */}
-          <Animated.View style={[styles.actionsWrap, actionsStyle]}>
-            {/* Play Now — full width, prominent */}
-            <TouchableOpacity
-              style={styles.playBtn}
-              onPress={() => navigateTo(ROUTES.LEVEL_SELECT)}
-              activeOpacity={0.85}
-              testID="play-button"
-            >
-              <View style={styles.playBtnInner}>
-                <View style={styles.playBtnLeft}>
-                  <View style={[styles.playBtnIcon, { backgroundColor: 'rgba(0,0,0,0.2)' }]}>
-                    <Ionicons name="play-circle" size={32} color={GameColors.backgroundPrimary} />
-                  </View>
-                  <View>
-                    <Text style={styles.playBtnLabel}>Play Now</Text>
-                    <Text style={styles.playBtnSub}>Start a new game</Text>
-                  </View>
-                </View>
-                <Ionicons name="chevron-forward" size={22} color="rgba(0,0,0,0.5)" />
-              </View>
-            </TouchableOpacity>
-
-            {/* Secondary actions row 1 */}
-            <View style={styles.secondaryRow}>
-              {/* Shop */}
-              <ActionCard
-                icon="cart-outline"
-                label="Shop"
-                sublabel="Hints & upgrades"
-                color={GameColors.accentOrange}
-                onPress={() => navigateTo(ROUTES.SHOP)}
-              />
-
-              {/* Leaderboard */}
-              <ActionCard
-                icon="trophy-outline"
-                label="Leaderboard"
-                sublabel="Top players"
-                color="#CE93D8"
-                onPress={() => navigateTo(ROUTES.LEADERBOARD)}
-              />
-
-              {/* Daily Reward */}
-              <ActionCard
-                icon={dailyClaimed ? 'checkmark-circle-outline' : 'gift-outline'}
-                label="Daily"
-                sublabel={dailyClaimed ? 'Claimed' : `+${nextReward}`}
-                color={dailyClaimed ? GameColors.textSecondary : GameColors.accentGreen}
-                onPress={() => navigateTo(ROUTES.DAILY_REWARD)}
-                badge={!dailyClaimed}
-              />
-            </View>
-
-            {/* Secondary actions row 2 */}
-            <View style={styles.secondaryRow}>
-              {/* Achievements */}
-              <ActionCard
-                icon="ribbon-outline"
-                label="Achievements"
-                sublabel="Your badges"
-                color="#CE93D8"
-                onPress={() => navigateTo(ROUTES.ACHIEVEMENTS)}
-                badge={hasNewAchievement}
-              />
-
-              {/* Collections */}
-              <ActionCard
-                icon="albums-outline"
-                label="Collections"
-                sublabel="Cosmetics & gear"
-                color="#64B5F6"
-                onPress={() => navigateTo(ROUTES.COLLECTIONS)}
-              />
-            </View>
-          </Animated.View>
-
-        </ScrollView>
-
-        {/* ── Daily Gift FAB (spec §7.1) ────────────────────────────────── */}
-        <DailyGiftFab
-          onPress={() => navigateTo(ROUTES.SPIN)}
-          loading={false}
-          available={true}
-          adFree={isAdFreePassActive()}
-          style={[styles.fabWrap, fabStyle, { bottom: botPad + 16 }]}
-        />
-
-        {/* ── Bottom navigation bar ─────────────────────────────────────── */}
-        <View
-          style={[
-            styles.bottomNav,
-            {
-              paddingBottom: Platform.OS === 'web' ? 16 : insets.bottom + 8,
-              bottom: 0,
-            },
-          ]}
-        >
-          {BOTTOM_NAV.map((item) => {
-            const isActive = activeNav === item.id;
-            const color = isActive ? GameColors.accentGold : GameColors.textSecondary;
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.navItem}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setActiveNav(item.id);
-                  if (item.route) navigateTo(item.route);
-                }}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.navIcon, isActive && styles.navIconActive]}>
-                  <Ionicons
-                    name={isActive ? item.activeIcon : item.icon}
-                    size={22}
-                    color={color}
-                  />
-                </View>
-                <Text style={[styles.navLabel, { color }]}>{item.label}</Text>
-                {isActive && <View style={styles.navDot} />}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* ── Daily reward modal ──────────────────────────────────────────── */}
-      <DailyRewardModal
-        visible={dailyModalVisible}
-        amount={nextReward}
-        streak={dailyReward.streak}
-        alreadyClaimed={dailyClaimed}
-        onClaim={handleClaimReward}
-        onClose={() => setDailyModalVisible(false)}
-      />
-    </AnimatedGradientBackground>
-  );
-}
-
-// ─── Action card sub-component ────────────────────────────────────────────
-
-interface ActionCardProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  sublabel: string;
-  color: string;
+  val: string;
   onPress: () => void;
-  badge?: boolean;
-}
-
-const ActionCard: React.FC<ActionCardProps> = ({ icon, label, sublabel, color, onPress, badge }) => (
-  <TouchableOpacity style={styles.actionCard} onPress={onPress} activeOpacity={0.8}>
-    <View style={[styles.actionIcon, { borderColor: color, shadowColor: color }]}>
-      <Ionicons name={icon} size={26} color={color} />
-      {badge && <View style={styles.badgeDot} />}
-    </View>
-    <Text style={[styles.actionLabel, { color }]}>{label}</Text>
-    <Text style={styles.actionSublabel}>{sublabel}</Text>
+}> = ({ icon, color, val, onPress }) => (
+  <TouchableOpacity style={[styles.pill, { borderColor: `${color}40` }]} onPress={onPress} activeOpacity={0.75}>
+    <Ionicons name={icon} size={12} color={color} />
+    <Text style={[styles.pillVal, { color }]}>{val}</Text>
+    <Ionicons name="add-circle" size={12} color={`${color}90`} />
   </TouchableOpacity>
 );
 
-// ─── Daily Gift FAB sub-component (spec §7.1) ─────────────────────────────
-
-function formatCooldownRemaining(lastTimestamp: number | null): string {
-  if (lastTimestamp === null) return '';
-  const elapsed = Date.now() - lastTimestamp;
-  const remaining = Math.max(0, DAILY_AD_COOLDOWN_MS - elapsed);
-  if (remaining === 0) return '';
-  const totalMinutes = Math.ceil(remaining / 60_000);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
-}
-
-interface DailyGiftFabProps {
+/** Right-side vertical nav button */
+const NavBtn: React.FC<{
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  color: string;
   onPress: () => void;
-  loading: boolean;
-  available: boolean;
-  adFree: boolean;
-  style?: object | object[];
-}
+  badge?: boolean;
+}> = ({ icon, label, color, onPress, badge }) => (
+  <TouchableOpacity style={styles.navBtn} onPress={onPress} activeOpacity={0.8}>
+    <LinearGradient
+      colors={['rgba(88,28,135,0.55)', 'rgba(30,0,60,0.8)']}
+      style={styles.navBtnGrad}
+    >
+      <View style={[styles.navBtnIconWrap, { borderColor: `${color}55` }]}>
+        <Ionicons name={icon} size={22} color={color} />
+        {badge && <View style={styles.badgeDot} />}
+      </View>
+      <Text style={[styles.navBtnLabel, { color }]} numberOfLines={1}>{label}</Text>
+    </LinearGradient>
+  </TouchableOpacity>
+);
 
-const DailyGiftFab: React.FC<DailyGiftFabProps> = ({ onPress, loading, available, adFree, style }) => {
-  const { lastDailyAdTimestamp } = useAdStore();
-  const cooldown = !available ? formatCooldownRemaining(lastDailyAdTimestamp) : '';
+/** Bottom nav tab */
+const BotBtn: React.FC<{
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress: () => void;
+  badge?: boolean;
+  center?: boolean;
+}> = ({ icon, label, onPress, badge, center }) => (
+  <TouchableOpacity style={[styles.botBtn, center && styles.botBtnCenter]} onPress={onPress} activeOpacity={0.8}>
+    {center ? (
+      <LinearGradient colors={[PURPLE, PURPLE_DARK]} style={styles.botBtnCenterGrad}>
+        <Ionicons name={icon} size={22} color={GOLD} />
+        {badge && <View style={[styles.badgeDot, { top: 2, right: 2 }]} />}
+      </LinearGradient>
+    ) : (
+      <View style={styles.botBtnIconWrap}>
+        <Ionicons name={icon} size={20} color={PURPLE_LT} />
+        {badge && <View style={styles.badgeDot} />}
+      </View>
+    )}
+    <Text style={[styles.botBtnLabel, center && { color: GOLD }]}>{label}</Text>
+  </TouchableOpacity>
+);
 
-  const fabColor = available ? GameColors.accentGreen : 'rgba(100,100,100,0.6)';
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
+export default function LobbyScreen() {
+  const router  = useRouter();
+  const insets  = useSafeAreaInsets();
+  const {
+    username, coins, gems, level, selectedAvatarId,
+    dailyReward, claimDailyReward,
+    hasNewAchievement, equippedCosmetics, powerUps,
+  } = useUserStore();
+  const { playMusic, stopMusic } = useAudio();
+
+  useFocusEffect(useCallback(() => {
+    playMusic('menu_music');
+    return () => { stopMusic(); };
+  }, [playMusic, stopMusic]));
+
+  const [dailyModal,   setDailyModal]   = useState(false);
+  const [dailyClaimed, setDailyClaimed] = useState(isToday(dailyReward.lastClaimed));
+
+  // ── Animations ─────────────────────────────────────────────────────────────
+  const headerOp  = useSharedValue(0);
+  const heroOp    = useSharedValue(0);
+  const heroY     = useSharedValue(24);
+  const playPulse = useSharedValue(1);
+  const avatarY   = useSharedValue(0);
+  const ringOp    = useSharedValue(0.55);
+
+  useEffect(() => {
+    headerOp.value = withTiming(1, { duration: 480 });
+    heroOp.value   = withDelay(200, withTiming(1, { duration: 520 }));
+    heroY.value    = withDelay(200, withTiming(0, { duration: 520, easing: Easing.out(Easing.cubic) }));
+
+    // Avatar float
+    avatarY.value = withDelay(700, withRepeat(
+      withSequence(
+        withTiming(-10, { duration: 2400, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0,   { duration: 2400, easing: Easing.inOut(Easing.sin) }),
+      ), -1, false,
+    ));
+
+    // PLAY pulse
+    playPulse.value = withDelay(900, withRepeat(
+      withSequence(
+        withTiming(1.05, { duration: 1200, easing: Easing.inOut(Easing.sin) }),
+        withTiming(1,    { duration: 1200, easing: Easing.inOut(Easing.sin) }),
+      ), -1, false,
+    ));
+
+    // Platform ring breathe
+    ringOp.value = withRepeat(
+      withSequence(
+        withTiming(0.95, { duration: 1800 }),
+        withTiming(0.35, { duration: 1800 }),
+      ), -1, false,
+    );
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Hardware back ───────────────────────────────────────────────────────────
+  useFocusEffect(useCallback(() => {
+    if (Platform.OS !== 'android') return;
+    const h = BackHandler.addEventListener('hardwareBackPress', () => {
+      Alert.alert('Exit Game', 'Are you sure you want to exit BlurQuiz?', [
+        { text: 'Stay',  style: 'cancel' },
+        { text: 'Exit',  style: 'destructive', onPress: () => BackHandler.exitApp() },
+      ], { cancelable: true });
+      return true;
+    });
+    return () => h.remove();
+  }, []));
+
+  const nav = useCallback((route: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push(route as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+  }, [router]);
+
+  // ── Animated styles ─────────────────────────────────────────────────────────
+  const headerStyle = useAnimatedStyle(() => ({ opacity: headerOp.value }));
+  const heroStyle   = useAnimatedStyle(() => ({ opacity: heroOp.value, transform: [{ translateY: heroY.value }] }));
+  const playStyle   = useAnimatedStyle(() => ({ transform: [{ scale: playPulse.value }] }));
+  const avatarStyle = useAnimatedStyle(() => ({ transform: [{ translateY: avatarY.value }] }));
+  const ringStyle   = useAnimatedStyle(() => ({ opacity: ringOp.value }));
+
+  const avatar  = DEFAULT_AVATARS.find((a) => a.id === selectedAvatarId) ?? DEFAULT_AVATARS[0];
+  const hints   = powerUps?.hint ?? 0;
+  const topPad  = Platform.OS === 'web' ? 16 : insets.top;
+  const botPad  = Platform.OS === 'web' ? 0  : insets.bottom;
 
   return (
-    <Animated.View style={[styles.fabWrap, style]}>
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: fabColor }, (loading || !available) && styles.fabLoading]}
-        onPress={onPress}
-        activeOpacity={0.85}
-        disabled={loading || !available}
-      >
-        <Ionicons
-          name={loading ? 'hourglass-outline' : available ? 'gift-outline' : 'time-outline'}
-          size={16}
-          color={available ? GameColors.backgroundPrimary : GameColors.textSecondary}
-        />
-        <Text style={[styles.fabText, !available && { color: GameColors.textSecondary }]}>
-          {loading
-            ? 'Loading…'
-            : available
-            ? adFree ? 'Free Lucky Spin ⚡' : 'Free Lucky Spin'
-            : `Lucky Spin ${cooldown}`}
-        </Text>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-};
+    <View style={[styles.root, { paddingTop: topPad }]}>
 
-// ─── Styles ───────────────────────────────────────────────────────────────
+      {/* ── Atmospheric glow layers ──────────────────────────────────────── */}
+      <View style={styles.atmTop}    pointerEvents="none" />
+      <View style={styles.atmCenter} pointerEvents="none" />
+      <View style={styles.atmBot}    pointerEvents="none" />
+
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <Animated.View style={[styles.header, headerStyle]}>
+
+        {/* Left: avatar chip */}
+        <TouchableOpacity style={styles.userChip} onPress={() => nav(ROUTES.PROFILE)} activeOpacity={0.8}>
+          <View style={styles.chipFrame}>
+            <AvatarFrame
+              imageKey={selectedAvatarId}
+              frameId={equippedCosmetics?.frame}
+              size={32}
+              showLevel
+              level={level}
+            />
+          </View>
+          <Text style={styles.chipName} numberOfLines={1}>{username || 'Player'}</Text>
+          <Ionicons name="star" size={11} color={GOLD} />
+        </TouchableOpacity>
+
+        {/* Right: currencies */}
+        <View style={styles.currRow}>
+          <Pill icon="logo-usd"  color={GOLD}      val={formatNum(coins)} onPress={() => nav(ROUTES.SHOP)} />
+          <Pill icon="diamond"   color={BLUE_NEON}  val={formatNum(gems)}  onPress={() => nav(ROUTES.SHOP)} />
+          <Pill icon="flash"     color={PURPLE_LT}  val={String(hints)}    onPress={() => nav(ROUTES.SHOP)} />
+          <TouchableOpacity style={styles.gearBtn} onPress={() => nav(ROUTES.SETTINGS)}>
+            <Ionicons name="settings-outline" size={18} color={PURPLE_LT} />
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+
+      {/* ── Hero section ───────────────────────────────────────────────── */}
+      <Animated.View style={[styles.heroSection, heroStyle]}>
+
+        {/* Left: title + avatar stage + PLAY */}
+        <View style={styles.heroLeft}>
+
+          {/* Game title */}
+          <View style={styles.titleBlock}>
+            <Text style={styles.titleMain}>BlurQuiz</Text>
+            <View style={styles.titleSubRow}>
+              <View style={styles.titleLine} />
+              <Text style={styles.titleSub}>The Blur Challenge</Text>
+              <View style={styles.titleLine} />
+            </View>
+          </View>
+
+          {/* Avatar + platform */}
+          <View style={styles.avatarStage}>
+            {/* Floating avatar */}
+            <Animated.View style={[styles.avatarWrap, avatarStyle]}>
+              <AvatarFrame
+                imageKey={avatar.imageKey}
+                frameId={equippedCosmetics?.frame}
+                size={SH > 750 ? 108 : 88}
+                showLevel
+                level={level}
+              />
+            </Animated.View>
+
+            {/* Neon platform rings */}
+            <Animated.View style={[styles.ring1, ringStyle]} />
+            <View style={styles.ring2} />
+            <View style={styles.ring3} />
+          </View>
+
+          {/* PLAY button */}
+          <Animated.View style={[styles.playWrap, playStyle]}>
+            <TouchableOpacity
+              style={styles.playOuter}
+              onPress={() => nav(ROUTES.LEVEL_SELECT)}
+              activeOpacity={0.85}
+              testID="play-button"
+            >
+              <LinearGradient
+                colors={['#7C3AED', '#4C1D95', '#6D28D9']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.playGrad}
+              >
+                {/* Hex corner accents */}
+                <View style={[styles.hexCorner, styles.hexTL]} />
+                <View style={[styles.hexCorner, styles.hexTR]} />
+                <View style={[styles.hexCorner, styles.hexBL]} />
+                <View style={[styles.hexCorner, styles.hexBR]} />
+
+                <Ionicons name="diamond" size={18} color={GOLD} />
+                <Text style={styles.playText}>PLAY</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+
+        </View>
+
+        {/* Right nav column */}
+        <View style={styles.rightNav}>
+          <NavBtn icon="person"  label="PROFILE"      color={PURPLE_LT}  onPress={() => nav(ROUTES.PROFILE)} />
+          <NavBtn icon="ribbon"  label="ACHIEVEMENTS" color={GOLD}       onPress={() => nav(ROUTES.ACHIEVEMENTS)} badge={hasNewAchievement} />
+          <NavBtn icon="people"  label="FRIENDS"      color={BLUE_NEON}  onPress={() => nav(ROUTES.COLLECTIONS)} />
+          <NavBtn icon="trophy"  label="LEADERBOARD"  color="#F59E0B"    onPress={() => nav(ROUTES.LEADERBOARD)} />
+        </View>
+
+      </Animated.View>
+
+      {/* ── Bottom nav bar ─────────────────────────────────────────────── */}
+      <View style={[styles.bottomBar, { paddingBottom: botPad + 6 }]}>
+        <BotBtn icon="cart"   label="SHOP"         onPress={() => nav(ROUTES.SHOP)} />
+        <BotBtn icon="person" label="PROFILE"      onPress={() => nav(ROUTES.PROFILE)} />
+        <BotBtn icon="ribbon" label="ACHIEVEMENTS" onPress={() => nav(ROUTES.ACHIEVEMENTS)} badge={hasNewAchievement} center />
+        <BotBtn icon="people" label="FRIENDS"      onPress={() => nav(ROUTES.COLLECTIONS)} />
+        <BotBtn icon="trophy" label="LEADERBOARD"  onPress={() => nav(ROUTES.LEADERBOARD)} />
+      </View>
+
+      {/* Daily reward modal */}
+      <DailyRewardModal
+        visible={dailyModal}
+        amount={150}
+        streak={dailyReward.streak}
+        alreadyClaimed={dailyClaimed}
+        onClaim={() => { claimDailyReward(); setDailyClaimed(true); }}
+        onClose={() => setDailyModal(false)}
+      />
+    </View>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const NAV_BTN_W = 72;
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  scroll: { flex: 1 },
-  container: {
-    paddingHorizontal: 20,
-    gap: 16,
+
+  root: {
+    flex: 1,
+    backgroundColor: BG,
   },
 
-  // ── Top bar ────────────────────────────────────────────────────────────
-  topBar: {
+  // ── Atmospheric layers ────────────────────────────────────────────────────
+  atmTop: {
+    ...StyleSheet.absoluteFillObject,
+    top: -SH * 0.15,
+    alignSelf: 'center',
+    width: SW * 0.9,
+    height: SH * 0.45,
+    borderRadius: 9999,
+    backgroundColor: 'rgba(109, 40, 217, 0.13)',
+    // soft glow at the top
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 80,
+  },
+  atmCenter: {
+    ...StyleSheet.absoluteFillObject,
+    top: SH * 0.3,
+    left: SW * 0.1,
+    width: SW * 0.8,
+    height: SH * 0.4,
+    borderRadius: 9999,
+    backgroundColor: 'rgba(56, 189, 248, 0.04)',
+  },
+  atmBot: {
+    ...StyleSheet.absoluteFillObject,
+    bottom: -SH * 0.1,
+    alignSelf: 'center',
+    width: SW * 0.7,
+    height: SH * 0.3,
+    borderRadius: 9999,
+    backgroundColor: 'rgba(109, 40, 217, 0.08)',
+  },
+
+  // ── Header ───────────────────────────────────────────────────────────────
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(139,92,246,0.2)',
+    backgroundColor: 'rgba(4,0,15,0.7)',
+  },
+  userChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: 'rgba(88,28,135,0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.45)',
+    borderRadius: 24,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    maxWidth: SW * 0.4,
+  },
+  chipFrame: { borderRadius: 20, overflow: 'hidden' },
+  chipName: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    letterSpacing: 0.3,
+    flexShrink: 1,
+  },
+  currRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(30,0,60,0.8)',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+  pillVal: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+    letterSpacing: 0.2,
+  },
+  gearBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(88,28,135,0.35)',
     borderWidth: 1,
-    borderColor: GameColors.border,
+    borderColor: 'rgba(139,92,246,0.35)',
   },
-  logoWrap: { flex: 1, alignItems: 'center' },
-  logoText: {
-    ...Typography.semibold,
-    color: GameColors.textWhite,
-    fontFamily: 'Inter_700Bold',
-    letterSpacing: 1.5,
-    textShadowColor: GameColors.glow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
-  },
-  topRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  topSpacer: { minWidth: 80 }, // mirrors topRight width to keep logo centred
 
-  // ── User card ──────────────────────────────────────────────────────────
-  userCard: {
+  // ── Hero ─────────────────────────────────────────────────────────────────
+  heroSection: {
+    flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: GameColors.border,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
-  userInfo: { flex: 1, gap: 5 },
-  username: {
-    ...Typography.bodyMedium,
-    color: GameColors.textWhite,
-    fontFamily: 'Inter_700Bold',
-    fontWeight: '700',
-  },
-  xpRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  xpLabel: { ...Typography.small, color: GameColors.textSecondary, fontFamily: 'Inter_500Medium' },
-  xpVal: { ...Typography.small, color: GameColors.accentGold, fontFamily: 'Inter_600SemiBold', fontWeight: '600' },
-  bestScoreWrap: { alignItems: 'center', gap: 2 },
-  bestScoreLabel: { ...Typography.small, color: GameColors.textSecondary, fontSize: 10 },
-  bestScoreVal: {
-    ...Typography.bodyMedium,
-    color: GameColors.accentGold,
-    fontFamily: 'Inter_700Bold',
-    fontWeight: '700',
-  },
-
-  // ── Hero Avatar ────────────────────────────────────────────────────────
-  heroAvatarWrap: { alignItems: 'center' },
-  heroAvatarCard: {
-    width: '100%',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 24,
-    paddingHorizontal: 20,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  heroAvatarGlow: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 24,
-  },
-  heroAvatarMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 4,
-  },
-  heroAvatarName: {
-    color: GameColors.textWhite,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 18,
-    letterSpacing: 0.3,
-  },
-  heroRarityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  heroRarityText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 9,
-    letterSpacing: 1,
-  },
-  heroAbility: {
-    color: GameColors.textSecondary,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 18,
-    paddingHorizontal: 12,
-  },
-  heroChangeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    marginTop: 2,
-  },
-  heroChangeBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-  },
-
-  // ── Actions ────────────────────────────────────────────────────────────
-  actionsWrap: { gap: 12 },
-
-  playBtn: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    backgroundColor: GameColors.accentGold,
-    shadowColor: GameColors.accentGold,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  playBtnInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-  },
-  playBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  playBtnIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  playBtnLabel: {
-    fontSize: 20,
-    fontFamily: 'Inter_700Bold',
-    fontWeight: '700',
-    color: GameColors.backgroundPrimary,
-    lineHeight: 26,
-  },
-  playBtnSub: {
-    ...Typography.small,
-    color: 'rgba(0,0,0,0.55)',
-    fontFamily: 'Inter_500Medium',
-  },
-
-  secondaryRow: { flexDirection: 'row', gap: 10 },
-
-  actionCard: {
+  heroLeft: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 18,
-    padding: 16,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: GameColors.border,
-    position: 'relative',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingBottom: 8,
   },
-  actionIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    borderWidth: 1.5,
+
+  // Title
+  titleBlock: {
+    alignItems: 'center',
+    gap: 4,
+    paddingTop: 4,
+  },
+  titleMain: {
+    fontSize: SH > 750 ? 42 : 34,
+    fontFamily: 'Inter_700Bold',
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 2,
+    textShadowColor: PURPLE,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 18,
+  },
+  titleSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  titleLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(167,139,250,0.4)',
+    maxWidth: 30,
+  },
+  titleSub: {
+    color: PURPLE_LT,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    letterSpacing: 1.5,
+  },
+
+  // Avatar stage
+  avatarStage: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    flex: 1,
+    width: '100%',
+  },
+  avatarWrap: {
+    zIndex: 10,
+    // Glow behind avatar
+    shadowColor: PURPLE,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowOpacity: 0.9,
+    shadowRadius: 30,
+    elevation: 20,
   },
-  actionLabel: {
-    ...Typography.small,
+  // Platform rings
+  ring1: {
+    position: 'absolute',
+    bottom: '15%',
+    alignSelf: 'center',
+    width: SW * 0.42,
+    height: SW * 0.12,
+    borderRadius: 9999,
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: BLUE_NEON,
+    shadowColor: BLUE_NEON,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  ring2: {
+    position: 'absolute',
+    bottom: '12%',
+    alignSelf: 'center',
+    width: SW * 0.3,
+    height: SW * 0.08,
+    borderRadius: 9999,
+    backgroundColor: 'rgba(56,189,248,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(56,189,248,0.35)',
+  },
+  ring3: {
+    position: 'absolute',
+    bottom: '10%',
+    alignSelf: 'center',
+    width: SW * 0.18,
+    height: SW * 0.05,
+    borderRadius: 9999,
+    backgroundColor: 'rgba(56,189,248,0.15)',
+  },
+
+  // PLAY button
+  playWrap: {
+    width: '80%',
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.7,
+    shadowRadius: 18,
+    elevation: 14,
+  },
+  playOuter: {
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: GOLD,
+    overflow: 'hidden',
+  },
+  playGrad: {
+    paddingVertical: SH > 750 ? 18 : 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    position: 'relative',
+  },
+  playText: {
+    fontSize: SH > 750 ? 32 : 26,
     fontFamily: 'Inter_700Bold',
-    fontWeight: '700',
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 5,
+    textShadowColor: 'rgba(255,255,255,0.4)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
-  actionSublabel: {
-    ...Typography.small,
-    color: GameColors.textSecondary,
-    fontSize: 10,
+  // Corner hex accent decorations
+  hexCorner: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderColor: GOLD,
+  },
+  hexTL: { top: 4,  left: 4,  borderTopWidth: 2,    borderLeftWidth: 2  },
+  hexTR: { top: 4,  right: 4, borderTopWidth: 2,    borderRightWidth: 2 },
+  hexBL: { bottom: 4, left: 4,  borderBottomWidth: 2, borderLeftWidth: 2  },
+  hexBR: { bottom: 4, right: 4, borderBottomWidth: 2, borderRightWidth: 2 },
+
+  // ── Right nav column ─────────────────────────────────────────────────────
+  rightNav: {
+    width: NAV_BTN_W + 8,
+    paddingRight: 8,
+    justifyContent: 'center',
+    gap: 8,
+  },
+  navBtn: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.45)',
+  },
+  navBtnGrad: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    gap: 5,
+  },
+  navBtnIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(139,92,246,0.15)',
+    position: 'relative',
+  },
+  navBtnLabel: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 7.5,
+    letterSpacing: 0.8,
     textAlign: 'center',
   },
   badgeDot: {
     position: 'absolute',
-    top: -3,
-    right: -3,
-    width: 10,
-    height: 10,
+    top: -2,
+    right: -2,
+    width: 9,
+    height: 9,
     borderRadius: 5,
-    backgroundColor: GameColors.accentRed,
+    backgroundColor: '#FF1744',
     borderWidth: 1.5,
-    borderColor: GameColors.backgroundPrimary,
+    borderColor: BG,
   },
 
-  // ── Banner ─────────────────────────────────────────────────────────────
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 50,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: 'rgba(255,255,255,0.15)',
-    backgroundColor: 'rgba(255,255,255,0.02)',
-  },
-  bannerText: {
-    ...Typography.small,
-    color: 'rgba(176,176,176,0.5)',
-    fontFamily: 'Inter_500Medium',
-  },
-
-  // ── FAB ────────────────────────────────────────────────────────────────
-  fabWrap: {
-    position: 'absolute',
-    right: 20,
-    zIndex: 50,
-  },
-  fab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: GameColors.accentGreen,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
-    shadowColor: GameColors.accentGreen,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  fabLoading: { opacity: 0.65 },
-  fabText: {
-    ...Typography.small,
-    color: GameColors.backgroundPrimary,
-    fontFamily: 'Inter_700Bold',
-    fontWeight: '700',
-  },
-
-  // ── Bottom nav ─────────────────────────────────────────────────────────
-  bottomNav: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
+  // ── Bottom bar ───────────────────────────────────────────────────────────
+  bottomBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-around',
-    paddingTop: 10,
-    paddingHorizontal: 16,
-    backgroundColor: 'rgba(13,2,33,0.92)',
+    paddingTop: 8,
+    paddingHorizontal: 6,
+    backgroundColor: 'rgba(4,0,15,0.96)',
     borderTopWidth: 1,
-    borderTopColor: GameColors.border,
+    borderTopColor: 'rgba(139,92,246,0.35)',
   },
-  navItem: {
+  botBtn: {
+    flex: 1,
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    minWidth: 64,
+    paddingBottom: 2,
   },
-  navIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  botBtnCenter: {
+    flex: 1.2,
+    marginTop: -14, // pop up above bar
+  },
+  botBtnCenterGrad: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: GOLD,
+    shadowColor: PURPLE,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 10,
+    position: 'relative',
   },
-  navIconActive: {
-    backgroundColor: 'rgba(255,215,0,0.12)',
+  botBtnIconWrap: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
   },
-  navLabel: {
-    ...Typography.small,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 10,
-    lineHeight: 14,
-  },
-  navDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: GameColors.accentGold,
+  botBtnLabel: {
+    color: PURPLE_LT,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 8,
+    letterSpacing: 0.7,
+    textAlign: 'center',
   },
 });
