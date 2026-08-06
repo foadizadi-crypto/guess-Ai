@@ -2,4 +2,6 @@
 - [Native module platform split](native-module-platform-split.md) — Packages like AdMob/IAP must use .native.ts + .ts Metro split; runtime Platform guards don't prevent bundling on web.
 - [Expo Go crash diagnosis](expo-go-crash-diagnosis.md) — "Failed to download remote update" = Metro bundling error (check workflow logs); blue "Something went wrong" = native module missing from Expo Go.
 - [BlurQuiz component props](blurquiz-component-props.md) — CoinDisplay uses `amount` prop (not `coins`); firestoreService edits must be appended at true file end, never mid-function.
-- [Energy system design](energy-system.md) — lazy-refill pattern; tickEnergy() must be called on focus; spendEnergy() calls tick internally before checking.
+- [Energy system design](energy-system.md) — Two-tier: active (0-50, time-refilled) + reserve (uncapped, purchased/rewarded). spendEnergy drains active first then reserve. addStamina always → reserve.
+- [Notification service](notification-service.md) — 7 local + 6 remote-stub notification types. Services/NotificationService.ts (web stub) + .native.ts (expo-notifications). Hooked into userStore for stamina/achievements/spin/daily-reward. AppState in _layout.tsx handles inactive-reminder scheduling.
+- [Coin economy](coin-economy.md) — Levels 1-100 give coins every level (300/700/1500). Coin→gem exchange: 30k→5💎 (max 2) and 100k→25💎 (max 1), tracked in coinGemExchanges state.

@@ -59,7 +59,7 @@ import {
   GEM_PACKS,
   RARITY_COLORS,
 } from '@/constants/shopConfig';
-import { IAP_GEM_PACKS } from '@/constants/economy';
+import { IAP_GEM_PACKS, COIN_GEM_EXCHANGES } from '@/constants/economy';
 import type { UnifiedShopItem } from '@/types';
 import type { ConsumableId } from '@/constants/shopData';
 import type { PowerUpId } from '@/types';
@@ -110,7 +110,9 @@ export default function ShopScreen() {
   const mockPurchaseCoins = useUserStore((s) => s.mockPurchaseCoins);
   const addGems           = useUserStore((s) => s.addGems);
 
-  const buyGemPack    = useUserStore((s) => s.buyGemPack);
+  const buyGemPack          = useUserStore((s) => s.buyGemPack);
+  const buyCoinGemExchange  = useUserStore((s) => s.buyCoinGemExchange);
+  const coinGemExchanges    = useUserStore((s) => s.coinGemExchanges);
 
   const { isAdFreePassActive, removeAds, adFreePassExpiry } = useAdStore();
   const adFreeActive = isAdFreePassActive();
@@ -124,6 +126,38 @@ export default function ShopScreen() {
     coinPulse.value = withSequence(withSpring(1.18), withSpring(1));
     setTimeout(() => setFloating(null), 1200);
   }, [coinPulse]);
+
+  const handleCoinGemExchange = useCallback((id: string, label: string, coinCost: number, gemGrant: number, maxPurchases: number) => {
+    const purchased = coinGemExchanges[id] ?? 0;
+    if (purchased >= maxPurchases) {
+      Alert.alert('Limit reached', `You can only exchange at this rate ${maxPurchases} time${maxPurchases > 1 ? 's' : ''}.`);
+      return;
+    }
+    if (coins < coinCost) {
+      Alert.alert('Not enough coins', `You need ${coinCost.toLocaleString()} 🪙 for this exchange.`);
+      return;
+    }
+    Alert.alert(
+      `Convert ${coinCost.toLocaleString()} 🪙?`,
+      `You'll receive ${gemGrant} 💎 (${purchased + 1}/${maxPurchases} uses).`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Convert',
+          onPress: () => {
+            const ok = buyCoinGemExchange(id as any);
+            if (ok) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              playEffect('purchase');
+              showPurchase(`+${gemGrant} 💎`);
+            } else {
+              Alert.alert('Exchange failed', 'Something went wrong. Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  }, [coins, coinGemExchanges, buyCoinGemExchange, playEffect, showPurchase]);
 
   const handleBuyGemPack = useCallback((packId: string, packName: string, gemCost: number) => {
     if (gems < gemCost) {
@@ -350,6 +384,56 @@ export default function ShopScreen() {
           <View style={styles.emptyWrap}>
             <Ionicons name="search-outline" size={40} color={GameColors.textSecondary} />
             <Text style={styles.emptyText}>No items match this filter</Text>
+          </View>
+        )}
+
+        {/* ── Convert Coins → Gems (Coin Shop only) ────────────────────────── */}
+        {tab === 0 && (
+          <View style={styles.exchangeSection}>
+            <View style={styles.iapDivider}>
+              <View style={styles.iapLine} />
+              <Text style={styles.iapLabel}>Convert Coins → Gems</Text>
+              <View style={styles.iapLine} />
+            </View>
+            <Text style={styles.exchangeHint}>
+              Spend accumulated coins to earn a small gem bonus.{'\n'}
+              Maximum purchases per tier apply lifetime.
+            </Text>
+            {COIN_GEM_EXCHANGES.map((tier) => {
+              const purchased   = coinGemExchanges[tier.id] ?? 0;
+              const isMaxed     = purchased >= tier.maxPurchases;
+              const canAffordEx = coins >= tier.coins && !isMaxed;
+              return (
+                <TouchableOpacity
+                  key={tier.id}
+                  style={[styles.exchangeCard, isMaxed && styles.exchangeCardMaxed]}
+                  onPress={() => handleCoinGemExchange(tier.id, tier.label, tier.coins, tier.gems, tier.maxPurchases)}
+                  activeOpacity={isMaxed ? 1 : 0.8}
+                  disabled={isMaxed}
+                >
+                  <View style={[styles.exchangeIcon, { backgroundColor: isMaxed ? 'rgba(255,255,255,0.04)' : 'rgba(206,147,216,0.12)' }]}>
+                    <Ionicons name="swap-horizontal-outline" size={22} color={isMaxed ? GameColors.textSecondary : '#CE93D8'} />
+                  </View>
+                  <View style={styles.exchangeInfo}>
+                    <Text style={[styles.exchangeTitle, isMaxed && { color: GameColors.textSecondary }]}>
+                      {tier.gems} 💎
+                    </Text>
+                    <Text style={styles.exchangeSubtitle}>
+                      {tier.coins.toLocaleString()} 🪙 · {purchased}/{tier.maxPurchases} uses
+                    </Text>
+                  </View>
+                  <View style={[
+                    styles.exchangeBtn,
+                    canAffordEx  && styles.exchangeBtnReady,
+                    !canAffordEx && styles.exchangeBtnLocked,
+                  ]}>
+                    <Text style={[styles.exchangeBtnText, canAffordEx && styles.exchangeBtnTextReady]}>
+                      {isMaxed ? 'Maxed' : canAffordEx ? 'Convert' : 'Convert'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
 
@@ -821,6 +905,50 @@ const styles = StyleSheet.create({
   bestValue:{ color: GameColors.backgroundPrimary, backgroundColor: GameColors.accentGold, fontFamily: 'Inter_700Bold', fontSize: 9, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
   restoreBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
   restoreText: { color: GameColors.textSecondary, fontFamily: 'Inter_500Medium', fontSize: 13 },
+
+  // ── Coin → Gem exchange ───────────────────────────────────────────────────
+  exchangeSection: { gap: 10, marginTop: 4 },
+  exchangeHint: {
+    color: GameColors.textSecondary, fontSize: 11, textAlign: 'center',
+    fontFamily: 'Inter_400Regular', lineHeight: 16,
+  },
+  exchangeCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: 14, borderRadius: 16,
+    backgroundColor: 'rgba(206,147,216,0.06)', borderWidth: 1,
+    borderColor: 'rgba(206,147,216,0.25)',
+  },
+  exchangeCardMaxed: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderColor: GameColors.border,
+  },
+  exchangeIcon: {
+    width: 44, height: 44, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  exchangeInfo: { flex: 1, gap: 3 },
+  exchangeTitle: {
+    color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 15,
+  },
+  exchangeSubtitle: {
+    color: GameColors.textSecondary, fontFamily: 'Inter_400Regular', fontSize: 11,
+  },
+  exchangeBtn: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12,
+    borderWidth: 1, borderColor: GameColors.border,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  exchangeBtnReady: {
+    backgroundColor: 'rgba(206,147,216,0.18)',
+    borderColor: 'rgba(206,147,216,0.5)',
+  },
+  exchangeBtnLocked: {
+    opacity: 0.5,
+  },
+  exchangeBtnText: {
+    color: GameColors.textSecondary, fontFamily: 'Inter_700Bold', fontSize: 12,
+  },
+  exchangeBtnTextReady: { color: '#CE93D8' },
 
   // ── Gem Packs (spendable bundles) ─────────────────────────────────────────
   gemPacksSection: { gap: 10, marginTop: 4 },

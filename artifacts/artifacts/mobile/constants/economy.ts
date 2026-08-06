@@ -140,6 +140,15 @@ export const IAP_GEM_PACKS = [
 
 export type IAPGemPackId = typeof IAP_GEM_PACKS[number]['id'];
 
+// ─── Coin → Gem exchange ──────────────────────────────────────────────────────
+// Players can convert accumulated coins into a small gem grant.
+// Each tier has a lifetime purchase cap to preserve the gem economy.
+export const COIN_GEM_EXCHANGES = [
+  { id: 'coin_gem_30k',  coins: 30_000,  gems: 5,  maxPurchases: 2, label: '5 💎 for 30,000 🪙' },
+  { id: 'coin_gem_100k', coins: 100_000, gems: 25, maxPurchases: 1, label: '25 💎 for 100,000 🪙' },
+] as const;
+export type CoinGemExchangeId = typeof COIN_GEM_EXCHANGES[number]['id'];
+
 // ─── Energy / Stamina ─────────────────────────────────────────────────────────
 // Players start at MAX_ENERGY. Each game costs STAMINA_PER_GAME. Refills passively.
 // Active players can play ~12-15 rounds per day (50 base ÷ 10 cost = 5 rounds,

@@ -123,6 +123,24 @@ const GEM_MILESTONE: Readonly<Record<number, number>> = {
   10: 1, 25: 1, 50: 2, 100: 5, 150: 10, 300: 50, 500: 250,
 };
 
+// ─── Per-level coin formula (levels 1–100) ───────────────────────────────────
+//
+//  Range     Coins per level   Total
+//  1–10      300               3,000
+//  11–50     700               28,000
+//  51–100    1,500             75,000
+//  ────────────────────────────────────
+//  Grand total (1–100)         106,000
+//
+//  Levels 101–500 keep the original every-5-level cadence (minorCoins).
+
+function perLevelCoins(level: number): number {
+  if (level <= 10)  return 300;
+  if (level <= 50)  return 700;
+  if (level <= 100) return 1_500;
+  return 0; // 101+ handled by minorCoins at every-5 intervals
+}
+
 // ─── Build the full 500-level table ──────────────────────────────────────────
 
 function buildLevelRewards(): LevelReward[] {
@@ -135,8 +153,16 @@ function buildLevelRewards(): LevelReward[] {
     let coins = 0;
     const items: RewardItem[] = [];
 
-    if (isMinor) {
+    if (level <= 100) {
+      // Every level 1-100 grants coins; items still only at minor/major levels
+      coins += perLevelCoins(level);
+    } else if (isMinor) {
+      // Levels 101-500: coins only on minor (every 5) levels
       coins += minorCoins(level);
+    }
+
+    if (isMinor) {
+      // Items drop at every minor level across all ranges
       items.push(...minorItems(level));
     }
 

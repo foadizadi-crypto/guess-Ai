@@ -36,7 +36,10 @@ import {
   ENERGY_REFILL_INTERVAL_MIN,
   ENERGY_REFILL_GEM_COST,
   STAMINA_PER_GAME,
+  COIN_GEM_EXCHANGES,
+  type CoinGemExchangeId,
 } from '@/constants/economy';
+import { notificationService } from '@/services/NotificationService';
 import { calculateLevel, isToday, getTodayUTCString } from '@/utils';
 
 // ─── State shape ──────────────────────────────────────────────────────────
@@ -207,6 +210,7 @@ export const useUserStore = create<UserState>()(
       energy:               MAX_ENERGY,
       staminaReserve:       0,
       lastEnergyRefillTime: null,
+      coinGemExchanges:     {},
       settings: { ...defaultSettings },
       statistics: { ...defaultStatistics },
       dailyXPEarned: 0,
@@ -481,6 +485,10 @@ export const useUserStore = create<UserState>()(
             longestStreak: Math.max(state.statistics.longestStreak, newStreak),
           },
         }));
+        // Reschedule the daily-reward reminder so it fires again tomorrow
+        if (get().settings.notifications) {
+          notificationService.scheduleDailyReward();
+        }
         return reward;
       },
 
@@ -612,6 +620,10 @@ export const useUserStore = create<UserState>()(
               totalCoinsEarned: state.statistics.totalCoinsEarned + coinsToAdd,
             },
           }));
+          // Fire an immediate notification for the first newly unlocked achievement
+          if (get().settings.notifications && newlyUnlocked[0]) {
+            notificationService.fireAchievementCompleted(newlyUnlocked[0].title);
+          }
         }
 
         return newlyUnlocked;
@@ -723,6 +735,10 @@ export const useUserStore = create<UserState>()(
           if (gained <= 0) return {};
           const newEnergy  = Math.min(MAX_ENERGY, s.energy + gained);
           const remainder  = elapsed % intervalMs;
+          // Cancel "stamina full" notification when active stamina reaches max
+          if (newEnergy >= MAX_ENERGY && s.settings.notifications) {
+            notificationService.cancelStaminaFull();
+          }
           return {
             energy: newEnergy,
             lastEnergyRefillTime: newEnergy >= MAX_ENERGY ? null : Date.now() - remainder,
@@ -754,6 +770,17 @@ export const useUserStore = create<UserState>()(
             lastEnergyRefillTime: s.lastEnergyRefillTime ?? Date.now(),
           };
         });
+
+        // Schedule "stamina full" notification based on deficit after spend
+        if (get().settings.notifications) {
+          const newEnergy = get().energy;
+          if (newEnergy < MAX_ENERGY) {
+            const deficit = MAX_ENERGY - newEnergy;
+            const minutesUntilFull = deficit * ENERGY_REFILL_INTERVAL_MIN;
+            notificationService.scheduleStaminaFull(minutesUntilFull);
+          }
+        }
+
         return true;
       },
 
@@ -877,7 +904,32 @@ export const useUserStore = create<UserState>()(
           };
         });
 
+        // Schedule "spin ready" notification after a free spin
+        if (isFree && get().settings.notifications) {
+          notificationService.scheduleSpinReady(SPIN_CONFIG.freeSpinCooldownHours);
+        }
+
         return reward;
+      },
+
+      // ── Coin → Gem exchange ────────────────────────────────────────────
+
+      buyCoinGemExchange: (id) => {
+        const tier = COIN_GEM_EXCHANGES.find((t) => t.id === id);
+        if (!tier) return false;
+        const { coins, coinGemExchanges } = get();
+        const purchased = coinGemExchanges[id] ?? 0;
+        if (purchased >= tier.maxPurchases) return false;  // lifetime cap reached
+        if (coins < tier.coins) return false;               // insufficient coins
+        set((s) => ({
+          coins: s.coins - tier.coins,
+          gems:  s.gems  + tier.gems,
+          coinGemExchanges: {
+            ...s.coinGemExchanges,
+            [id]: (s.coinGemExchanges[id] ?? 0) + 1,
+          },
+        }));
+        return true;
       },
 
       // ── Settings ──────────────────────────────────────────────────────
@@ -922,6 +974,7 @@ export const useUserStore = create<UserState>()(
           energy:               MAX_ENERGY,
           staminaReserve:       0,
           lastEnergyRefillTime: null,
+          coinGemExchanges:     {},
           settings: { ...defaultSettings },
           statistics: { ...defaultStatistics },
           dailyXPEarned: 0,
@@ -969,6 +1022,7 @@ export const useUserStore = create<UserState>()(
           energy:                  saved.energy                   ?? MAX_ENERGY,
           staminaReserve:          saved.staminaReserve            ?? 0,
           lastEnergyRefillTime:    saved.lastEnergyRefillTime      ?? null,
+          coinGemExchanges:        saved.coinGemExchanges          ?? {},
         };
       },
     },
