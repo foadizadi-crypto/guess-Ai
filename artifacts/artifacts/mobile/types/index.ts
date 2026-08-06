@@ -70,10 +70,12 @@ export interface Avatar {
   name: string;
   imageKey: string;
   unlocked: boolean;
-  cost: number;
+  cost: number;                  // kept for backward-compat; always 0 for level-unlock avatars
   rarity?: 'Common' | 'Rare' | 'Epic' | 'Legendary';
   ability?: string;
   abilityKey?: string;
+  unlockLevel?: number;          // required level to auto-unlock (undefined = default or achievement)
+  unlockCondition?: string;      // human-readable unlock hint shown in gallery
 }
 
 export interface UserStatistics {

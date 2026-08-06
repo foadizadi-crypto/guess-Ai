@@ -2,9 +2,10 @@
  * shop.tsx — Phase 1 Economy + Shop Core
  *
  * Two primary tabs driven entirely by shopConfig (no hardcoded item data):
- *   • Coin Shop  — consumables, avatars, power-ups (all bought with coins)
+ *   • Coin Shop  — consumables, power-ups (bought with coins)
  *   • Gem Shop   — premium cosmetics (bought with gems)
  *
+ * Avatars are NOT sold here — they unlock via level milestones and achievements.
  * Each tab has a scrollable filter bar: All / Owned / Locked / Rare / Epic / Legendary
  * Item cards display: icon, name, description, rarity badge, price, action button.
  *
@@ -97,15 +98,11 @@ export default function ShopScreen() {
   // ── Store ────────────────────────────────────────────────────────────────
   const coins           = useUserStore((s) => s.coins);
   const gems            = useUserStore((s) => s.gems);
-  const avatars         = useUserStore((s) => s.avatars);
   const consumables     = useUserStore((s) => s.consumables);
   const powerUps        = useUserStore((s) => s.powerUps);
   const gemCosmetics    = useUserStore((s) => s.gemCosmetics);
-  const selectedAvatarId = useUserStore((s) => s.selectedAvatarId);
   const buyConsumable   = useUserStore((s) => s.buyConsumable);
   const buyPowerUp      = useUserStore((s) => s.buyPowerUp);
-  const unlockAvatar    = useUserStore((s) => s.unlockAvatar);
-  const selectAvatar    = useUserStore((s) => s.selectAvatar);
   const buyGemCosmetic  = useUserStore((s) => s.buyGemCosmetic);
   const equipGemCosmetic = useUserStore((s) => s.equipGemCosmetic);
   const mockPurchaseCoins = useUserStore((s) => s.mockPurchaseCoins);
@@ -127,11 +124,6 @@ export default function ShopScreen() {
   // ── Ownership / quantity helpers ─────────────────────────────────────────
 
   const getRuntime = useCallback((item: UnifiedShopItem): RuntimeItem => {
-    // Avatar
-    if (item.id.startsWith('avatar_')) {
-      const av = avatars.find((a) => a.id === item.id);
-      return { ...item, owned: av?.unlocked ?? false, equipped: selectedAvatarId === item.id };
-    }
     // Consumable (spec items)
     if (item.id in consumables) {
       const qty = consumables[item.id as ConsumableId];
@@ -145,7 +137,7 @@ export default function ShopScreen() {
     // Gem cosmetic
     const gem = gemCosmetics[item.id];
     return { ...item, owned: gem?.owned ?? false, equipped: gem?.equipped ?? false };
-  }, [avatars, consumables, powerUps, gemCosmetics, selectedAvatarId]);
+  }, [consumables, powerUps, gemCosmetics]);
 
   // ── Filtered items for current tab ───────────────────────────────────────
 
@@ -161,26 +153,9 @@ export default function ShopScreen() {
   // ── Purchase handlers ────────────────────────────────────────────────────
 
   const handlePress = useCallback((item: RuntimeItem) => {
-    const isAvatar = item.id.startsWith('avatar_');
     const isGem    = item.currencyType === 'gems';
     const isPowerUp = POWER_UP_IDS.has(item.id);
 
-    // ── Avatar: equip if owned ──────────────────────────────────────────
-    if (isAvatar && item.owned) {
-      selectAvatar(item.id);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      showPurchase('Equipped!');
-      return;
-    }
-    // ── Avatar: purchase ───────────────────────────────────────────────
-    if (isAvatar) {
-      if (item.price === 0) { selectAvatar(item.id); showPurchase('Equipped!'); return; }
-      const ok = unlockAvatar(item.id);
-      Haptics.notificationAsync(ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error);
-      if (ok) { playEffect('purchase'); showPurchase(`−${item.price} 🪙`); }
-      else Alert.alert('Not enough coins', `You need ${item.price} coins to unlock ${item.name}.`);
-      return;
-    }
     // ── Gem cosmetic: equip if owned ────────────────────────────────────
     if (isGem && item.owned) {
       equipGemCosmetic(item.id);
@@ -209,7 +184,7 @@ export default function ShopScreen() {
     Haptics.notificationAsync(ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error);
     if (ok) { playEffect('purchase'); showPurchase(`−${item.price} 🪙`); }
     else Alert.alert('Not enough coins', 'Earn more coins by playing games or claiming daily rewards.');
-  }, [selectAvatar, unlockAvatar, buyGemCosmetic, equipGemCosmetic, buyPowerUp, buyConsumable, playEffect, showPurchase]);
+  }, [buyGemCosmetic, equipGemCosmetic, buyPowerUp, buyConsumable, playEffect, showPurchase]);
 
   // ── Render ───────────────────────────────────────────────────────────────
 

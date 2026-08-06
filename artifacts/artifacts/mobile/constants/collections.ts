@@ -74,16 +74,29 @@ function a(
   return { id, name, type: 'avatar', rarity, icon, price, currency, unlockType, description, ...extra };
 }
 
-// ─── AVATAR COLLECTION (50 total: 10 coin-tier + 40 gem-tier) ─────────────────
+// ─── AVATAR COLLECTION (50 total: 10 level/achievement-tier + 40 gem-tier) ──────
 
 /**
- * Coin-tier avatars (refs to DEFAULT_AVATARS in constants/index.ts).
- * These are included in the collection for display only; ownership is
- * read from the `avatars` Zustand slice, not `ownedCosmetics`.
+ * Level/achievement-tier avatars — unlocked through gameplay, never purchased.
+ * Ownership is read from the `avatars` Zustand slice, not `ownedCosmetics`.
  */
 export const COIN_AVATAR_IDS = [
   'avatar_1', 'avatar_2', 'avatar_3', 'avatar_4', 'avatar_5',
   'avatar_6', 'avatar_7', 'avatar_8', 'avatar_9', 'avatar_10',
+];
+
+/** Full CosmeticItem descriptors for the 10 progression avatars, used in the gallery. */
+export const COIN_AVATARS: CosmeticItem[] = [
+  { id: 'avatar_1',  name: 'Abigail', type: 'avatar', rarity: 'common',    icon: 'person-outline',        price: 0, currency: 'free',  unlockType: 'special',     description: 'Your default companion — always ready.'           },
+  { id: 'avatar_2',  name: 'Chlöe',   type: 'avatar', rarity: 'common',    icon: 'time-outline',          price: 0, currency: 'coins', unlockType: 'level',       description: 'Quick wit and sharp focus.',          unlockLevel: 5   },
+  { id: 'avatar_3',  name: 'Daveigh', type: 'avatar', rarity: 'rare',      icon: 'library-outline',       price: 0, currency: 'coins', unlockType: 'level',       description: 'Ancient wisdom powers every level-up.',unlockLevel: 10  },
+  { id: 'avatar_4',  name: 'Haley',   type: 'avatar', rarity: 'rare',      icon: 'eye-outline',           price: 0, currency: 'coins', unlockType: 'level',       description: 'Sees through the blur before anyone.', unlockLevel: 20  },
+  { id: 'avatar_5',  name: 'Heather', type: 'avatar', rarity: 'epic',      icon: 'shield-outline',        price: 0, currency: 'coins', unlockType: 'level',       description: 'Blocks all distractions. Pure focus.',  unlockLevel: 30  },
+  { id: 'avatar_6',  name: 'Kirsten', type: 'avatar', rarity: 'epic',      icon: 'leaf-outline',          price: 0, currency: 'coins', unlockType: 'level',       description: 'Fortune favors the bold — and the lucky.',unlockLevel: 40  },
+  { id: 'avatar_7',  name: 'Linda',   type: 'avatar', rarity: 'epic',      icon: 'rocket-outline',        price: 0, currency: 'coins', unlockType: 'level',       description: 'Lightning reflexes. Zero hesitation.',  unlockLevel: 50  },
+  { id: 'avatar_8',  name: 'Marilyn', type: 'avatar', rarity: 'epic',      icon: 'magnet-outline',        price: 0, currency: 'coins', unlockType: 'level',       description: 'Attracts coins like gravity.',           unlockLevel: 75  },
+  { id: 'avatar_9',  name: 'Patty',   type: 'avatar', rarity: 'legendary', icon: 'sparkles-outline',      price: 0, currency: 'coins', unlockType: 'level',       description: 'Born to defeat blur. Legendary focus.', unlockLevel: 100 },
+  { id: 'avatar_10', name: 'Sissy',   type: 'avatar', rarity: 'legendary', icon: 'hardware-chip-outline', price: 0, currency: 'coins', unlockType: 'achievement', description: 'Collect 5 avatars to unlock this legend.' },
 ];
 
 export const GEM_AVATARS: CosmeticItem[] = [
@@ -239,8 +252,8 @@ export function getCollection(type: CosmeticType): CosmeticItem[] {
   return ALL_COSMETICS.filter((c) => c.type === type);
 }
 
-/** Total items in a collection (excluding coin-tier avatars for non-avatar types). */
+/** Total items in a collection. */
 export function getCollectionTotal(type: CosmeticType): number {
-  if (type === 'avatar') return GEM_AVATARS.length + COIN_AVATAR_IDS.length; // 50
+  if (type === 'avatar') return COIN_AVATARS.length + GEM_AVATARS.length; // 50
   return getCollection(type).length;
 }

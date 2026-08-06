@@ -98,10 +98,10 @@ export const POWERUP_SHOP_ITEMS: UnifiedShopItem[] = [
   { id: 'double-xp',     name: 'Double XP',     description: 'Doubles all XP earned in the current session',   icon: 'star-outline',              category: 'consumable', rarity: 'rare',   currencyType: 'coins', price: 200, unlockType: 'shop' },
 ];
 
-// All coin shop items — order: consumables → avatars → power-ups
+// All coin shop items — order: consumables → power-ups
+// Avatars are no longer sold in the shop; they unlock via level milestones and achievements.
 export const ALL_COIN_SHOP_ITEMS: UnifiedShopItem[] = [
   ...CONSUMABLE_SHOP_ITEMS,
-  ...AVATAR_SHOP_ITEMS,
   ...POWERUP_SHOP_ITEMS,
 ];
 

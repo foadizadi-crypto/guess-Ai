@@ -65,9 +65,10 @@ import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
 import { RARITY_COLORS } from '@/constants/shopConfig';
-import { DEFAULT_AVATARS } from '@/constants';
 import {
   COLLECTION_META,
+  COIN_AVATARS,
+  COIN_AVATAR_IDS,
   GEM_AVATARS,
   FRAMES,
   THEMES,
@@ -75,7 +76,6 @@ import {
   BADGES,
   TITLES,
   PARTICLES,
-  COIN_AVATAR_IDS,
   getCollectionTotal,
   type CosmeticItem,
   type CosmeticType,
@@ -91,7 +91,7 @@ type Filter = typeof FILTERS[number];
 
 function getItemsForType(type: CosmeticType): CosmeticItem[] {
   switch (type) {
-    case 'avatar':        return GEM_AVATARS;  // coin-tier refs handled via DEFAULT_AVATARS
+    case 'avatar':        return [...COIN_AVATARS, ...GEM_AVATARS]; // level/achievement-tier first, then gem-tier
     case 'frame':         return FRAMES;
     case 'theme':         return THEMES;
     case 'entranceEffect':return ENTRANCE_EFFECTS;
@@ -105,11 +105,11 @@ function getItemsForType(type: CosmeticType): CosmeticItem[] {
 // Unlock type label for locked items that aren't purchasable
 function unlockLabel(item: CosmeticItem): string {
   switch (item.unlockType) {
-    case 'level':       return `Lvl ${item.unlockLevel ?? '?'}`;
-    case 'achievement': return 'Achievement';
+    case 'level':       return `Level ${item.unlockLevel ?? '?'}`;
+    case 'achievement': return '🏆 Collect 5 Avatars';
     case 'event':       return 'Event';
     case 'season':      return 'Season';
-    case 'special':     return 'Special';
+    case 'special':     return 'Default';
     default:            return 'Shop';
   }
 }
@@ -131,9 +131,10 @@ interface CardProps {
 
 const ItemCard: React.FC<CardProps> = ({ item, balance, onAction }) => {
   const rarityColor = RARITY_COLORS[item.rarity] ?? GameColors.textSecondary;
-  const shopBuyable = item.unlockType === 'shop' && item.currency !== 'free';
-  const isFree      = item.currency === 'free';
+  const shopBuyable = item.unlockType === 'shop' && item.currency !== 'free' && item.currency !== 'coins';
+  const isFree      = item.unlockType === 'special' || (item.currency === 'free' && item.unlockType === 'shop');
   const canAfford   = balance >= item.price;
+  const isCoinAvatar = COIN_AVATAR_IDS.includes(item.id); // level/achievement unlock — never purchasable
 
   // Button label
   let label: string;
@@ -144,6 +145,10 @@ const ItemCard: React.FC<CardProps> = ({ item, balance, onAction }) => {
   } else if (item.owned) {
     label = 'Equip';
     btnVariant = 'equip';
+  } else if (isCoinAvatar) {
+    // Show the unlock requirement — not purchasable
+    label = unlockLabel(item);
+    btnVariant = 'locked';
   } else if (isFree) {
     label = 'Free · Claim';
     btnVariant = 'free';
@@ -339,11 +344,9 @@ export default function CollectionDetailScreen() {
       return;
     }
 
-    // Avatar coin-tier
-    if (cosmeticType === 'avatar' && item.currency === 'coins') {
-      const ok = unlockAvatar(item.id);
-      Haptics.notificationAsync(ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error);
-      if (ok) { playEffect('purchase'); showToast(`−${item.price} 🪙`); }
+    // Coin-tier avatars unlock through gameplay only — never purchasable
+    if (COIN_AVATAR_IDS.includes(item.id)) {
+      Alert.alert('Locked', `${item.name} unlocks at ${unlockLabel(item)}`);
       return;
     }
 

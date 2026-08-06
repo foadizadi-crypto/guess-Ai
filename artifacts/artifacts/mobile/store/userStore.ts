@@ -293,9 +293,22 @@ export const useUserStore = create<UserState>()(
             }
           }
 
+          // Auto-unlock avatars for any levels crossed
+          const newAvatars = state.avatars.map((av) => {
+            if (av.unlocked || av.unlockLevel === undefined) return av;
+            return av.unlockLevel <= newLevel ? { ...av, unlocked: true } : av;
+          });
+          // Collector achievement: unlock avatar_10 when 5+ avatars owned
+          const ownedCount = newAvatars.filter((a) => a.unlocked).length;
+          const finalAvatars =
+            ownedCount >= 5 && !newAvatars.find((a) => a.id === 'avatar_10')?.unlocked
+              ? newAvatars.map((a) => a.id === 'avatar_10' ? { ...a, unlocked: true } : a)
+              : newAvatars;
+
           return {
             xp: newTotalXP,
             level: newLevel,
+            avatars: finalAvatars,
             dailyXPEarned: currentDailyXP + actualXP,
             dailyXPDate: today,
             unclaimedLevelRewards: newUnclaimed,
@@ -305,16 +318,22 @@ export const useUserStore = create<UserState>()(
       // ── Avatar ────────────────────────────────────────────────────────
 
       unlockAvatar: (avatarId) => {
-        const { avatars, coins } = get();
+        const { avatars } = get();
         const avatar = avatars.find((a) => a.id === avatarId);
         if (!avatar || avatar.unlocked) return false;
-        if (coins < avatar.cost) return false;
-        set((state) => ({
-          coins: state.coins - avatar.cost,
-          avatars: state.avatars.map((a) =>
+        // Unlock without coin cost — avatars are earned through gameplay
+        set((state) => {
+          const newAvatars = state.avatars.map((a) =>
             a.id === avatarId ? { ...a, unlocked: true } : a,
-          ),
-        }));
+          );
+          // Check collector achievement: if player now owns 5+ avatars, unlock avatar_10
+          const ownedCount = newAvatars.filter((a) => a.unlocked).length;
+          const collectorUnlocked = ownedCount >= 5 && !newAvatars.find((a) => a.id === 'avatar_10')?.unlocked;
+          const finalAvatars = collectorUnlocked
+            ? newAvatars.map((a) => a.id === 'avatar_10' ? { ...a, unlocked: true } : a)
+            : newAvatars;
+          return { avatars: finalAvatars };
+        });
         return true;
       },
 

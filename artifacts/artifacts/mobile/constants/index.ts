@@ -48,16 +48,16 @@ export const CATEGORIES = [
 // ─── Default avatars ───────────────────────────────────────────────────────
 
 export const DEFAULT_AVATARS: Avatar[] = [
-  { id: 'avatar_1',  name: 'Abigail', imageKey: 'abigail', unlocked: true,  cost: 0,    rarity: 'Common',    ability: 'Balanced start',                abilityKey: 'alpha'       },
-  { id: 'avatar_2',  name: 'Chlöe',   imageKey: 'chloe',   unlocked: false, cost: 200,  rarity: 'Common',    ability: '+5 seconds at the start',        abilityKey: 'time-master' },
-  { id: 'avatar_3',  name: 'Daveigh', imageKey: 'daveigh', unlocked: false, cost: 350,  rarity: 'Rare',      ability: '+25% XP earned',                 abilityKey: 'xp-sage'     },
-  { id: 'avatar_4',  name: 'Haley',   imageKey: 'haley',   unlocked: false, cost: 500,  rarity: 'Rare',      ability: '+2 points per correct answer',    abilityKey: 'visionary'   },
-  { id: 'avatar_5',  name: 'Heather', imageKey: 'heather', unlocked: false, cost: 650,  rarity: 'Epic',      ability: 'Protected from interruptions',    abilityKey: 'ad-shield'   },
-  { id: 'avatar_6',  name: 'Kirsten', imageKey: 'kirsten', unlocked: false, cost: 800,  rarity: 'Epic',      ability: 'Chance for bonus coins',          abilityKey: 'lucky-charm' },
-  { id: 'avatar_7',  name: 'Linda',   imageKey: 'linda',   unlocked: false, cost: 950,  rarity: 'Epic',      ability: 'Faster answer streak bonuses',    abilityKey: 'speed-demon' },
-  { id: 'avatar_8',  name: 'Marilyn', imageKey: 'marilyn', unlocked: false, cost: 1100, rarity: 'Epic',      ability: '+25% coins from games',           abilityKey: 'coin-magnet' },
-  { id: 'avatar_9',  name: 'Patty',   imageKey: 'patty',   unlocked: false, cost: 1300, rarity: 'Legendary', ability: 'Starts with +20% clarity',        abilityKey: 'blur-buster' },
-  { id: 'avatar_10', name: 'Sissy',   imageKey: 'sissy',   unlocked: false, cost: 1600, rarity: 'Legendary', ability: 'One answer hint each game',       abilityKey: 'ai-oracle'   },
+  { id: 'avatar_1',  name: 'Abigail', imageKey: 'abigail', unlocked: true,  cost: 0, rarity: 'Common',    ability: 'Balanced start',             abilityKey: 'alpha',        unlockCondition: 'Default'                    },
+  { id: 'avatar_2',  name: 'Chlöe',   imageKey: 'chloe',   unlocked: false, cost: 0, rarity: 'Common',    ability: '+5 seconds at the start',    abilityKey: 'time-master',  unlockLevel: 5,   unlockCondition: 'Reach Level 5'  },
+  { id: 'avatar_3',  name: 'Daveigh', imageKey: 'daveigh', unlocked: false, cost: 0, rarity: 'Rare',      ability: '+25% XP earned',             abilityKey: 'xp-sage',      unlockLevel: 10,  unlockCondition: 'Reach Level 10' },
+  { id: 'avatar_4',  name: 'Haley',   imageKey: 'haley',   unlocked: false, cost: 0, rarity: 'Rare',      ability: '+2 points per correct answer',abilityKey: 'visionary',    unlockLevel: 20,  unlockCondition: 'Reach Level 20' },
+  { id: 'avatar_5',  name: 'Heather', imageKey: 'heather', unlocked: false, cost: 0, rarity: 'Epic',      ability: 'Protected from interruptions',abilityKey: 'ad-shield',    unlockLevel: 30,  unlockCondition: 'Reach Level 30' },
+  { id: 'avatar_6',  name: 'Kirsten', imageKey: 'kirsten', unlocked: false, cost: 0, rarity: 'Epic',      ability: 'Chance for bonus coins',     abilityKey: 'lucky-charm',  unlockLevel: 40,  unlockCondition: 'Reach Level 40' },
+  { id: 'avatar_7',  name: 'Linda',   imageKey: 'linda',   unlocked: false, cost: 0, rarity: 'Epic',      ability: 'Faster answer streak bonuses',abilityKey: 'speed-demon', unlockLevel: 50,  unlockCondition: 'Reach Level 50' },
+  { id: 'avatar_8',  name: 'Marilyn', imageKey: 'marilyn', unlocked: false, cost: 0, rarity: 'Epic',      ability: '+25% coins from games',      abilityKey: 'coin-magnet',  unlockLevel: 75,  unlockCondition: 'Reach Level 75' },
+  { id: 'avatar_9',  name: 'Patty',   imageKey: 'patty',   unlocked: false, cost: 0, rarity: 'Legendary', ability: 'Starts with +20% clarity',   abilityKey: 'blur-buster',  unlockLevel: 100, unlockCondition: 'Reach Level 100'},
+  { id: 'avatar_10', name: 'Sissy',   imageKey: 'sissy',   unlocked: false, cost: 0, rarity: 'Legendary', ability: 'One answer hint each game',  abilityKey: 'ai-oracle',                      unlockCondition: 'Collect 5 Avatars'},
 ];
 
 // ─── Storage keys ──────────────────────────────────────────────────────────
