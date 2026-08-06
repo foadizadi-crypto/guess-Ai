@@ -29,16 +29,30 @@ const BADGE_IMAGES: Record<string, ReturnType<typeof require>> = {
 
 // ─── Avatar PNG images (for avatar collection cards) ──────────────────────────
 const AVATAR_IMAGES: Record<string, ReturnType<typeof require>> = {
-  avatar_1:  require('@/assets/avatars/AKASHA.png'),
-  avatar_2:  require('@/assets/avatars/AUREY.jpg'),
-  avatar_3:  require('@/assets/avatars/CELECTE.png'),
-  avatar_4:  require('@/assets/avatars/EVILA.png'),
-  avatar_5:  require('@/assets/avatars/EVILI.png'),
-  avatar_6:  require('@/assets/avatars/GIA.png'),
-  avatar_7:  require('@/assets/avatars/KOSMOS.png'),
-  avatar_8:  require('@/assets/avatars/LUNA.png'),
-  avatar_9:  require('@/assets/avatars/NOVA.png'),
-  avatar_10: require('@/assets/avatars/ZEPHRE.png'),
+  avatar_1:  require('@/assets/avatar/Abigail.webp'),
+  avatar_2:  require('@/assets/avatar/chlöe.webp'),
+  avatar_3:  require('@/assets/avatar/Daveigh.webp'),
+  avatar_4:  require('@/assets/avatar/Haley.webp'),
+  avatar_5:  require('@/assets/avatar/Heather.webp'),
+  avatar_6:  require('@/assets/avatar/kirsten.webp'),
+  avatar_7:  require('@/assets/avatar/Linda.webp'),
+  avatar_8:  require('@/assets/avatar/Marilyn.webp'),
+  avatar_9:  require('@/assets/avatar/Patty.webp'),
+  avatar_10: require('@/assets/avatar/Sissy.webp'),
+};
+
+// ─── Frame PNG images (for frame collection cards) ────────────────────────────
+const FRAME_IMAGES: Record<string, ReturnType<typeof require>> = {
+  frame_0_simple:    require('@/assets/frames/0-simple.jpg'),
+  frame_1_bronze:    require('@/assets/frames/1-bronze.jpg'),
+  frame_2_silver:    require('@/assets/frames/2-silver.jpg'),
+  frame_3_gold:      require('@/assets/frames/3-gold.jpg'),
+  frame_4_neon:      require('@/assets/frames/4-neon.jpg'),
+  frame_5_galaxy:    require('@/assets/frames/5-galaxy.jpg'),
+  frame_6_diamond:   require('@/assets/frames/6-diamond.jpg'),
+  frame_7_fire:      require('@/assets/frames/7-fire.jpg'),
+  frame_8_animated:  require('@/assets/frames/8-animated.jpg'),
+  frame_9_legendary: require('@/assets/frames/9-legendary.jpg'),
 };
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -167,6 +181,12 @@ const ItemCard: React.FC<CardProps> = ({ item, balance, onAction }) => {
             source={BADGE_IMAGES[item.id]}
             style={[styles.itemImg, { opacity: item.owned ? 1 : 0.35 }]}
             resizeMode="contain"
+          />
+        ) : FRAME_IMAGES[item.id] ? (
+          <Image
+            source={FRAME_IMAGES[item.id]}
+            style={[styles.itemImgRound, { opacity: item.owned ? 1 : 0.4 }]}
+            resizeMode="cover"
           />
         ) : AVATAR_IMAGES[item.id] ? (
           <Image

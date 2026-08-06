@@ -14,7 +14,7 @@ import { calculateXPProgress, formatScore, xpInCurrentLevel, xpForCurrentLevel }
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { username, coins, xp, level, selectedAvatarId, avatars, statistics } = useUserStore();
+  const { username, coins, xp, level, selectedAvatarId, avatars, statistics, equippedCosmetics } = useUserStore();
   const currentAvatar = avatars.find((avatar) => avatar.id === selectedAvatarId);
   const xpInLevel  = xpInCurrentLevel(xp);
   const xpLevelCap = xpForCurrentLevel(level);
@@ -36,7 +36,7 @@ export default function ProfileScreen() {
       <ScrollView contentContainerStyle={[styles.container, { paddingTop: topPad, paddingBottom: bottomPad }]} showsVerticalScrollIndicator={false}>
         <View style={styles.header}><BackButton /><Text style={styles.title}>Profile</Text><View style={styles.spacer} /></View>
         <View style={styles.hero}>
-          <AvatarFrame imageKey={currentAvatar?.imageKey ?? 'wolf'} size={78} showLevel level={level} />
+          <AvatarFrame imageKey={currentAvatar?.imageKey ?? 'abigail'} frameId={equippedCosmetics?.frame} size={78} showLevel level={level} />
           <Text style={styles.username}>{username || 'Player'}</Text>
           <CoinDisplay amount={coins} size="medium" animate />
           <View style={styles.xpWrap}>

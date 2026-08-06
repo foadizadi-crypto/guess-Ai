@@ -113,7 +113,7 @@ export default function LobbyScreen() {
     username, coins, xp, level, selectedAvatarId,
     bestScore, dailyReward, claimDailyReward,
     addCoins, addConsumable,
-    hasNewAchievement,
+    hasNewAchievement, equippedCosmetics,
   } = useUserStore();
   const {
     isDailyAdAvailable,
@@ -331,7 +331,7 @@ export default function LobbyScreen() {
           {/* ── User card ────────────────────────────────────────────────── */}
           <Animated.View style={userCardStyle}>
             <View style={styles.userCard}>
-              <AvatarFrame imageKey={selectedAvatarId} size={56} showLevel level={level} />
+              <AvatarFrame imageKey={selectedAvatarId} frameId={equippedCosmetics?.frame} size={56} showLevel level={level} />
 
               <View style={styles.userInfo}>
                 <Text style={styles.username} numberOfLines={1}>
@@ -372,6 +372,7 @@ export default function LobbyScreen() {
               <Animated.View style={avatarFloatStyle}>
                 <AvatarFrame
                   imageKey={currentAvatar.imageKey}
+                  frameId={equippedCosmetics?.frame}
                   size={88}
                   showLevel
                   level={level}

@@ -148,16 +148,16 @@ export const GEM_AVATARS: CosmeticItem[] = [
 // ─── FRAME COLLECTION (10) ────────────────────────────────────────────────────
 
 export const FRAMES: CosmeticItem[] = [
-  { id: 'frame_bronze',   name: 'Bronze Frame',   type: 'frame', rarity: 'common',    icon: 'ellipse-outline',          price: 0,   currency: 'free',  unlockType: 'level',       unlockLevel: 1,  description: 'Your first frame — earned at level 1' },
-  { id: 'frame_silver',   name: 'Silver Frame',   type: 'frame', rarity: 'common',    icon: 'ellipse-outline',          price: 30,  currency: 'gems',  unlockType: 'shop',                         description: 'Clean silver styling' },
-  { id: 'frame_gold',     name: 'Gold Frame',     type: 'frame', rarity: 'rare',      icon: 'ellipse',                  price: 60,  currency: 'gems',  unlockType: 'shop',                         description: 'The classic gold ring — bold and unmistakable' },
-  { id: 'frame_diamond',  name: 'Diamond Frame',  type: 'frame', rarity: 'epic',      icon: 'diamond-outline',          price: 100, currency: 'gems',  unlockType: 'shop',                         description: 'Refracts light with diamond clarity' },
-  { id: 'frame_neon',     name: 'Neon Frame',     type: 'frame', rarity: 'rare',      icon: 'radio-button-on-outline',  price: 70,  currency: 'gems',  unlockType: 'shop',                         description: 'Glowing neon outlines that pulse with energy' },
-  { id: 'frame_fire',     name: 'Fire Frame',     type: 'frame', rarity: 'epic',      icon: 'flame-outline',            price: 110, currency: 'gems',  unlockType: 'shop',                         description: 'A fiery ring — your answers are unstoppable' },
-  { id: 'frame_ice',      name: 'Ice Frame',      type: 'frame', rarity: 'rare',      icon: 'snow-outline',             price: 80,  currency: 'gems',  unlockType: 'shop',                         description: 'A cool icy border — stay sharp' },
-  { id: 'frame_galaxy',   name: 'Galaxy Frame',   type: 'frame', rarity: 'epic',      icon: 'planet-outline',           price: 130, currency: 'gems',  unlockType: 'shop',                         description: 'Swirling cosmic energy around your avatar' },
-  { id: 'frame_animated', name: 'Animated Frame', type: 'frame', rarity: 'legendary', icon: 'refresh-circle-outline',   price: 220, currency: 'gems',  unlockType: 'shop',                         description: 'A living animated frame — truly one-of-a-kind' },
-  { id: 'frame_royal',    name: 'Royal Frame',    type: 'frame', rarity: 'legendary', icon: 'star-outline',             price: 280, currency: 'gems',  unlockType: 'special',                      description: 'Reserved for the most dedicated players' },
+  { id: 'frame_0_simple',    name: 'Simple Frame',    type: 'frame', rarity: 'common',    icon: 'ellipse-outline',         price: 0,   currency: 'free',  unlockType: 'level',  unlockLevel: 1, description: 'Clean and classic — your first frame' },
+  { id: 'frame_1_bronze',    name: 'Bronze Frame',    type: 'frame', rarity: 'common',    icon: 'ellipse-outline',         price: 30,  currency: 'gems',  unlockType: 'shop',                   description: 'A sturdy bronze border for rising players' },
+  { id: 'frame_2_silver',    name: 'Silver Frame',    type: 'frame', rarity: 'common',    icon: 'ellipse-outline',         price: 50,  currency: 'gems',  unlockType: 'shop',                   description: 'Polished silver — cool under pressure' },
+  { id: 'frame_3_gold',      name: 'Gold Frame',      type: 'frame', rarity: 'rare',      icon: 'ellipse',                 price: 80,  currency: 'gems',  unlockType: 'shop',                   description: 'The classic gold ring — bold and unmistakable' },
+  { id: 'frame_4_neon',      name: 'Neon Frame',      type: 'frame', rarity: 'rare',      icon: 'radio-button-on-outline', price: 100, currency: 'gems',  unlockType: 'shop',                   description: 'Glowing neon outlines that pulse with energy' },
+  { id: 'frame_5_galaxy',    name: 'Galaxy Frame',    type: 'frame', rarity: 'epic',      icon: 'planet-outline',          price: 130, currency: 'gems',  unlockType: 'shop',                   description: 'Swirling cosmic energy around your avatar' },
+  { id: 'frame_6_diamond',   name: 'Diamond Frame',   type: 'frame', rarity: 'epic',      icon: 'diamond-outline',         price: 160, currency: 'gems',  unlockType: 'shop',                   description: 'Refracts light with diamond clarity' },
+  { id: 'frame_7_fire',      name: 'Fire Frame',      type: 'frame', rarity: 'epic',      icon: 'flame-outline',           price: 190, currency: 'gems',  unlockType: 'shop',                   description: 'A fiery ring — your answers are unstoppable' },
+  { id: 'frame_8_animated',  name: 'Animated Frame',  type: 'frame', rarity: 'legendary', icon: 'refresh-circle-outline',  price: 250, currency: 'gems',  unlockType: 'shop',                   description: 'A living animated frame — truly one-of-a-kind' },
+  { id: 'frame_9_legendary', name: 'Legendary Frame', type: 'frame', rarity: 'legendary', icon: 'star-outline',            price: 350, currency: 'gems',  unlockType: 'special',                description: 'Reserved for the absolute elite' },
 ];
 
 // ─── THEME COLLECTION (7) ─────────────────────────────────────────────────────

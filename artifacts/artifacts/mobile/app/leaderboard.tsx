@@ -51,7 +51,7 @@ export default function LeaderboardScreen() {
   const [error, setError]     = useState<string | null>(null);
   const [myRank, setMyRank]   = useState<number | null>(null);
 
-  const { xp, username, level, selectedAvatarId, avatars } = useUserStore();
+  const { xp, username, level, selectedAvatarId, avatars, equippedCosmetics } = useUserStore();
   const currentAvatar = avatars.find((a) => a.id === selectedAvatarId);
 
   // ── Fetch leaderboard from API ─────────────────────────────────────────────
@@ -187,7 +187,8 @@ export default function LeaderboardScreen() {
         <View style={styles.currentCard}>
           <View style={styles.currentIdentity}>
             <AvatarFrame
-              imageKey={currentAvatar?.imageKey ?? 'wolf'}
+              imageKey={currentAvatar?.imageKey ?? 'abigail'}
+              frameId={equippedCosmetics?.frame}
               size={42}
               showLevel
               level={level}

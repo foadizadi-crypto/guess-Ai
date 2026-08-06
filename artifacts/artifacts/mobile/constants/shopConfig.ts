@@ -78,16 +78,16 @@ export const CONSUMABLE_SHOP_ITEMS: UnifiedShopItem[] = [
 
 // ─── Avatars (Coin Shop — cosmetics) ─────────────────────────────────────────
 export const AVATAR_SHOP_ITEMS: UnifiedShopItem[] = [
-  { id: 'avatar_1',  name: 'Alpha Wolf',   description: 'The default hunter — cunning, bold, free.',        icon: 'paw-outline',             category: 'cosmetic', rarity: 'common',    currencyType: 'coins', price: 0,    unlockType: 'shop' },
-  { id: 'avatar_2',  name: 'Time Master',  description: 'Bends time to answer faster.',                     icon: 'time-outline',            category: 'cosmetic', rarity: 'common',    currencyType: 'coins', price: 200,  unlockType: 'shop' },
-  { id: 'avatar_3',  name: 'XP Sage',      description: 'Ancient wisdom powers every level-up.',            icon: 'library-outline',         category: 'cosmetic', rarity: 'rare',      currencyType: 'coins', price: 350,  unlockType: 'shop' },
-  { id: 'avatar_4',  name: 'Visionary',    description: 'Sees through the blur before anyone else.',        icon: 'eye-outline',             category: 'cosmetic', rarity: 'rare',      currencyType: 'coins', price: 500,  unlockType: 'shop' },
-  { id: 'avatar_5',  name: 'Ad Shield',    description: 'Blocks all distractions. Pure focus.',             icon: 'shield-outline',          category: 'cosmetic', rarity: 'rare',      currencyType: 'coins', price: 650,  unlockType: 'shop' },
-  { id: 'avatar_6',  name: 'Lucky Charm',  description: 'Fortune favors the bold — and the lucky.',         icon: 'leaf-outline',            category: 'cosmetic', rarity: 'epic',      currencyType: 'coins', price: 800,  unlockType: 'shop' },
-  { id: 'avatar_7',  name: 'Speed Demon',  description: 'Lightning reflexes. Zero hesitation.',             icon: 'rocket-outline',          category: 'cosmetic', rarity: 'epic',      currencyType: 'coins', price: 950,  unlockType: 'shop' },
-  { id: 'avatar_8',  name: 'Coin Magnet',  description: 'Attracts coins like gravity.',                     icon: 'magnet-outline',          category: 'cosmetic', rarity: 'epic',      currencyType: 'coins', price: 1100, unlockType: 'shop' },
-  { id: 'avatar_9',  name: 'Blur Buster',  description: 'Born to defeat blur. Legendary concentration.',    icon: 'sparkles-outline',        category: 'cosmetic', rarity: 'legendary', currencyType: 'coins', price: 1300, unlockType: 'shop' },
-  { id: 'avatar_10', name: 'AI Oracle',    description: 'The future of quizzing. Answers from beyond.',     icon: 'hardware-chip-outline',   category: 'cosmetic', rarity: 'legendary', currencyType: 'coins', price: 1600, unlockType: 'shop' },
+  { id: 'avatar_1',  name: 'Abigail', description: 'The first — balanced, bold, and always ready.',         icon: 'person-outline',          category: 'cosmetic', rarity: 'common',    currencyType: 'coins', price: 0,    unlockType: 'shop' },
+  { id: 'avatar_2',  name: 'Chlöe',   description: 'Quick wit and sharp focus — bends time to answer.',     icon: 'time-outline',            category: 'cosmetic', rarity: 'common',    currencyType: 'coins', price: 200,  unlockType: 'shop' },
+  { id: 'avatar_3',  name: 'Daveigh', description: 'Ancient wisdom powers every level-up.',                 icon: 'library-outline',         category: 'cosmetic', rarity: 'rare',      currencyType: 'coins', price: 350,  unlockType: 'shop' },
+  { id: 'avatar_4',  name: 'Haley',   description: 'Sees through the blur before anyone else.',             icon: 'eye-outline',             category: 'cosmetic', rarity: 'rare',      currencyType: 'coins', price: 500,  unlockType: 'shop' },
+  { id: 'avatar_5',  name: 'Heather', description: 'Blocks all distractions. Pure focus.',                  icon: 'shield-outline',          category: 'cosmetic', rarity: 'epic',      currencyType: 'coins', price: 650,  unlockType: 'shop' },
+  { id: 'avatar_6',  name: 'Kirsten', description: 'Fortune favors the bold — and the lucky.',              icon: 'leaf-outline',            category: 'cosmetic', rarity: 'epic',      currencyType: 'coins', price: 800,  unlockType: 'shop' },
+  { id: 'avatar_7',  name: 'Linda',   description: 'Lightning reflexes. Zero hesitation.',                  icon: 'rocket-outline',          category: 'cosmetic', rarity: 'epic',      currencyType: 'coins', price: 950,  unlockType: 'shop' },
+  { id: 'avatar_8',  name: 'Marilyn', description: 'Attracts coins like gravity.',                          icon: 'magnet-outline',          category: 'cosmetic', rarity: 'epic',      currencyType: 'coins', price: 1100, unlockType: 'shop' },
+  { id: 'avatar_9',  name: 'Patty',   description: 'Born to defeat blur. Legendary concentration.',         icon: 'sparkles-outline',        category: 'cosmetic', rarity: 'legendary', currencyType: 'coins', price: 1300, unlockType: 'shop' },
+  { id: 'avatar_10', name: 'Sissy',   description: 'The future of quizzing. Answers from beyond.',          icon: 'hardware-chip-outline',   category: 'cosmetic', rarity: 'legendary', currencyType: 'coins', price: 1600, unlockType: 'shop' },
 ];
 
 // ─── Power-ups (Coin Shop — consumables) ─────────────────────────────────────
