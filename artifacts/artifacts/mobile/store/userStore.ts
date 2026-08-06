@@ -31,6 +31,9 @@ import {
   PREMIUM_MISSIONS_PER_DAY,
   PREMIUM_COIN_MULTIPLIER,
   MAX_LEVEL,
+  MAX_ENERGY,
+  ENERGY_REFILL_INTERVAL_MIN,
+  ENERGY_REFILL_GEM_COST,
 } from '@/constants/economy';
 import { calculateLevel, isToday, getTodayUTCString } from '@/utils';
 
@@ -126,6 +129,12 @@ interface UserState {
   canFreeSpin:   () => boolean;
   canExtraSpin:  () => boolean;
   performSpin:   (isFree: boolean) => SpinReward | null;
+  // ── Energy / Stamina ──────────────────────────────────────────────────
+  energy: number;
+  lastEnergyRefillTime: number | null; // Unix ms timestamp when last refill tick was saved
+  tickEnergy: () => void;              // lazy-refill based on elapsed time; call on focus
+  spendEnergy: (amount?: number) => boolean;
+  refillEnergyWithGems: () => boolean;
 }
 
 // ─── Defaults ─────────────────────────────────────────────────────────────
@@ -183,6 +192,8 @@ export const useUserStore = create<UserState>()(
       lastSpinDate:       null,
       extraSpinsToday:    0,
       lastExtraSpinDate:  null,
+      energy:              MAX_ENERGY,
+      lastEnergyRefillTime: null,
       settings: { ...defaultSettings },
       statistics: { ...defaultStatistics },
       dailyXPEarned: 0,
@@ -676,6 +687,44 @@ export const useUserStore = create<UserState>()(
         }));
       },
 
+      // ── Energy / Stamina ──────────────────────────────────────────────────
+
+      tickEnergy: () => {
+        set((s) => {
+          if (s.energy >= MAX_ENERGY) return {};
+          const refillTime = s.lastEnergyRefillTime ?? Date.now();
+          const elapsed = Date.now() - refillTime;
+          const intervalMs = ENERGY_REFILL_INTERVAL_MIN * 60 * 1000;
+          const gained = Math.floor(elapsed / intervalMs);
+          if (gained <= 0) return {};
+          const newEnergy = Math.min(MAX_ENERGY, s.energy + gained);
+          const remainder = elapsed % intervalMs;
+          return {
+            energy: newEnergy,
+            lastEnergyRefillTime: newEnergy >= MAX_ENERGY ? null : Date.now() - remainder,
+          };
+        });
+      },
+
+      spendEnergy: (amount = 1) => {
+        get().tickEnergy();
+        const { energy } = get();
+        if (energy < amount) return false;
+        set((s) => ({
+          energy: s.energy - amount,
+          lastEnergyRefillTime: s.lastEnergyRefillTime ?? Date.now(),
+        }));
+        return true;
+      },
+
+      refillEnergyWithGems: () => {
+        const { gems, energy } = get();
+        if (energy >= MAX_ENERGY) return false;
+        if (gems < ENERGY_REFILL_GEM_COST) return false;
+        set({ gems: gems - ENERGY_REFILL_GEM_COST, energy: MAX_ENERGY, lastEnergyRefillTime: null });
+        return true;
+      },
+
       // ── Phase 3 — Jackpot spin wheel ──────────────────────────────────
 
       canFreeSpin: () => {
@@ -794,6 +843,8 @@ export const useUserStore = create<UserState>()(
           lastSpinDate:      null,
           extraSpinsToday:   0,
           lastExtraSpinDate: null,
+          energy:              MAX_ENERGY,
+          lastEnergyRefillTime: null,
           settings: { ...defaultSettings },
           statistics: { ...defaultStatistics },
           dailyXPEarned: 0,
@@ -838,6 +889,8 @@ export const useUserStore = create<UserState>()(
           dailyXPEarned:           saved.dailyXPEarned            ?? 0,
           dailyXPDate:             saved.dailyXPDate              ?? null,
           isPremium:               saved.isPremium                ?? false,
+          energy:                  saved.energy                   ?? MAX_ENERGY,
+          lastEnergyRefillTime:    saved.lastEnergyRefillTime      ?? null,
         };
       },
     },

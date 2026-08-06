@@ -115,3 +115,9 @@ export const FREE_MISSIONS_PER_DAY      = 3;
 export const PREMIUM_COIN_MULTIPLIER    = 2; // applied to daily login coins
 export const REWARDED_ADS_DAILY_FREE    = 5;
 export const REWARDED_ADS_DAILY_PREMIUM = 10;
+
+// ─── Energy / Stamina ─────────────────────────────────────────────────────────
+// Players start at MAX_ENERGY. Each game costs 1 energy. Energy refills passively.
+export const MAX_ENERGY                    = 120; // full bar
+export const ENERGY_REFILL_INTERVAL_MIN    = 6;   // 1 energy every 6 minutes (full in 12 h)
+export const ENERGY_REFILL_GEM_COST        = 30;  // gems to instantly refill to max

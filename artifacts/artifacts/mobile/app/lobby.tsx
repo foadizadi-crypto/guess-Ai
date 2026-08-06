@@ -3,8 +3,14 @@
  *
  * Layout: full-screen, no scroll.
  *   • Header bar   — avatar chip + username, currency pills, settings
- *   • Hero section — game title / floating avatar / right nav column / PLAY
+ *   • Hero section — game title / floating hero frame + avatar / right nav / PLAY
  *   • Bottom bar   — 5 nav tabs
+ *
+ * Features added:
+ *   • Energy system — ⚡ pill shows current/max; PLAY is gated by energy
+ *   • Daily reward auto-pop on focus when unclaimed
+ *   • Spin FAB appears when free spin is ready
+ *   • Hero avatar displayed with heroMode AvatarFrame (frame wings visible)
  */
 import React, { useEffect, useCallback, useState } from 'react';
 import {
@@ -37,7 +43,8 @@ import { useUserStore } from '@/store/userStore';
 import { useAudio } from '@/hooks/useAudio';
 import { ROUTES } from '@/navigation/routes';
 import { isToday } from '@/utils';
-import { DEFAULT_AVATARS } from '@/constants';
+import { DEFAULT_AVATARS, DAILY_REWARDS } from '@/constants';
+import { MAX_ENERGY } from '@/constants/economy';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
@@ -48,6 +55,7 @@ const PURPLE_DARK = '#3B0764';
 const PURPLE_LT   = '#A78BFA';
 const GOLD        = '#FFD700';
 const BLUE_NEON   = '#38BDF8';
+const GREEN       = '#4ADE80';
 const BG          = '#02000A';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -57,6 +65,21 @@ function formatNum(n: number): string {
   return String(n);
 }
 
+/** Compute the reward coins for today's unclaimed daily reward */
+function computeTodayReward(streak: number, lastClaimed: string | null): number {
+  const isConsecutive =
+    lastClaimed !== null &&
+    (() => {
+      const last = new Date(lastClaimed);
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      return last.toDateString() === yesterday.toDateString();
+    })();
+  const newStreak = isConsecutive ? streak + 1 : 1;
+  const cycleDay  = ((newStreak - 1) % 7) + 1;
+  return (DAILY_REWARDS as any)[cycleDay - 1]?.coins ?? 15;
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 /** Top-bar currency pill */
@@ -64,12 +87,17 @@ const Pill: React.FC<{
   icon: React.ComponentProps<typeof Ionicons>['name'];
   color: string;
   val: string;
+  badge?: boolean;
   onPress: () => void;
-}> = ({ icon, color, val, onPress }) => (
+}> = ({ icon, color, val, badge, onPress }) => (
   <TouchableOpacity style={[styles.pill, { borderColor: `${color}40` }]} onPress={onPress} activeOpacity={0.75}>
     <Ionicons name={icon} size={12} color={color} />
     <Text style={[styles.pillVal, { color }]}>{val}</Text>
-    <Ionicons name="add-circle" size={12} color={`${color}90`} />
+    {badge ? (
+      <View style={styles.pillBadge} />
+    ) : (
+      <Ionicons name="add-circle" size={12} color={`${color}90`} />
+    )}
   </TouchableOpacity>
 );
 
@@ -127,7 +155,8 @@ export default function LobbyScreen() {
   const {
     username, coins, gems, level, selectedAvatarId,
     dailyReward, claimDailyReward,
-    hasNewAchievement, equippedCosmetics, powerUps,
+    hasNewAchievement, equippedCosmetics,
+    energy, tickEnergy, spendEnergy, canFreeSpin,
   } = useUserStore();
   const { playMusic, stopMusic } = useAudio();
 
@@ -138,21 +167,41 @@ export default function LobbyScreen() {
 
   const [dailyModal,   setDailyModal]   = useState(false);
   const [dailyClaimed, setDailyClaimed] = useState(isToday(dailyReward.lastClaimed));
+  const [spinReady,    setSpinReady]    = useState(false);
 
-  // ── Animations ─────────────────────────────────────────────────────────────
+  // ── On focus: tick energy, check spin/daily availability ────────────────────
+  useFocusEffect(useCallback(() => {
+    tickEnergy();
+    setSpinReady(canFreeSpin());
+    const claimed = isToday(dailyReward.lastClaimed);
+    setDailyClaimed(claimed);
+    // Auto-pop daily reward modal after a short entrance delay
+    if (!claimed) {
+      const t = setTimeout(() => setDailyModal(true), 900);
+      return () => clearTimeout(t);
+    }
+  }, [dailyReward.lastClaimed, tickEnergy, canFreeSpin]));
+
+  // ── Periodic energy tick (every 60 s while lobby is visible) ────────────────
+  useEffect(() => {
+    const id = setInterval(() => tickEnergy(), 60_000);
+    return () => clearInterval(id);
+  }, [tickEnergy]);
+
+  // ── Animations ──────────────────────────────────────────────────────────────
   const headerOp  = useSharedValue(0);
   const heroOp    = useSharedValue(0);
   const heroY     = useSharedValue(24);
   const playPulse = useSharedValue(1);
   const avatarY   = useSharedValue(0);
   const ringOp    = useSharedValue(0.55);
+  const spinPulse = useSharedValue(1);
 
   useEffect(() => {
     headerOp.value = withTiming(1, { duration: 480 });
     heroOp.value   = withDelay(200, withTiming(1, { duration: 520 }));
     heroY.value    = withDelay(200, withTiming(0, { duration: 520, easing: Easing.out(Easing.cubic) }));
 
-    // Avatar float
     avatarY.value = withDelay(700, withRepeat(
       withSequence(
         withTiming(-10, { duration: 2400, easing: Easing.inOut(Easing.sin) }),
@@ -160,7 +209,6 @@ export default function LobbyScreen() {
       ), -1, false,
     ));
 
-    // PLAY pulse
     playPulse.value = withDelay(900, withRepeat(
       withSequence(
         withTiming(1.05, { duration: 1200, easing: Easing.inOut(Easing.sin) }),
@@ -168,13 +216,19 @@ export default function LobbyScreen() {
       ), -1, false,
     ));
 
-    // Platform ring breathe
     ringOp.value = withRepeat(
       withSequence(
         withTiming(0.95, { duration: 1800 }),
         withTiming(0.35, { duration: 1800 }),
       ), -1, false,
     );
+
+    spinPulse.value = withDelay(400, withRepeat(
+      withSequence(
+        withTiming(1.08, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+        withTiming(1,    { duration: 900, easing: Easing.inOut(Easing.sin) }),
+      ), -1, false,
+    ));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Hardware back ───────────────────────────────────────────────────────────
@@ -195,17 +249,44 @@ export default function LobbyScreen() {
     router.push(route as any); // eslint-disable-line @typescript-eslint/no-explicit-any
   }, [router]);
 
+  // ── PLAY — gated by energy ───────────────────────────────────────────────────
+  const handlePlay = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const ok = spendEnergy(1);
+    if (!ok) {
+      Alert.alert(
+        '⚡ No Energy',
+        `Energy refills 1 point every 6 minutes (max ${MAX_ENERGY}). Refill instantly with gems in the Shop.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: '💎 Shop', onPress: () => nav(ROUTES.SHOP) },
+        ],
+      );
+      return;
+    }
+    router.push(ROUTES.LEVEL_SELECT as any);
+  }, [spendEnergy, nav, router]);
+
   // ── Animated styles ─────────────────────────────────────────────────────────
   const headerStyle = useAnimatedStyle(() => ({ opacity: headerOp.value }));
   const heroStyle   = useAnimatedStyle(() => ({ opacity: heroOp.value, transform: [{ translateY: heroY.value }] }));
   const playStyle   = useAnimatedStyle(() => ({ transform: [{ scale: playPulse.value }] }));
   const avatarStyle = useAnimatedStyle(() => ({ transform: [{ translateY: avatarY.value }] }));
   const ringStyle   = useAnimatedStyle(() => ({ opacity: ringOp.value }));
+  const spinStyle   = useAnimatedStyle(() => ({ transform: [{ scale: spinPulse.value }] }));
 
   const avatar  = DEFAULT_AVATARS.find((a) => a.id === selectedAvatarId) ?? DEFAULT_AVATARS[0];
-  const hints   = powerUps?.hint ?? 0;
   const topPad  = Platform.OS === 'web' ? 16 : insets.top;
   const botPad  = Platform.OS === 'web' ? 0  : insets.bottom;
+
+  // Hero avatar size — larger to make the frame frame prominent
+  const heroAvatarSize = SH > 750 ? 130 : 108;
+
+  // Today's unclaimed reward amount (computed fresh so it's accurate)
+  const todayRewardCoins = computeTodayReward(dailyReward.streak, dailyReward.lastClaimed);
+
+  // Energy display
+  const energyColor = energy <= 10 ? '#FF4444' : energy <= 40 ? '#FFB020' : PURPLE_LT;
 
   return (
     <View style={[styles.root, { paddingTop: topPad }]}>
@@ -235,9 +316,16 @@ export default function LobbyScreen() {
 
         {/* Right: currencies */}
         <View style={styles.currRow}>
-          <Pill icon="logo-usd"  color={GOLD}      val={formatNum(coins)} onPress={() => nav(ROUTES.SHOP)} />
-          <Pill icon="diamond"   color={BLUE_NEON}  val={formatNum(gems)}  onPress={() => nav(ROUTES.SHOP)} />
-          <Pill icon="flash"     color={PURPLE_LT}  val={String(hints)}    onPress={() => nav(ROUTES.SHOP)} />
+          <Pill icon="logo-usd"  color={GOLD}        val={formatNum(coins)} onPress={() => nav(ROUTES.SHOP)} />
+          <Pill icon="diamond"   color={BLUE_NEON}   val={formatNum(gems)}  onPress={() => nav(ROUTES.SHOP)} />
+          {/* Energy pill — shows current/max; red when low */}
+          <Pill
+            icon="flash"
+            color={energyColor}
+            val={`${energy}/${MAX_ENERGY}`}
+            badge={energy <= 10}
+            onPress={() => nav(ROUTES.SHOP)}
+          />
           <TouchableOpacity style={styles.gearBtn} onPress={() => nav(ROUTES.SETTINGS)}>
             <Ionicons name="settings-outline" size={18} color={PURPLE_LT} />
           </TouchableOpacity>
@@ -262,14 +350,15 @@ export default function LobbyScreen() {
 
           {/* Avatar + platform */}
           <View style={styles.avatarStage}>
-            {/* Floating avatar */}
+            {/* Floating hero avatar — heroMode lets frame wings extend outward */}
             <Animated.View style={[styles.avatarWrap, avatarStyle]}>
               <AvatarFrame
                 imageKey={avatar.imageKey}
                 frameId={equippedCosmetics?.frame}
-                size={SH > 750 ? 108 : 88}
+                size={heroAvatarSize}
                 showLevel
                 level={level}
+                heroMode
               />
             </Animated.View>
 
@@ -277,13 +366,34 @@ export default function LobbyScreen() {
             <Animated.View style={[styles.ring1, ringStyle]} />
             <View style={styles.ring2} />
             <View style={styles.ring3} />
+
+            {/* Spin FAB — glows gold when a free spin is ready */}
+            {spinReady && (
+              <Animated.View style={[styles.spinFab, spinStyle]}>
+                <TouchableOpacity
+                  style={styles.spinFabBtn}
+                  onPress={() => nav(ROUTES.SPIN)}
+                  activeOpacity={0.85}
+                >
+                  <LinearGradient
+                    colors={[GOLD, '#B45309']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.spinFabGrad}
+                  >
+                    <Ionicons name="refresh-circle" size={14} color="#000" />
+                    <Text style={styles.spinFabText}>SPIN</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Animated.View>
+            )}
           </View>
 
           {/* PLAY button */}
           <Animated.View style={[styles.playWrap, playStyle]}>
             <TouchableOpacity
               style={styles.playOuter}
-              onPress={() => nav(ROUTES.LEVEL_SELECT)}
+              onPress={handlePlay}
               activeOpacity={0.85}
               testID="play-button"
             >
@@ -301,6 +411,14 @@ export default function LobbyScreen() {
 
                 <Ionicons name="diamond" size={18} color={GOLD} />
                 <Text style={styles.playText}>PLAY</Text>
+
+                {/* Energy indicator inside PLAY button */}
+                <View style={styles.playEnergy}>
+                  <Ionicons name="flash" size={10} color={energyColor} />
+                  <Text style={[styles.playEnergyText, { color: energyColor }]}>
+                    {energy}/{MAX_ENERGY}
+                  </Text>
+                </View>
               </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
@@ -319,17 +437,18 @@ export default function LobbyScreen() {
 
       {/* ── Bottom nav bar ─────────────────────────────────────────────── */}
       <View style={[styles.bottomBar, { paddingBottom: botPad + 6 }]}>
-        <BotBtn icon="cart"   label="SHOP"         onPress={() => nav(ROUTES.SHOP)} />
-        <BotBtn icon="person" label="PROFILE"      onPress={() => nav(ROUTES.PROFILE)} />
-        <BotBtn icon="ribbon" label="ACHIEVEMENTS" onPress={() => nav(ROUTES.ACHIEVEMENTS)} badge={hasNewAchievement} center />
-        <BotBtn icon="people" label="FRIENDS"      onPress={() => nav(ROUTES.COLLECTIONS)} />
-        <BotBtn icon="trophy" label="LEADERBOARD"  onPress={() => nav(ROUTES.LEADERBOARD)} />
+        {/* SPIN tab gets a green badge when free spin is available */}
+        <BotBtn icon="cart"        label="SHOP"         onPress={() => nav(ROUTES.SHOP)} />
+        <BotBtn icon="sync-circle" label="SPIN"         onPress={() => nav(ROUTES.SPIN)} badge={spinReady} />
+        <BotBtn icon="ribbon"      label="ACHIEVEMENTS" onPress={() => nav(ROUTES.ACHIEVEMENTS)} badge={hasNewAchievement} center />
+        <BotBtn icon="calendar"    label="DAILY"        onPress={() => setDailyModal(true)} badge={!dailyClaimed} />
+        <BotBtn icon="trophy"      label="LEADERBOARD"  onPress={() => nav(ROUTES.LEADERBOARD)} />
       </View>
 
       {/* Daily reward modal */}
       <DailyRewardModal
         visible={dailyModal}
-        amount={150}
+        amount={todayRewardCoins}
         streak={dailyReward.streak}
         alreadyClaimed={dailyClaimed}
         onClaim={() => { claimDailyReward(); setDailyClaimed(true); }}
@@ -359,7 +478,6 @@ const styles = StyleSheet.create({
     height: SH * 0.45,
     borderRadius: 9999,
     backgroundColor: 'rgba(109, 40, 217, 0.13)',
-    // soft glow at the top
     shadowColor: PURPLE,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
@@ -405,7 +523,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    maxWidth: SW * 0.4,
+    maxWidth: SW * 0.38,
   },
   chipFrame: { borderRadius: 20, overflow: 'hidden' },
   chipName: {
@@ -418,7 +536,7 @@ const styles = StyleSheet.create({
   currRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   pill: {
     flexDirection: 'row',
@@ -427,13 +545,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(30,0,60,0.8)',
     borderWidth: 1,
     borderRadius: 14,
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 4,
   },
   pillVal: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 11,
+    fontSize: 10,
     letterSpacing: 0.2,
+  },
+  pillBadge: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#FF1744',
   },
   gearBtn: {
     width: 32,
@@ -504,13 +628,13 @@ const styles = StyleSheet.create({
   },
   avatarWrap: {
     zIndex: 10,
-    // Glow behind avatar
     shadowColor: PURPLE,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.9,
     shadowRadius: 30,
     elevation: 20,
   },
+
   // Platform rings
   ring1: {
     position: 'absolute',
@@ -549,6 +673,39 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(56,189,248,0.15)',
   },
 
+  // Spin FAB
+  spinFab: {
+    position: 'absolute',
+    top: '8%',
+    right: 0,
+    zIndex: 20,
+  },
+  spinFabBtn: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: GOLD,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 10,
+    elevation: 12,
+    borderWidth: 1.5,
+    borderColor: GOLD,
+    borderRadius: 20,
+  },
+  spinFabGrad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  spinFabText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+    letterSpacing: 1,
+    color: '#000',
+  },
+
   // PLAY button
   playWrap: {
     width: '80%',
@@ -565,10 +722,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   playGrad: {
-    paddingVertical: SH > 750 ? 18 : 14,
+    paddingVertical: SH > 750 ? 14 : 10,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 2,
     position: 'relative',
   },
   playText: {
@@ -580,6 +737,17 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(255,255,255,0.4)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 8,
+  },
+  playEnergy: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 1,
+  },
+  playEnergyText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.5,
   },
   // Corner hex accent decorations
   hexCorner: {
@@ -659,7 +827,7 @@ const styles = StyleSheet.create({
   },
   botBtnCenter: {
     flex: 1.2,
-    marginTop: -14, // pop up above bar
+    marginTop: -14,
   },
   botBtnCenterGrad: {
     width: 52,

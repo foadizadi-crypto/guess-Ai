@@ -6,16 +6,21 @@ import { Typography } from '@/theme/typography';
 
 interface AvatarFrameProps {
   imageKey?: string;
-  frameId?: string;           // equipped frame cosmetic id, e.g. 'frame_3_gold'
+  frameId?: string;     // equipped frame cosmetic id, e.g. 'frame_3_gold'
   level?: number;
   size?: number;
   style?: ViewStyle;
   showLevel?: boolean;
   locked?: boolean;
+  /**
+   * heroMode — renders the frame image at 1.75× the avatar size so decorative
+   * "wing" elements extend beyond the portrait circle, matching the reference design.
+   * Has no effect when no frameId is supplied.
+   */
+  heroMode?: boolean;
 }
 
 // ─── Avatar PNG map ────────────────────────────────────────────────────────────
-// Keyed by both avatar_N id AND the imageKey string (DEFAULT_AVATARS.imageKey)
 const AVATAR_IMAGES: Record<string, ReturnType<typeof require>> = {
   // by imageKey
   abigail: require('@/assets/avatar/Abigail.webp'),
@@ -55,6 +60,9 @@ const FRAME_IMAGES: Record<string, ReturnType<typeof require>> = {
   frame_9_legendary: require('@/assets/frames/9-legendary.jpg'),
 };
 
+// Scale factor for hero mode — how much larger the frame renders vs the avatar
+const HERO_SCALE = 1.75;
+
 export const AvatarFrame: React.FC<AvatarFrameProps> = ({
   imageKey = 'abigail',
   frameId,
@@ -63,75 +71,99 @@ export const AvatarFrame: React.FC<AvatarFrameProps> = ({
   style,
   showLevel = false,
   locked = false,
+  heroMode = false,
 }) => {
-  const frameSize = size + 8;
-  const borderRadius = frameSize / 2;
   const avatarSource = AVATAR_IMAGES[imageKey];
-  const frameSource = frameId ? FRAME_IMAGES[frameId] : undefined;
-  const borderColor = locked
+  const frameSource  = frameId ? FRAME_IMAGES[frameId] : undefined;
+
+  // In heroMode with a frame image, the container expands to heroScale×size so
+  // wing/crown decorations can extend beyond the portrait circle.
+  const useHero     = heroMode && !!frameSource && !locked;
+  const containerSz = useHero ? Math.round(size * HERO_SCALE) : size + 8;
+  // Avatar sits centred inside the container
+  const avatarInset = Math.round((containerSz - size) / 2);
+
+  const ringColor = locked
     ? GameColors.textSecondary
     : frameSource
-      ? 'transparent'         // frame image replaces the solid border
+      ? 'transparent'   // frame image replaces the solid border
       : GameColors.accentGold;
 
   return (
-    <View style={[{ width: frameSize, height: frameSize }, style]}>
-      {/* Gold ring / frame image */}
-      <View
-        style={[
-          styles.frame,
-          {
-            width: frameSize,
-            height: frameSize,
-            borderRadius,
-            borderColor,
-          },
-        ]}
-      >
-        {/* Avatar circle */}
-        <View
-          style={[
-            styles.avatar,
-            {
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-              backgroundColor: locked
-                ? 'rgba(176,176,176,0.15)'
-                : 'rgba(255,215,0,0.12)',
-              overflow: 'hidden',
-            },
-          ]}
-        >
-          {locked ? (
-            <Ionicons name="lock-closed" size={size * 0.45} color={GameColors.textSecondary} />
-          ) : avatarSource ? (
-            <Image
-              source={avatarSource}
-              style={{ width: size, height: size, borderRadius: size / 2 }}
-              resizeMode="cover"
-            />
-          ) : (
-            <Ionicons name="person" size={size * 0.55} color={GameColors.accentGold} />
-          )}
-        </View>
+    <View style={[{ width: containerSz, height: containerSz }, style]}>
 
-        {/* Frame overlay (rendered on top of the avatar circle) */}
-        {frameSource && !locked && (
+      {/* ── Avatar circle ────────────────────────────────────────────── */}
+      <View
+        style={{
+          position: 'absolute',
+          left: avatarInset,
+          top:  avatarInset,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: locked
+            ? 'rgba(176,176,176,0.15)'
+            : 'rgba(255,215,0,0.12)',
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {locked ? (
+          <Ionicons name="lock-closed" size={size * 0.45} color={GameColors.textSecondary} />
+        ) : avatarSource ? (
           <Image
-            source={frameSource}
-            style={[
-              StyleSheet.absoluteFillObject,
-              { borderRadius, width: frameSize, height: frameSize },
-            ]}
+            source={avatarSource}
+            style={{ width: size, height: size, borderRadius: size / 2 }}
             resizeMode="cover"
           />
+        ) : (
+          <Ionicons name="person" size={size * 0.55} color={GameColors.accentGold} />
         )}
       </View>
 
-      {/* Level badge */}
+      {/* ── Gold ring — shown when there is no frame image ───────────── */}
+      {!frameSource && !locked && (
+        <View
+          style={[
+            styles.ring,
+            {
+              left: 0,
+              top:  0,
+              width:        containerSz,
+              height:       containerSz,
+              borderRadius: containerSz / 2,
+              borderColor:  ringColor,
+            },
+          ]}
+          pointerEvents="none"
+        />
+      )}
+
+      {/* ── Frame image overlay ──────────────────────────────────────── */}
+      {frameSource && !locked && (
+        <Image
+          source={frameSource}
+          style={{
+            position: 'absolute',
+            width:    containerSz,
+            height:   containerSz,
+            top:  0,
+            left: 0,
+          }}
+          // 'contain' in heroMode keeps the full decoration visible without cropping
+          resizeMode={useHero ? 'contain' : 'cover'}
+        />
+      )}
+
+      {/* ── Level badge ──────────────────────────────────────────────── */}
       {showLevel && level !== undefined && (
-        <View style={styles.levelBadge}>
+        <View
+          style={[
+            styles.levelBadge,
+            { bottom: avatarInset - 6, right: avatarInset - 6 },
+          ]}
+        >
           <Text style={styles.levelText}>{level}</Text>
         </View>
       )}
@@ -140,24 +172,17 @@ export const AvatarFrame: React.FC<AvatarFrameProps> = ({
 };
 
 const styles = StyleSheet.create({
-  frame: {
+  ring: {
+    position: 'absolute',
     borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
     shadowColor: GameColors.accentGold,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 4,
   },
-  avatar: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   levelBadge: {
     position: 'absolute',
-    bottom: -2,
-    right: -2,
     backgroundColor: GameColors.accentGold,
     borderRadius: 10,
     minWidth: 20,

@@ -2,3 +2,4 @@
 - [Native module platform split](native-module-platform-split.md) — Packages like AdMob/IAP must use .native.ts + .ts Metro split; runtime Platform guards don't prevent bundling on web.
 - [Expo Go crash diagnosis](expo-go-crash-diagnosis.md) — "Failed to download remote update" = Metro bundling error (check workflow logs); blue "Something went wrong" = native module missing from Expo Go.
 - [BlurQuiz component props](blurquiz-component-props.md) — CoinDisplay uses `amount` prop (not `coins`); firestoreService edits must be appended at true file end, never mid-function.
+- [Energy system design](energy-system.md) — lazy-refill pattern; tickEnergy() must be called on focus; spendEnergy() calls tick internally before checking.
