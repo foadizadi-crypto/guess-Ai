@@ -44,7 +44,7 @@ import { useAudio } from '@/hooks/useAudio';
 import { ROUTES } from '@/navigation/routes';
 import { isToday } from '@/utils';
 import { DEFAULT_AVATARS, DAILY_REWARDS } from '@/constants';
-import { MAX_ENERGY, STAMINA_PER_GAME, STAMINA_AD_REWARD, STAMINA_ADS_PER_DAY } from '@/constants/economy';
+import { MAX_ENERGY, STAMINA_PER_GAME, STAMINA_AD_REWARD, STAMINA_ADS_PER_DAY, ENERGY_REFILL_INTERVAL_MIN } from '@/constants/economy';
 import { useAdStore } from '@/store/adStore';
 
 const { width: SW, height: SH } = Dimensions.get('window');
@@ -157,7 +157,7 @@ export default function LobbyScreen() {
     username, coins, gems, level, selectedAvatarId,
     dailyReward, claimDailyReward,
     hasNewAchievement, equippedCosmetics,
-    energy, tickEnergy, spendEnergy, addStamina, canFreeSpin,
+    energy, staminaReserve, tickEnergy, spendEnergy, addStamina, canFreeSpin,
   } = useUserStore();
   const {
     showRewarded,
@@ -265,8 +265,11 @@ export default function LobbyScreen() {
     if (!ok) {
       Alert.alert(
         '⚡ Not Enough Stamina',
-        `Each round costs ${STAMINA_PER_GAME} stamina (max ${MAX_ENERGY}). ` +
-        `Stamina refills 1 point every 10 minutes, or watch an ad for +${STAMINA_AD_REWARD}.`,
+        `Each round costs ${STAMINA_PER_GAME} stamina.\n\n` +
+        `⚡ Active: ${energy}/${MAX_ENERGY}` +
+        (staminaReserve > 0 ? `\n📦 Reserve: ${staminaReserve}` : '') +
+        `\n\nActive stamina refills 1 point every ${ENERGY_REFILL_INTERVAL_MIN} minutes, ` +
+        `or watch an ad to add ${STAMINA_AD_REWARD} to your reserve.`,
         [
           { text: 'OK', style: 'cancel' },
           { text: '💎 Shop', onPress: () => nav(ROUTES.SHOP) },
@@ -312,8 +315,11 @@ export default function LobbyScreen() {
   // Today's unclaimed reward amount (computed fresh so it's accurate)
   const todayRewardCoins = computeTodayReward(dailyReward.streak, dailyReward.lastClaimed);
 
-  // Energy display — thresholds tuned for MAX_ENERGY=50
-  const energyColor = energy < STAMINA_PER_GAME ? '#FF4444' : energy <= 20 ? '#FFB020' : PURPLE_LT;
+  // Active stamina colour — based on whether active alone covers a round
+  const energyColor =
+    energy < STAMINA_PER_GAME && staminaReserve < STAMINA_PER_GAME ? '#FF4444' :
+    energy < STAMINA_PER_GAME ? '#FFB020' :
+    energy <= 20              ? '#FFB020' : PURPLE_LT;
 
   // Stamina-ad remaining count
   const today = new Date().toISOString().slice(0, 10);
@@ -350,14 +356,25 @@ export default function LobbyScreen() {
         <View style={styles.currRow}>
           <Pill icon="logo-usd"  color={GOLD}        val={formatNum(coins)} onPress={() => nav(ROUTES.SHOP)} />
           <Pill icon="diamond"   color={BLUE_NEON}   val={formatNum(gems)}  onPress={() => nav(ROUTES.SHOP)} />
-          {/* Energy pill — shows current/max; red when low */}
+          {/* ⚡ Active stamina pill — shows active/max */}
           <Pill
             icon="flash"
             color={energyColor}
             val={`${energy}/${MAX_ENERGY}`}
-            badge={energy <= 10}
+            badge={energy < STAMINA_PER_GAME}
             onPress={() => nav(ROUTES.SHOP)}
           />
+          {/* 📦 Reserve pill — only shown when reserve > 0 */}
+          {staminaReserve > 0 && (
+            <TouchableOpacity
+              style={[styles.pill, styles.reservePill]}
+              onPress={() => nav(ROUTES.SHOP)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.reservePillIcon}>📦</Text>
+              <Text style={styles.reservePillText}>{staminaReserve}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.gearBtn} onPress={() => nav(ROUTES.SETTINGS)}>
             <Ionicons name="settings-outline" size={18} color={PURPLE_LT} />
           </TouchableOpacity>
@@ -448,7 +465,9 @@ export default function LobbyScreen() {
                 <View style={styles.playEnergy}>
                   <Ionicons name="flash" size={10} color={energyColor} />
                   <Text style={[styles.playEnergyText, { color: energyColor }]}>
-                    {energy}/{MAX_ENERGY} · {STAMINA_PER_GAME}/round
+                    {energy}/{MAX_ENERGY}
+                    {staminaReserve > 0 ? ` + 📦${staminaReserve}` : ''}
+                    {' · '}{STAMINA_PER_GAME}/round
                   </Text>
                 </View>
               </LinearGradient>
@@ -904,6 +923,22 @@ const styles = StyleSheet.create({
     fontSize: 8,
     letterSpacing: 0.7,
     textAlign: 'center',
+  },
+
+  // ── Stamina reserve pill (header) ────────────────────────────────────────
+  reservePill: {
+    backgroundColor: 'rgba(167,139,250,0.12)',
+    borderColor: 'rgba(167,139,250,0.35)',
+    gap: 3,
+  },
+  reservePillIcon: {
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  reservePillText: {
+    color: '#A78BFA',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
   },
 
   // ── Watch-ad stamina button (below PLAY) ──────────────────────────────────

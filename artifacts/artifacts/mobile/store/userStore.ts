@@ -132,10 +132,17 @@ interface UserState {
   canExtraSpin:  () => boolean;
   performSpin:   (isFree: boolean) => SpinReward | null;
   // ── Energy / Stamina ──────────────────────────────────────────────────
+  //
+  // Active stamina (energy): 0–MAX_ENERGY. Refills passively at 1/10 min.
+  // Stamina reserve: uncapped. Holds purchased/rewarded/ad stamina.
+  // Consumption priority: active first; when active = 0, drain from reserve.
+  // Purchased/rewarded stamina always goes into reserve, never directly into active.
   energy: number;
+  staminaReserve: number;              // uncapped reserve — purchased/rewarded stamina
   lastEnergyRefillTime: number | null; // Unix ms timestamp when last refill tick was saved
   tickEnergy: () => void;              // lazy-refill based on elapsed time; call on focus
   spendEnergy: (amount?: number) => boolean;
+  /** Add stamina to the reserve (not directly to active). */
   addStamina: (amount: number) => void;
   refillEnergyWithGems: () => boolean;
   // ── Gem packs (spendable bundles) ─────────────────────────────────────
@@ -197,7 +204,8 @@ export const useUserStore = create<UserState>()(
       lastSpinDate:       null,
       extraSpinsToday:    0,
       lastExtraSpinDate:  null,
-      energy:              MAX_ENERGY,
+      energy:               MAX_ENERGY,
+      staminaReserve:       0,
       lastEnergyRefillTime: null,
       settings: { ...defaultSettings },
       statistics: { ...defaultStatistics },
@@ -695,17 +703,26 @@ export const useUserStore = create<UserState>()(
       },
 
       // ── Energy / Stamina ──────────────────────────────────────────────────
+      //
+      // ARCHITECTURE:
+      //   active (energy)   — 0..MAX_ENERGY, refills passively at 1/10 min
+      //   reserve           — uncapped, holds purchased / rewarded / ad stamina
+      //
+      // Consumption priority: deduct from active first.
+      //   If active reaches 0 and more is needed, drain reserve.
+      // Incoming stamina (rewards/ads/packs) always enters reserve, never active.
+      // The passive refill only fills active; reserve is untouched by time.
 
       tickEnergy: () => {
         set((s) => {
           if (s.energy >= MAX_ENERGY) return {};
           const refillTime = s.lastEnergyRefillTime ?? Date.now();
-          const elapsed = Date.now() - refillTime;
+          const elapsed    = Date.now() - refillTime;
           const intervalMs = ENERGY_REFILL_INTERVAL_MIN * 60 * 1000;
-          const gained = Math.floor(elapsed / intervalMs);
+          const gained     = Math.floor(elapsed / intervalMs);
           if (gained <= 0) return {};
-          const newEnergy = Math.min(MAX_ENERGY, s.energy + gained);
-          const remainder = elapsed % intervalMs;
+          const newEnergy  = Math.min(MAX_ENERGY, s.energy + gained);
+          const remainder  = elapsed % intervalMs;
           return {
             energy: newEnergy,
             lastEnergyRefillTime: newEnergy >= MAX_ENERGY ? null : Date.now() - remainder,
@@ -714,26 +731,35 @@ export const useUserStore = create<UserState>()(
       },
 
       spendEnergy: (amount = STAMINA_PER_GAME) => {
+        // Tick passive refill before checking balance
         get().tickEnergy();
-        const { energy } = get();
-        if (energy < amount) return false;
-        set((s) => ({
-          energy: s.energy - amount,
-          // Start refill clock the first time energy drops below max
-          lastEnergyRefillTime: s.lastEnergyRefillTime ?? Date.now(),
-        }));
+        const { energy, staminaReserve } = get();
+        const total = energy + staminaReserve;
+        if (total < amount) return false;          // can't afford even with reserve
+
+        set((s) => {
+          if (s.energy >= amount) {
+            // Happy path: active stamina covers the full cost
+            const newEnergy = s.energy - amount;
+            return {
+              energy: newEnergy,
+              lastEnergyRefillTime: s.lastEnergyRefillTime ?? Date.now(),
+            };
+          }
+          // Active ran dry — use it all, then pull the rest from reserve
+          const fromReserve = amount - s.energy;
+          return {
+            energy: 0,
+            staminaReserve: s.staminaReserve - fromReserve,
+            lastEnergyRefillTime: s.lastEnergyRefillTime ?? Date.now(),
+          };
+        });
         return true;
       },
 
+      /** Incoming stamina (ads, events, rewards) goes into reserve — never active. */
       addStamina: (amount) => {
-        set((s) => {
-          const newEnergy = Math.min(MAX_ENERGY, s.energy + amount);
-          return {
-            energy: newEnergy,
-            // If now at max, clear the clock; otherwise keep it running
-            lastEnergyRefillTime: newEnergy >= MAX_ENERGY ? null : s.lastEnergyRefillTime,
-          };
-        });
+        set((s) => ({ staminaReserve: s.staminaReserve + amount }));
       },
 
       refillEnergyWithGems: () => {
@@ -752,8 +778,8 @@ export const useUserStore = create<UserState>()(
         if (gems < pack.gemCost) return false;
 
         set((state) => {
-          // Stamina: addStamina logic inline (capped at MAX_ENERGY)
-          const newEnergy = Math.min(MAX_ENERGY, state.energy + pack.stamina);
+          // Pack stamina goes into reserve — not active (reserve is uncapped)
+          const newReserve = state.staminaReserve + pack.stamina;
 
           // Grant cosmetics from the pack (mark owned but not equipped)
           const newOwned = { ...state.ownedCosmetics };
@@ -762,10 +788,9 @@ export const useUserStore = create<UserState>()(
           }
 
           return {
-            gems: state.gems - pack.gemCost,
-            coins: state.coins + pack.coins,
-            energy: newEnergy,
-            lastEnergyRefillTime: newEnergy >= MAX_ENERGY ? null : state.lastEnergyRefillTime,
+            gems:           state.gems - pack.gemCost,
+            coins:          state.coins + pack.coins,
+            staminaReserve: newReserve,
             ownedCosmetics: newOwned,
             statistics: {
               ...state.statistics,
@@ -894,7 +919,8 @@ export const useUserStore = create<UserState>()(
           lastSpinDate:      null,
           extraSpinsToday:   0,
           lastExtraSpinDate: null,
-          energy:              MAX_ENERGY,
+          energy:               MAX_ENERGY,
+          staminaReserve:       0,
           lastEnergyRefillTime: null,
           settings: { ...defaultSettings },
           statistics: { ...defaultStatistics },
@@ -941,6 +967,7 @@ export const useUserStore = create<UserState>()(
           dailyXPDate:             saved.dailyXPDate              ?? null,
           isPremium:               saved.isPremium                ?? false,
           energy:                  saved.energy                   ?? MAX_ENERGY,
+          staminaReserve:          saved.staminaReserve            ?? 0,
           lastEnergyRefillTime:    saved.lastEnergyRefillTime      ?? null,
         };
       },

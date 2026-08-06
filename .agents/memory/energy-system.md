@@ -1,39 +1,45 @@
 ---
 name: Energy system design
-description: How the stamina/energy system works — store shape, refill logic, ad rewards, and lobby integration.
+description: How the two-tier stamina system works — active + reserve, store shape, refill logic, consumption priority, UI display.
 ---
 
-# Stamina / Energy system
+# Two-Tier Stamina System
 
 ## Constants (constants/economy.ts)
-- `MAX_ENERGY = 50` — full stamina bar
+- `MAX_ENERGY = 50` — active stamina cap
 - `STAMINA_PER_GAME = 10` — cost per game round
-- `ENERGY_REFILL_INTERVAL_MIN = 10` — 1 stamina every 10 minutes (full refill in ~8.3 h)
-- `STAMINA_AD_REWARD = 5` — stamina granted per rewarded-ad watch
+- `ENERGY_REFILL_INTERVAL_MIN = 10` — passive refill: 1 active stamina every 10 min
+- `STAMINA_AD_REWARD = 5` — stamina added to reserve per rewarded ad
 - `STAMINA_ADS_PER_DAY = 5` — max ad watches for stamina per calendar day
-- `ENERGY_REFILL_GEM_COST = 30` — gems to instantly refill to max
+- `ENERGY_REFILL_GEM_COST = 30` — gems to instantly refill active to max
 
-## Store shape (store/userStore.ts)
-- `energy: number` — current stamina (defaults to MAX_ENERGY = 50)
-- `lastEnergyRefillTime: number | null` — Unix ms; null means energy is full and no clock running
+## Store fields (store/userStore.ts)
+- `energy: number` — active stamina (0–MAX_ENERGY). Passively refills.
+- `staminaReserve: number` — uncapped reserve. Holds purchased / rewarded / ad stamina.
+- `lastEnergyRefillTime: number | null` — Unix ms; null = active is full (no tick running)
 
-## Actions (userStore)
-- `tickEnergy()` — lazy refill: computes elapsed time, adds floor(elapsed/interval) energy, saves remainder. Call on lobby focus and via a 60s setInterval.
-- `spendEnergy(amount = STAMINA_PER_GAME)` — calls tickEnergy() first, then deducts 10 by default; returns false if insufficient.
-- `addStamina(amount)` — adds stamina capped at MAX, keeps/clears refill clock correctly.
-- `refillEnergyWithGems()` — costs ENERGY_REFILL_GEM_COST gems, sets energy = MAX, clears clock.
+## Consumption priority
+1. `spendEnergy(amount = STAMINA_PER_GAME)`:
+   - Calls `tickEnergy()` first (lazy refill)
+   - If `energy + staminaReserve < amount` → returns `false`
+   - If `energy >= amount` → deducts from active only
+   - If `energy < amount` → uses all active, deducts remainder from reserve
+2. Active reaches 0 before reserve is touched.
 
-## Ad tracking (store/adStore.ts)
-- `staminaAdsToday: number`, `lastStaminaAdDate: string | null`
-- `canWatchStaminaAd()` — true when fewer than STAMINA_ADS_PER_DAY ads watched today
-- `recordStaminaAdWatched()` — increments counter and records today's date
+## Incoming stamina routing
+- `addStamina(amount)` — ALWAYS goes to reserve; never directly to active.
+- Ad rewards, gem pack stamina, event rewards, spin rewards → all call `addStamina` → reserve.
+- Passive time refill only fills active; reserve is untouched by time.
 
-## Lobby integration (app/lobby.tsx)
-- `tickEnergy()` called in useFocusEffect and via setInterval(60_000)
-- PLAY button calls `spendEnergy()` (defaults to STAMINA_PER_GAME=10) → Alert if false
-- Header ⚡ pill shows `${energy}/${MAX_ENERGY}`; red when < 10, orange when ≤ 20
-- "Watch Ad +5⚡" button appears below PLAY when ads remain today; calls showRewarded() → addStamina(5) → recordStaminaAdWatched()
-- Remaining ad count shown in button: "(3/5 left)"
+## UI (app/lobby.tsx)
+- Header: `⚡ {energy}/{MAX_ENERGY}` pill + optional `📦 {staminaReserve}` pill (hidden when 0)
+- PLAY button subtitle: `{energy}/{MAX_ENERGY} + 📦{reserve} · 10/round`
+- Alert on no stamina shows both active and reserve values
+- Ad button below PLAY: "+5⚡ Watch Ad (n/5 left)" → adds to reserve
 
-**Why:** Lazy refill avoids background timers/workers. The store state is always correct after a tick call.
-**How to apply:** Any screen that shows energy must call tickEnergy() on focus. Any action that costs energy must go through spendEnergy() (never mutate energy directly). Ad stamina flow: canWatchStaminaAd() check → showRewarded() → addStamina() + recordStaminaAdWatched().
+**Why:** Reserve prevents purchased/earned stamina from being silently capped at MAX_ENERGY. Active stays balanced (time-gated). Reserve preserves real-money and reward value.
+
+**How to apply:**
+- Any feature that grants stamina must call `addStamina()` → goes to reserve.
+- Never add stamina directly to `energy` field except in `tickEnergy` (passive) and `refillEnergyWithGems` (gem purchase fills active to MAX).
+- `spendEnergy()` handles the two-tier drain automatically — callers don't need to know about reserve.
