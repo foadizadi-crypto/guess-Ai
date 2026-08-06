@@ -117,7 +117,12 @@ export const REWARDED_ADS_DAILY_FREE    = 5;
 export const REWARDED_ADS_DAILY_PREMIUM = 10;
 
 // ─── Energy / Stamina ─────────────────────────────────────────────────────────
-// Players start at MAX_ENERGY. Each game costs 1 energy. Energy refills passively.
-export const MAX_ENERGY                    = 120; // full bar
-export const ENERGY_REFILL_INTERVAL_MIN    = 6;   // 1 energy every 6 minutes (full in 12 h)
-export const ENERGY_REFILL_GEM_COST        = 30;  // gems to instantly refill to max
+// Players start at MAX_ENERGY. Each game costs STAMINA_PER_GAME. Refills passively.
+// Active players can play ~12-15 rounds per day (50 base ÷ 10 cost = 5 rounds,
+// plus up to 2 more from rewarded ads (25 stamina / 10 per round)).
+export const MAX_ENERGY                 = 50;  // full stamina bar
+export const STAMINA_PER_GAME          = 10;  // cost per game round
+export const ENERGY_REFILL_INTERVAL_MIN = 10;  // 1 stamina every 10 minutes
+export const STAMINA_AD_REWARD         = 5;   // stamina per rewarded ad watch
+export const STAMINA_ADS_PER_DAY       = 5;   // max rewarded ads for stamina/day
+export const ENERGY_REFILL_GEM_COST    = 30;  // gems to instantly refill to max

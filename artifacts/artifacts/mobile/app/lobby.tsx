@@ -44,7 +44,8 @@ import { useAudio } from '@/hooks/useAudio';
 import { ROUTES } from '@/navigation/routes';
 import { isToday } from '@/utils';
 import { DEFAULT_AVATARS, DAILY_REWARDS } from '@/constants';
-import { MAX_ENERGY } from '@/constants/economy';
+import { MAX_ENERGY, STAMINA_PER_GAME, STAMINA_AD_REWARD, STAMINA_ADS_PER_DAY } from '@/constants/economy';
+import { useAdStore } from '@/store/adStore';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
@@ -156,8 +157,13 @@ export default function LobbyScreen() {
     username, coins, gems, level, selectedAvatarId,
     dailyReward, claimDailyReward,
     hasNewAchievement, equippedCosmetics,
-    energy, tickEnergy, spendEnergy, canFreeSpin,
+    energy, tickEnergy, spendEnergy, addStamina, canFreeSpin,
   } = useUserStore();
+  const {
+    showRewarded,
+    canWatchStaminaAd, recordStaminaAdWatched,
+    staminaAdsToday, lastStaminaAdDate,
+  } = useAdStore();
   const { playMusic, stopMusic } = useAudio();
 
   useFocusEffect(useCallback(() => {
@@ -168,11 +174,14 @@ export default function LobbyScreen() {
   const [dailyModal,   setDailyModal]   = useState(false);
   const [dailyClaimed, setDailyClaimed] = useState(isToday(dailyReward.lastClaimed));
   const [spinReady,    setSpinReady]    = useState(false);
+  const [adAvailable,  setAdAvailable]  = useState(false);
+  const [watchingAd,   setWatchingAd]   = useState(false);
 
-  // ── On focus: tick energy, check spin/daily availability ────────────────────
+  // ── On focus: tick energy, check spin/daily/ad availability ─────────────────
   useFocusEffect(useCallback(() => {
     tickEnergy();
     setSpinReady(canFreeSpin());
+    setAdAvailable(canWatchStaminaAd());
     const claimed = isToday(dailyReward.lastClaimed);
     setDailyClaimed(claimed);
     // Auto-pop daily reward modal after a short entrance delay
@@ -180,7 +189,7 @@ export default function LobbyScreen() {
       const t = setTimeout(() => setDailyModal(true), 900);
       return () => clearTimeout(t);
     }
-  }, [dailyReward.lastClaimed, tickEnergy, canFreeSpin]));
+  }, [dailyReward.lastClaimed, tickEnergy, canFreeSpin, canWatchStaminaAd]));
 
   // ── Periodic energy tick (every 60 s while lobby is visible) ────────────────
   useEffect(() => {
@@ -249,16 +258,17 @@ export default function LobbyScreen() {
     router.push(route as any); // eslint-disable-line @typescript-eslint/no-explicit-any
   }, [router]);
 
-  // ── PLAY — gated by energy ───────────────────────────────────────────────────
+  // ── PLAY — costs STAMINA_PER_GAME stamina ───────────────────────────────────
   const handlePlay = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const ok = spendEnergy(1);
+    const ok = spendEnergy(); // defaults to STAMINA_PER_GAME (10)
     if (!ok) {
       Alert.alert(
-        '⚡ No Energy',
-        `Energy refills 1 point every 6 minutes (max ${MAX_ENERGY}). Refill instantly with gems in the Shop.`,
+        '⚡ Not Enough Stamina',
+        `Each round costs ${STAMINA_PER_GAME} stamina (max ${MAX_ENERGY}). ` +
+        `Stamina refills 1 point every 10 minutes, or watch an ad for +${STAMINA_AD_REWARD}.`,
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: 'OK', style: 'cancel' },
           { text: '💎 Shop', onPress: () => nav(ROUTES.SHOP) },
         ],
       );
@@ -266,6 +276,23 @@ export default function LobbyScreen() {
     }
     router.push(ROUTES.LEVEL_SELECT as any);
   }, [spendEnergy, nav, router]);
+
+  // ── Watch rewarded ad for +STAMINA_AD_REWARD stamina ────────────────────────
+  const handleWatchAd = useCallback(async () => {
+    if (!canWatchStaminaAd() || watchingAd) return;
+    setWatchingAd(true);
+    try {
+      const success = await showRewarded();
+      if (success) {
+        addStamina(STAMINA_AD_REWARD);
+        recordStaminaAdWatched();
+        setAdAvailable(canWatchStaminaAd());
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } finally {
+      setWatchingAd(false);
+    }
+  }, [canWatchStaminaAd, showRewarded, addStamina, recordStaminaAdWatched, watchingAd]);
 
   // ── Animated styles ─────────────────────────────────────────────────────────
   const headerStyle = useAnimatedStyle(() => ({ opacity: headerOp.value }));
@@ -285,8 +312,13 @@ export default function LobbyScreen() {
   // Today's unclaimed reward amount (computed fresh so it's accurate)
   const todayRewardCoins = computeTodayReward(dailyReward.streak, dailyReward.lastClaimed);
 
-  // Energy display
-  const energyColor = energy <= 10 ? '#FF4444' : energy <= 40 ? '#FFB020' : PURPLE_LT;
+  // Energy display — thresholds tuned for MAX_ENERGY=50
+  const energyColor = energy < STAMINA_PER_GAME ? '#FF4444' : energy <= 20 ? '#FFB020' : PURPLE_LT;
+
+  // Stamina-ad remaining count
+  const today = new Date().toISOString().slice(0, 10);
+  const staminaAdsUsed = lastStaminaAdDate === today ? staminaAdsToday : 0;
+  const staminaAdsLeft = STAMINA_ADS_PER_DAY - staminaAdsUsed;
 
   return (
     <View style={[styles.root, { paddingTop: topPad }]}>
@@ -412,16 +444,31 @@ export default function LobbyScreen() {
                 <Ionicons name="diamond" size={18} color={GOLD} />
                 <Text style={styles.playText}>PLAY</Text>
 
-                {/* Energy indicator inside PLAY button */}
+                {/* Stamina cost indicator inside PLAY button */}
                 <View style={styles.playEnergy}>
                   <Ionicons name="flash" size={10} color={energyColor} />
                   <Text style={[styles.playEnergyText, { color: energyColor }]}>
-                    {energy}/{MAX_ENERGY}
+                    {energy}/{MAX_ENERGY} · {STAMINA_PER_GAME}/round
                   </Text>
                 </View>
               </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
+
+          {/* Watch Ad for +STAMINA_AD_REWARD stamina — visible when ads remain today */}
+          {adAvailable && (
+            <TouchableOpacity
+              style={[styles.adBtn, watchingAd && { opacity: 0.5 }]}
+              onPress={handleWatchAd}
+              activeOpacity={0.8}
+              disabled={watchingAd}
+            >
+              <Ionicons name="play-circle" size={13} color={GREEN} />
+              <Text style={styles.adBtnText}>
+                {watchingAd ? 'Loading…' : `Watch Ad +${STAMINA_AD_REWARD}⚡  (${staminaAdsLeft}/${STAMINA_ADS_PER_DAY} left)`}
+              </Text>
+            </TouchableOpacity>
+          )}
 
         </View>
 
@@ -857,5 +904,25 @@ const styles = StyleSheet.create({
     fontSize: 8,
     letterSpacing: 0.7,
     textAlign: 'center',
+  },
+
+  // ── Watch-ad stamina button (below PLAY) ──────────────────────────────────
+  adBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(74,222,128,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(74,222,128,0.35)',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginTop: 4,
+  },
+  adBtnText: {
+    color: '#4ADE80',
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+    letterSpacing: 0.3,
   },
 });

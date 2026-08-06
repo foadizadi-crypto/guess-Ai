@@ -23,6 +23,12 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { adService } from '@/services/AdService';
+import { STAMINA_ADS_PER_DAY } from '@/constants/economy';
+
+/** Returns today's date as YYYY-MM-DD UTC. */
+function todayUTC(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────
 
@@ -82,6 +88,16 @@ interface AdState {
 
   /** Convenience: grant a lifetime ad-free pass (backward-compat with IAPService). */
   removeAds: () => void;
+
+  // ── Stamina ad tracking ────────────────────────────────────────────────────
+  /** Number of rewarded-ad stamina grants used today. Resets at UTC midnight. */
+  staminaAdsToday: number;
+  /** YYYY-MM-DD UTC string of the day staminaAdsToday was last recorded. */
+  lastStaminaAdDate: string | null;
+  /** True when fewer than STAMINA_ADS_PER_DAY ads have been watched today. */
+  canWatchStaminaAd: () => boolean;
+  /** Increment the daily stamina-ad counter. Call after a successful ad watch. */
+  recordStaminaAdWatched: () => void;
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────
@@ -93,6 +109,8 @@ export const useAdStore = create<AdState>()(
       adFreePassExpiry: null,
       sessionCounter: 0,
       lastDailyAdTimestamp: null,
+      staminaAdsToday: 0,
+      lastStaminaAdDate: null,
 
       // ── Derived helpers ──────────────────────────────────────────────────
 
@@ -132,6 +150,22 @@ export const useAdStore = create<AdState>()(
       },
 
       removeAds: () => set({ adsRemoved: true, adFreePassExpiry: null }),
+
+      // ── Stamina ad tracking ──────────────────────────────────────────────
+      canWatchStaminaAd: () => {
+        const { staminaAdsToday, lastStaminaAdDate } = get();
+        const today = todayUTC();
+        const usedToday = lastStaminaAdDate === today ? staminaAdsToday : 0;
+        return usedToday < STAMINA_ADS_PER_DAY;
+      },
+
+      recordStaminaAdWatched: () => {
+        const today = todayUTC();
+        set((s) => ({
+          staminaAdsToday: s.lastStaminaAdDate === today ? s.staminaAdsToday + 1 : 1,
+          lastStaminaAdDate: today,
+        }));
+      },
     }),
     {
       name: 'blurquiz-ad-storage',
@@ -141,6 +175,8 @@ export const useAdStore = create<AdState>()(
         adFreePassExpiry: state.adFreePassExpiry,
         sessionCounter: state.sessionCounter,
         lastDailyAdTimestamp: state.lastDailyAdTimestamp,
+        staminaAdsToday: state.staminaAdsToday,
+        lastStaminaAdDate: state.lastStaminaAdDate,
       }),
     },
   ),

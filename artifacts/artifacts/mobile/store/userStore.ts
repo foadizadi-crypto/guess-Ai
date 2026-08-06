@@ -34,6 +34,7 @@ import {
   MAX_ENERGY,
   ENERGY_REFILL_INTERVAL_MIN,
   ENERGY_REFILL_GEM_COST,
+  STAMINA_PER_GAME,
 } from '@/constants/economy';
 import { calculateLevel, isToday, getTodayUTCString } from '@/utils';
 
@@ -134,6 +135,7 @@ interface UserState {
   lastEnergyRefillTime: number | null; // Unix ms timestamp when last refill tick was saved
   tickEnergy: () => void;              // lazy-refill based on elapsed time; call on focus
   spendEnergy: (amount?: number) => boolean;
+  addStamina: (amount: number) => void;
   refillEnergyWithGems: () => boolean;
 }
 
@@ -706,15 +708,27 @@ export const useUserStore = create<UserState>()(
         });
       },
 
-      spendEnergy: (amount = 1) => {
+      spendEnergy: (amount = STAMINA_PER_GAME) => {
         get().tickEnergy();
         const { energy } = get();
         if (energy < amount) return false;
         set((s) => ({
           energy: s.energy - amount,
+          // Start refill clock the first time energy drops below max
           lastEnergyRefillTime: s.lastEnergyRefillTime ?? Date.now(),
         }));
         return true;
+      },
+
+      addStamina: (amount) => {
+        set((s) => {
+          const newEnergy = Math.min(MAX_ENERGY, s.energy + amount);
+          return {
+            energy: newEnergy,
+            // If now at max, clear the clock; otherwise keep it running
+            lastEnergyRefillTime: newEnergy >= MAX_ENERGY ? null : s.lastEnergyRefillTime,
+          };
+        });
       },
 
       refillEnergyWithGems: () => {
