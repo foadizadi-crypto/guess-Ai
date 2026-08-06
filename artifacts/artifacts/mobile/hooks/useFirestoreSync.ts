@@ -10,7 +10,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useUserStore } from '@/store/userStore';
-import { initAuth } from '@/services/authService';
+import { initAuth, getPlayerId } from '@/services/authService';
 import { savePlayerProfile } from '@/services/firestoreService';
 import { fetchAndApplyRemoteConfig } from '@/services/remoteConfigService';
 
@@ -45,7 +45,6 @@ export function useFirestoreSync(): void {
 
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(async () => {
-      const { getPlayerId } = await import('@/services/authService');
       const uid = getPlayerId();
       if (!uid) return;
 
