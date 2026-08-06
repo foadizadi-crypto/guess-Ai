@@ -22,6 +22,7 @@ import {
   type SpinReward,
 } from '@/constants/spinConfig';
 import { getLevelReward } from '@/constants/levelRewards';
+import { GEM_PACKS, type GemPackItem } from '@/constants/shopConfig';
 import { type ConsumableId, CONSUMABLE_PRICES } from '@/constants/shopData';
 import { getDailyMissions, getTodayUTC, type MissionType } from '@/constants/missions';
 import {
@@ -137,6 +138,8 @@ interface UserState {
   spendEnergy: (amount?: number) => boolean;
   addStamina: (amount: number) => void;
   refillEnergyWithGems: () => boolean;
+  // ── Gem packs (spendable bundles) ─────────────────────────────────────
+  buyGemPack: (packId: string) => boolean;
 }
 
 // ─── Defaults ─────────────────────────────────────────────────────────────
@@ -488,6 +491,8 @@ export const useUserStore = create<UserState>()(
 
         set((state) => ({
           coins: state.coins + reward.coins,
+          // Grant free gems for milestone levels (10, 25, 50, 100, 150, 300, 500)
+          gems: reward.gems ? state.gems + reward.gems : state.gems,
           unclaimedLevelRewards: state.unclaimedLevelRewards.filter((l) => l !== level),
           consumables: nullifiersGranted > 0
             ? { ...state.consumables, error_nullifier: state.consumables.error_nullifier + nullifiersGranted }
@@ -736,6 +741,38 @@ export const useUserStore = create<UserState>()(
         if (energy >= MAX_ENERGY) return false;
         if (gems < ENERGY_REFILL_GEM_COST) return false;
         set({ gems: gems - ENERGY_REFILL_GEM_COST, energy: MAX_ENERGY, lastEnergyRefillTime: null });
+        return true;
+      },
+
+      // ── Gem Packs (spendable bundles) ───────────────────────────────────────
+      buyGemPack: (packId) => {
+        const pack: GemPackItem | undefined = GEM_PACKS.find((p) => p.id === packId);
+        if (!pack) return false;
+        const { gems } = get();
+        if (gems < pack.gemCost) return false;
+
+        set((state) => {
+          // Stamina: addStamina logic inline (capped at MAX_ENERGY)
+          const newEnergy = Math.min(MAX_ENERGY, state.energy + pack.stamina);
+
+          // Grant cosmetics from the pack (mark owned but not equipped)
+          const newOwned = { ...state.ownedCosmetics };
+          for (const id of pack.cosmeticIds) {
+            newOwned[id] = true;
+          }
+
+          return {
+            gems: state.gems - pack.gemCost,
+            coins: state.coins + pack.coins,
+            energy: newEnergy,
+            lastEnergyRefillTime: newEnergy >= MAX_ENERGY ? null : state.lastEnergyRefillTime,
+            ownedCosmetics: newOwned,
+            statistics: {
+              ...state.statistics,
+              totalCoinsEarned: state.statistics.totalCoinsEarned + pack.coins,
+            },
+          };
+        });
         return true;
       },
 

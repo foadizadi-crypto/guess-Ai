@@ -116,6 +116,30 @@ export const PREMIUM_COIN_MULTIPLIER    = 2; // applied to daily login coins
 export const REWARDED_ADS_DAILY_FREE    = 5;
 export const REWARDED_ADS_DAILY_PREMIUM = 10;
 
+// ─── Level gem milestones ─────────────────────────────────────────────────────
+// Free gem rewards granted on reaching specific levels.
+// Total across all milestones up to level 500: 319 gems.
+export const LEVEL_GEM_REWARDS: Readonly<Record<number, number>> = {
+  10:  1,
+  25:  1,
+  50:  2,
+  100: 5,
+  150: 10,
+  300: 50,
+  500: 250,
+};
+
+// ─── IAP gem packs ────────────────────────────────────────────────────────────
+export const IAP_GEM_PACKS = [
+  { id: 'gems-50',   sku: 'com.aiblur.quiz.gems_50',   amount:   50, price: '$0.99'  },
+  { id: 'gems-100',  sku: 'com.aiblur.quiz.gems_100',  amount:  100, price: '$1.70'  },
+  { id: 'gems-250',  sku: 'com.aiblur.quiz.gems_250',  amount:  250, price: '$3.80'  },
+  { id: 'gems-500',  sku: 'com.aiblur.quiz.gems_500',  amount:  500, price: '$6.99'  },
+  { id: 'gems-1000', sku: 'com.aiblur.quiz.gems_1000', amount: 1000, price: '$12.50' },
+] as const;
+
+export type IAPGemPackId = typeof IAP_GEM_PACKS[number]['id'];
+
 // ─── Energy / Stamina ─────────────────────────────────────────────────────────
 // Players start at MAX_ENERGY. Each game costs STAMINA_PER_GAME. Refills passively.
 // Active players can play ~12-15 rounds per day (50 base ÷ 10 cost = 5 rounds,

@@ -48,7 +48,7 @@ import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
 import { useAdStore } from '@/store/adStore';
-import { iapService, IAP_SKUS, SKU_GEMS } from '@/services/IAPService';
+import { iapService, IAP_SKUS } from '@/services/IAPService';
 import { savePurchaseHistory } from '@/services/firestoreService';
 import { getPlayerId } from '@/services/authService';
 import { useAudio } from '@/hooks/useAudio';
@@ -56,8 +56,10 @@ import { COIN_PACKAGES } from '@/constants';
 import {
   ALL_COIN_SHOP_ITEMS,
   GEM_SHOP_ITEMS,
+  GEM_PACKS,
   RARITY_COLORS,
 } from '@/constants/shopConfig';
+import { IAP_GEM_PACKS } from '@/constants/economy';
 import type { UnifiedShopItem } from '@/types';
 import type { ConsumableId } from '@/constants/shopData';
 import type { PowerUpId } from '@/types';
@@ -108,6 +110,8 @@ export default function ShopScreen() {
   const mockPurchaseCoins = useUserStore((s) => s.mockPurchaseCoins);
   const addGems           = useUserStore((s) => s.addGems);
 
+  const buyGemPack    = useUserStore((s) => s.buyGemPack);
+
   const { isAdFreePassActive, removeAds, adFreePassExpiry } = useAdStore();
   const adFreeActive = isAdFreePassActive();
 
@@ -120,6 +124,28 @@ export default function ShopScreen() {
     coinPulse.value = withSequence(withSpring(1.18), withSpring(1));
     setTimeout(() => setFloating(null), 1200);
   }, [coinPulse]);
+
+  const handleBuyGemPack = useCallback((packId: string, packName: string, gemCost: number) => {
+    if (gems < gemCost) {
+      Alert.alert('Not enough gems', `You need ${gemCost} 💎 to buy ${packName}. Get more gems below.`);
+      return;
+    }
+    Alert.alert(
+      `Buy ${packName}?`,
+      `This will spend ${gemCost} 💎 from your balance.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Buy',
+          onPress: () => {
+            const ok = buyGemPack(packId);
+            if (ok) { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); playEffect('purchase'); showPurchase(`${packName} unlocked!`); }
+            else Alert.alert('Purchase failed', 'Something went wrong. Please try again.');
+          },
+        },
+      ],
+    );
+  }, [gems, buyGemPack, playEffect, showPurchase]);
 
   // ── Ownership / quantity helpers ─────────────────────────────────────────
 
@@ -247,6 +273,66 @@ export default function ShopScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
+
+        {/* ── Gem Packs — spendable bundles (Gem Shop tab only) ──────────── */}
+        {tab === 1 && (
+          <View style={styles.gemPacksSection}>
+            <View style={styles.iapDivider}>
+              <View style={styles.iapLine} />
+              <Text style={styles.iapLabel}>Gem Packs</Text>
+              <View style={styles.iapLine} />
+            </View>
+            {GEM_PACKS.map((pack) => {
+              const rarityColor = RARITY_COLORS[pack.rarity] ?? GameColors.textSecondary;
+              const canAfford = gems >= pack.gemCost;
+              return (
+                <TouchableOpacity
+                  key={pack.id}
+                  style={[styles.gemPackCard, { borderColor: `${rarityColor}55` }]}
+                  onPress={() => handleBuyGemPack(pack.id, pack.name, pack.gemCost)}
+                  activeOpacity={0.8}
+                >
+                  {/* Left icon */}
+                  <View style={[styles.gemPackIcon, { backgroundColor: `${rarityColor}20` }]}>
+                    <Ionicons name={pack.icon as any} size={22} color={rarityColor} />
+                  </View>
+                  {/* Info */}
+                  <View style={styles.gemPackInfo}>
+                    <View style={styles.gemPackTitleRow}>
+                      <Text style={styles.gemPackName}>{pack.name}</Text>
+                      <View style={[styles.rarityChip, { backgroundColor: `${rarityColor}25` }]}>
+                        <Text style={[styles.rarityChipText, { color: rarityColor }]}>
+                          {pack.rarity.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.gemPackDesc}>{pack.description}</Text>
+                    <Text style={styles.gemPackRewards}>
+                      ⚡ {pack.stamina.toLocaleString()} stamina · 🪙 {pack.coins.toLocaleString()} coins
+                      {pack.cosmeticIds.length > 0 ? ` · ✨ ${pack.cosmeticIds.length} cosmetic${pack.cosmeticIds.length > 1 ? 's' : ''}` : ''}
+                    </Text>
+                  </View>
+                  {/* Price */}
+                  <View style={[styles.gemPackPrice, !canAfford && styles.gemPackPriceInsufficient]}>
+                    <Ionicons name="diamond" size={11} color={canAfford ? '#CE93D8' : GameColors.textSecondary} />
+                    <Text style={[styles.gemPackPriceText, !canAfford && { color: GameColors.textSecondary }]}>
+                      {pack.gemCost}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {/* ── Premium Cosmetics grid (Gem Shop) / Coin items grid ─────────── */}
+        {tab === 1 && (
+          <View style={styles.iapDivider}>
+            <View style={styles.iapLine} />
+            <Text style={styles.iapLabel}>Premium Cosmetics</Text>
+            <View style={styles.iapLine} />
+          </View>
+        )}
 
         {/* ── Item grid ───────────────────────────────────────────────────── */}
         {displayItems.length > 0 ? (
@@ -382,23 +468,23 @@ export default function ShopScreen() {
               {iapService.isMockMode ? 'Mock purchase · no payment processed' : 'Real purchase via App Store / Play Store'}
             </Text>
 
-            {/* Gem packs */}
-            {([
-              { sku: IAP_SKUS.GEMS_100,  gems: SKU_GEMS[IAP_SKUS.GEMS_100]  ?? 100,  price: '$1.99',  popular: false },
-              { sku: IAP_SKUS.GEMS_500,  gems: SKU_GEMS[IAP_SKUS.GEMS_500]  ?? 500,  price: '$4.99',  popular: true  },
-              { sku: IAP_SKUS.GEMS_1200, gems: SKU_GEMS[IAP_SKUS.GEMS_1200] ?? 1200, price: '$9.99',  popular: false },
-            ] as const).map((pack) => (
+            {/* Gem packs — 5 tiers */}
+            {IAP_GEM_PACKS.map((pack, idx) => (
               <TouchableOpacity
-                key={pack.sku}
-                style={[styles.iapCard, pack.popular && styles.iapCardPopular, loading === pack.sku && styles.iapCardLoading]}
+                key={pack.id}
+                style={[
+                  styles.iapCard,
+                  idx === 2 && styles.iapCardPopular,
+                  loading === pack.sku && styles.iapCardLoading,
+                ]}
                 disabled={!!loading}
                 onPress={async () => {
                   setLoading(pack.sku);
                   try {
                     const { success, transactionId } = await iapService.purchase(pack.sku);
                     if (success) {
-                      addGems(pack.gems); playEffect('purchase'); showPurchase(`+${pack.gems} 💎`);
-                      if (transactionId) { const uid = getPlayerId(); if (uid) savePurchaseHistory(uid, { transactionId, productId: pack.sku, date: new Date().toISOString(), status: 'completed', gemsGranted: pack.gems }); }
+                      addGems(pack.amount); playEffect('purchase'); showPurchase(`+${pack.amount} 💎`);
+                      if (transactionId) { const uid = getPlayerId(); if (uid) savePurchaseHistory(uid, { transactionId, productId: pack.sku, date: new Date().toISOString(), status: 'completed', gemsGranted: pack.amount }); }
                     }
                   } catch { /* silent */ } finally { setLoading(null); }
                 }}
@@ -407,8 +493,9 @@ export default function ShopScreen() {
                   <Ionicons name="diamond-outline" size={22} color="#CE93D8" />
                 </View>
                 <View style={styles.iapCopy}>
-                  <Text style={styles.iapName}>{pack.gems.toLocaleString()} Gems</Text>
-                  {pack.popular && <Text style={styles.bestValue}>POPULAR</Text>}
+                  <Text style={styles.iapName}>{pack.amount.toLocaleString()} Gems</Text>
+                  {idx === 2 && <Text style={styles.bestValue}>POPULAR</Text>}
+                  {idx === 4 && <Text style={styles.bestValue}>BEST VALUE</Text>}
                 </View>
                 <Text style={[styles.iapPrice, { color: '#CE93D8' }]}>
                   {loading === pack.sku ? '…' : pack.price}
@@ -734,4 +821,41 @@ const styles = StyleSheet.create({
   bestValue:{ color: GameColors.backgroundPrimary, backgroundColor: GameColors.accentGold, fontFamily: 'Inter_700Bold', fontSize: 9, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
   restoreBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
   restoreText: { color: GameColors.textSecondary, fontFamily: 'Inter_500Medium', fontSize: 13 },
+
+  // ── Gem Packs (spendable bundles) ─────────────────────────────────────────
+  gemPacksSection: { gap: 10, marginTop: 4 },
+  gemPackCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+  },
+  gemPackIcon: {
+    width: 48, height: 48, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  gemPackInfo: { flex: 1, gap: 3 },
+  gemPackTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  gemPackName: { color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 14 },
+  rarityChip: {
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
+  },
+  rarityChipText: { fontFamily: 'Inter_700Bold', fontSize: 9, letterSpacing: 0.7 },
+  gemPackDesc: { color: GameColors.textSecondary, fontFamily: 'Inter_400Regular', fontSize: 11 },
+  gemPackRewards: { color: '#A78BFA', fontFamily: 'Inter_500Medium', fontSize: 11, marginTop: 1 },
+  gemPackPrice: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(206,147,216,0.15)',
+    borderWidth: 1, borderColor: 'rgba(206,147,216,0.4)',
+  },
+  gemPackPriceInsufficient: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: GameColors.border,
+  },
+  gemPackPriceText: { color: '#CE93D8', fontFamily: 'Inter_700Bold', fontSize: 13 },
 });

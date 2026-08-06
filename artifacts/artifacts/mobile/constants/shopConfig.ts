@@ -175,6 +175,74 @@ export const GEM_SHOP_ITEMS: UnifiedShopItem[] = [
   },
 ];
 
+// ─── Gem Packs — spend gems for bundles of stamina + coins + cosmetics ────────
+// These are purchased with gems (already owned) from the in-game Gem Shop.
+export interface GemPackItem {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  gemCost: number;
+  /** Stamina/energy units granted (capped at MAX_ENERGY by addStamina). */
+  stamina: number;
+  coins: number;
+  /** cosmetic IDs to auto-grant on purchase (via ownedCosmetics). */
+  cosmeticIds: string[];
+}
+
+export const GEM_PACKS: GemPackItem[] = [
+  {
+    id:          'gem_pack_starter',
+    name:        'Starter Pack',
+    description: 'A quick energy top-up with a coin bonus',
+    icon:        'flash-outline',
+    rarity:      'common',
+    gemCost:     10,
+    stamina:     50,
+    coins:       100,
+    cosmeticIds: [],
+  },
+  {
+    id:          'gem_pack_booster',
+    name:        'Booster Pack',
+    description: 'Fuel three rounds and pocket a solid coin stack',
+    icon:        'rocket-outline',
+    rarity:      'rare',
+    gemCost:     25,
+    stamina:     150,
+    coins:       500,
+    cosmeticIds: [],
+  },
+  {
+    id:          'gem_pack_premium',
+    name:        'Premium Pack',
+    description: 'Massive stamina refill, coins, exclusive badge and a profile frame',
+    icon:        'diamond-outline',
+    rarity:      'epic',
+    gemCost:     80,
+    stamina:     500,
+    coins:       2_000,
+    cosmeticIds: ['pack_exclusive_badge', 'pack_special_frame'],
+  },
+  {
+    id:          'gem_pack_legendary',
+    name:        'Legendary Pack',
+    description: 'The ultimate bundle — legendary wings, rare badge, profile effect and more',
+    icon:        'trophy-outline',
+    rarity:      'legendary',
+    gemCost:     150,
+    stamina:     1_000,
+    coins:       5_000,
+    cosmeticIds: [
+      'pack_legendary_wings',
+      'pack_profile_effect',
+      'pack_rare_badge',
+      'pack_special_cosmetic',
+    ],
+  },
+];
+
 // ─── Convenience price maps (used by purchase validation in userStore) ────────
 export const CONSUMABLE_PRICE_MAP: Record<string, number> = Object.fromEntries(
   CONSUMABLE_SHOP_ITEMS.map((i) => [i.id, i.price]),

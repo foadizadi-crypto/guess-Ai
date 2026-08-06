@@ -35,6 +35,7 @@ export type PackageTier = 'bronze' | 'silver' | 'gold' | 'legendary';
 export interface LevelReward {
   level: number;
   coins: number;
+  gems?: number;     // free gem milestone (only at specific levels — see LEVEL_GEM_REWARDS)
   items: RewardItem[];
   packageTier: PackageTier;
   isMinor: boolean;   // qualifies for minor reward (every 5 levels)
@@ -117,6 +118,11 @@ function majorItems(level: number): RewardItem[] {
   ];
 }
 
+// ─── Level gem milestones (mirrored from economy.ts to avoid circular import) ─
+const GEM_MILESTONE: Readonly<Record<number, number>> = {
+  10: 1, 25: 1, 50: 2, 100: 5, 150: 10, 300: 50, 500: 250,
+};
+
 // ─── Build the full 500-level table ──────────────────────────────────────────
 
 function buildLevelRewards(): LevelReward[] {
@@ -138,9 +144,12 @@ function buildLevelRewards(): LevelReward[] {
       items.push(...majorItems(level));
     }
 
+    const gems = GEM_MILESTONE[level];
+
     rewards.push({
       level,
       coins,
+      ...(gems !== undefined ? { gems } : {}),
       items,
       packageTier: tier(level),
       isMinor,
