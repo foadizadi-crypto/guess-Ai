@@ -15,7 +15,7 @@ import type {
 import { ACHIEVEMENTS, DEFAULT_AVATARS, DAILY_REWARDS, DEFAULT_POWER_UPS, checkAchievementCondition } from '@/constants';
 import type { AchievementDef } from '@/constants/achievements';
 import { GEM_SHOP_ITEMS } from '@/constants/shopConfig';
-import { COSMETIC_BY_ID, type CosmeticType } from '@/constants/collections';
+import { COSMETIC_BY_ID, FRAMES, type CosmeticType } from '@/constants/collections';
 import {
   SPIN_CONFIG,
   pickRewardIndex,
@@ -305,10 +305,26 @@ export const useUserStore = create<UserState>()(
               ? newAvatars.map((a) => a.id === 'avatar_10' ? { ...a, unlocked: true } : a)
               : newAvatars;
 
+          // Auto-grant level-unlock frames for any levels crossed
+          const frameGrants: Record<string, boolean> = {};
+          for (const frame of FRAMES) {
+            if (
+              frame.unlockType === 'level' &&
+              frame.unlockLevel !== undefined &&
+              frame.unlockLevel <= newLevel &&
+              !state.ownedCosmetics[frame.id]
+            ) {
+              frameGrants[frame.id] = true;
+            }
+          }
+
           return {
             xp: newTotalXP,
             level: newLevel,
             avatars: finalAvatars,
+            ownedCosmetics: Object.keys(frameGrants).length > 0
+              ? { ...state.ownedCosmetics, ...frameGrants }
+              : state.ownedCosmetics,
             dailyXPEarned: currentDailyXP + actualXP,
             dailyXPDate: today,
             unclaimedLevelRewards: newUnclaimed,
