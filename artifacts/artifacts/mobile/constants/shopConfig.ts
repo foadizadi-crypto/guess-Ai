@@ -243,6 +243,43 @@ export const GEM_PACKS: GemPackItem[] = [
   },
 ];
 
+// ─── Stamina Packs — spend gems for pure stamina (no mixed bundles) ──────────
+export const STAMINA_PACKS: GemPackItem[] = [
+  {
+    id:          'stamina_quick',
+    name:        'Quick Refill',
+    description: 'Enough stamina for 2 more games right now',
+    icon:        'flash-outline',
+    rarity:      'common',
+    gemCost:     5,
+    stamina:     20,
+    coins:       0,
+    cosmeticIds: [],
+  },
+  {
+    id:          'stamina_standard',
+    name:        'Full Refill',
+    description: 'Tops up your active stamina to the max (5 full games)',
+    icon:        'battery-full-outline',
+    rarity:      'rare',
+    gemCost:     8,
+    stamina:     50,
+    coins:       0,
+    cosmeticIds: [],
+  },
+  {
+    id:          'stamina_mega',
+    name:        'Mega Reserve',
+    description: 'Stock 200 stamina in your reserve — play 20 rounds anytime',
+    icon:        'server-outline',
+    rarity:      'epic',
+    gemCost:     20,
+    stamina:     200,
+    coins:       0,
+    cosmeticIds: [],
+  },
+];
+
 // ─── Convenience price maps (used by purchase validation in userStore) ────────
 export const CONSUMABLE_PRICE_MAP: Record<string, number> = Object.fromEntries(
   CONSUMABLE_SHOP_ITEMS.map((i) => [i.id, i.price]),
