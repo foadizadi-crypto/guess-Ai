@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { logger } from "../lib/logger";
 import { generateImageWithFallback, generateQuestionsWithFallback, getProviderStatus } from "../services/ai/manager";
-import type { Difficulty, RawQuestion } from "../services/ai/types";
+import type { Difficulty } from "../services/ai/types";
 
 const router: Router = Router();
 
@@ -11,52 +11,9 @@ const BLUR_LEVEL: Record<string, number> = {
   hard: 20,
 };
 
-// Built-in, dependency-free mock question generator. This is the absolute
-// last line of defense: even with zero AI providers configured (or all of
-// them failing), the endpoint still returns a valid, playable question set.
-const MOCK_ANSWERS: Record<string, string[]> = {
-  nature: ["Mountain Peak", "Ocean Wave", "Rainforest", "Sand Dune"],
-  animals: ["Lion", "Elephant", "Dolphin", "Eagle"],
-  food: ["Sushi Bowl", "Margherita Pizza", "Tacos", "Croissant"],
-  landmarks: ["Eiffel Tower", "Great Wall", "Pyramids of Giza", "Statue of Liberty"],
-};
-
-function shuffleArray<T>(arr: T[]): T[] {
-  const out = [...arr];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j]!, out[i]!];
-  }
-  return out;
-}
-
-function generateMockQuestions(category: string, difficulty: string, count: number): RawQuestion[] {
-  const pool = MOCK_ANSWERS[category] ?? ["Mystery Object", "Hidden Item", "Unknown Subject", "Secret Thing"];
-  return Array.from({ length: count }, (_, i) => {
-    const answer = pool[i % pool.length] ?? "Unknown";
-    const distractors = pool.filter((a) => a !== answer).slice(0, 3);
-    const options = shuffleArray([answer, ...distractors]);
-    while (options.length < 4) options.push(`Option ${options.length + 1}`);
-    return {
-      answer,
-      options,
-      correctIndex: options.indexOf(answer),
-      funFact: `${answer} is a fascinating part of the ${category} category.`,
-      hints: [
-        `It belongs to the ${category} category`,
-        `This is a ${difficulty}-difficulty question`,
-        `Starts with "${answer.charAt(0)}"`,
-      ],
-      imagePrompt: answer,
-    };
-  });
-}
-
 // ─── POST /api/questions ────────────────────────────────────────────────────
-// Generates quiz questions via the AI Manager, which tries every configured
-// text provider in priority order (Gemini → Groq → OpenAI → Claude → Zhipu,
-// unless AI_MODE pins one) before falling back to the local mock generator.
-// Images are generated the same way (OpenAI → Stable Diffusion → picsum).
+// Generates quiz questions via the AI Manager (Gemini → Groq → OpenAI → …).
+// Returns 503 if every configured text provider fails — no mock fallback.
 router.post("/questions", async (req, res, next) => {
   try {
     const { category = "nature", difficulty = "medium", count = 10 } = req.body as {
@@ -74,20 +31,18 @@ router.post("/questions", async (req, res, next) => {
       count: safeCount,
     });
 
-    const usingMock = aiQuestions.length === 0;
-    const source = usingMock ? generateMockQuestions(category, difficulty, safeCount) : aiQuestions;
-
-    if (usingMock) {
-      logger.warn({ category, difficulty }, "Question generation: serving built-in mock questions");
+    if (aiQuestions.length === 0) {
+      logger.error({ category, difficulty }, "Question generation: all providers failed — no questions generated");
+      res.status(503).json({ error: "AI question generation is currently unavailable. Please check your API keys and try again." });
+      return;
     }
 
     const questions = await Promise.all(
-      source.map(async (q, index) => {
-        const fallbackUrl = `https://picsum.photos/seed/${encodeURIComponent(q.answer)}/400/400`;
+      aiQuestions.map(async (q, index) => {
         const { url } = await generateImageWithFallback(q.imagePrompt);
         return {
           id: `q_${Date.now()}_${index}`,
-          imageUrl: url ?? fallbackUrl,
+          imageUrl: url ?? null,
           answer: q.answer,
           options: q.options,
           correctIndex: q.correctIndex,
@@ -100,7 +55,7 @@ router.post("/questions", async (req, res, next) => {
       }),
     );
 
-    res.json({ questions, meta: { textProvider: textProvider ?? "mock" } });
+    res.json({ questions, meta: { textProvider } });
   } catch (err) {
     next(err);
   }
@@ -108,6 +63,7 @@ router.post("/questions", async (req, res, next) => {
 
 // ─── POST /api/images ───────────────────────────────────────────────────────
 // Generates a single image from a text prompt via the AI Manager.
+// Returns 503 if every configured image provider fails — no picsum fallback.
 router.post("/images", async (req, res, next) => {
   try {
     const { prompt } = req.body as { prompt?: string };
@@ -119,18 +75,20 @@ router.post("/images", async (req, res, next) => {
 
     const trimmedPrompt = prompt.trim();
     const { url, providerUsed } = await generateImageWithFallback(trimmedPrompt);
-    const fallbackUrl = `https://picsum.photos/seed/${encodeURIComponent(trimmedPrompt)}/400/400`;
 
-    res.json({ url: url ?? fallbackUrl, provider: providerUsed ?? "mock" });
+    if (!url) {
+      logger.warn({ prompt: trimmedPrompt }, "Image generation: all providers failed — no image generated");
+      res.status(503).json({ error: "AI image generation is currently unavailable. Please check your API keys and try again." });
+      return;
+    }
+
+    res.json({ url, provider: providerUsed });
   } catch (err) {
     next(err);
   }
 });
 
 // ─── GET /api/ai-status ─────────────────────────────────────────────────────
-// Read-only introspection of which providers are configured, which are on
-// cooldown, and the active AI_MODE — useful for confirming a newly-added key
-// is picked up without spending a real generation call.
 router.get("/ai-status", (_req, res) => {
   res.json(getProviderStatus());
 });

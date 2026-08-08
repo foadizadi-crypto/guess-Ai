@@ -73,6 +73,7 @@ export default function GameScreen() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [gameImageUrl, setGameImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [removedOptions, setRemovedOptions] = useState<number[]>([]);
@@ -123,19 +124,24 @@ export default function GameScreen() {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    openAIService.generateQuestions(category, difficulty, 20).then((items) => {
-      if (active) {
-        // Shuffle answer options so correct answer position is unpredictable
+    setLoadError(null);
+    openAIService.generateQuestions(category, difficulty, 20)
+      .then((items) => {
+        if (!active) return;
         const shuffled = items.map((q) => {
           const { options, correctIndex } = shuffleOptions(q);
           return { ...q, options, correctIndex };
         });
-        // Fix #1: pin one image for the entire session — use first question's image
         setGameImageUrl(shuffled[0]?.imageUrl ?? null);
         setQuestions(shuffled);
         setLoading(false);
-      }
-    });
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        const msg = err instanceof Error ? err.message : 'Could not load questions. Check your connection and API keys.';
+        setLoadError(msg);
+        setLoading(false);
+      });
     return () => { active = false; };
   }, [category, difficulty]);
 
@@ -389,19 +395,46 @@ export default function GameScreen() {
           <Text style={styles.score}>+{score}</Text>
         </View>
 
-        {loading || !currentQuestion ? (
+        {loadError ? (
+          <View style={styles.loading}>
+            <Ionicons name="cloud-offline-outline" size={48} color={GameColors.textSecondary} />
+            <Text style={[styles.loadingText, { color: '#FF4444', textAlign: 'center', paddingHorizontal: 24 }]}>
+              {loadError}
+            </Text>
+            <TouchableOpacity
+              style={{ marginTop: 12, paddingVertical: 12, paddingHorizontal: 28,
+                       borderRadius: 12, borderWidth: 1, borderColor: GameColors.border }}
+              onPress={() => router.back()}
+            >
+              <Text style={{ color: GameColors.textWhite, fontFamily: 'Inter_600SemiBold', fontSize: 14 }}>
+                ← Go Back
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : loading || !currentQuestion ? (
           <View style={styles.loading}>
             <ActivityIndicator color={GameColors.accentGold} size="large" />
-            <Text style={styles.loadingText}>Preparing your mystery...</Text>
+            <Text style={styles.loadingText}>
+              Generating {category} questions ({difficulty})…
+            </Text>
           </View>
         ) : (
           <>
             <Animated.View style={[styles.imageWrap, shakeStyle]}>
-              <Image
-                source={{ uri: gameImageUrl ?? '' }}
-                style={styles.image}
-                blurRadius={blurRadius}
-              />
+              {gameImageUrl ? (
+                <Image
+                  source={{ uri: gameImageUrl }}
+                  style={styles.image}
+                  blurRadius={blurRadius}
+                />
+              ) : (
+                <View style={[styles.image, { alignItems: 'center', justifyContent: 'center',
+                               backgroundColor: 'rgba(139,92,246,0.1)' }]}>
+                  <Ionicons name="image-outline" size={48} color={GameColors.textSecondary} />
+                  <Text style={{ color: GameColors.textSecondary, fontFamily: 'Inter_400Regular',
+                                 fontSize: 12, marginTop: 8 }}>Image unavailable</Text>
+                </View>
+              )}
               {/* Reveal % — top-left corner badge, keeps image clean */}
               <View style={[styles.imageBadge, { borderColor: config.color }]}>
                 <Ionicons name="eye-outline" size={16} color={config.color} />

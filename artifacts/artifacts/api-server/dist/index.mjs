@@ -56875,41 +56875,6 @@ var BLUR_LEVEL = {
   medium: 14,
   hard: 20
 };
-var MOCK_ANSWERS = {
-  nature: ["Mountain Peak", "Ocean Wave", "Rainforest", "Sand Dune"],
-  animals: ["Lion", "Elephant", "Dolphin", "Eagle"],
-  food: ["Sushi Bowl", "Margherita Pizza", "Tacos", "Croissant"],
-  landmarks: ["Eiffel Tower", "Great Wall", "Pyramids of Giza", "Statue of Liberty"]
-};
-function shuffleArray(arr) {
-  const out = [...arr];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
-function generateMockQuestions(category, difficulty, count) {
-  const pool = MOCK_ANSWERS[category] ?? ["Mystery Object", "Hidden Item", "Unknown Subject", "Secret Thing"];
-  return Array.from({ length: count }, (_, i) => {
-    const answer = pool[i % pool.length] ?? "Unknown";
-    const distractors = pool.filter((a) => a !== answer).slice(0, 3);
-    const options = shuffleArray([answer, ...distractors]);
-    while (options.length < 4) options.push(`Option ${options.length + 1}`);
-    return {
-      answer,
-      options,
-      correctIndex: options.indexOf(answer),
-      funFact: `${answer} is a fascinating part of the ${category} category.`,
-      hints: [
-        `It belongs to the ${category} category`,
-        `This is a ${difficulty}-difficulty question`,
-        `Starts with "${answer.charAt(0)}"`
-      ],
-      imagePrompt: answer
-    };
-  });
-}
 router2.post("/questions", async (req, res, next) => {
   try {
     const { category = "nature", difficulty = "medium", count = 10 } = req.body;
@@ -56920,18 +56885,17 @@ router2.post("/questions", async (req, res, next) => {
       difficulty,
       count: safeCount
     });
-    const usingMock = aiQuestions.length === 0;
-    const source = usingMock ? generateMockQuestions(category, difficulty, safeCount) : aiQuestions;
-    if (usingMock) {
-      logger.warn({ category, difficulty }, "Question generation: serving built-in mock questions");
+    if (aiQuestions.length === 0) {
+      logger.error({ category, difficulty }, "Question generation: all providers failed \u2014 no questions generated");
+      res.status(503).json({ error: "AI question generation is currently unavailable. Please check your API keys and try again." });
+      return;
     }
     const questions = await Promise.all(
-      source.map(async (q, index) => {
-        const fallbackUrl = `https://picsum.photos/seed/${encodeURIComponent(q.answer)}/400/400`;
+      aiQuestions.map(async (q, index) => {
         const { url } = await generateImageWithFallback(q.imagePrompt);
         return {
           id: `q_${Date.now()}_${index}`,
-          imageUrl: url ?? fallbackUrl,
+          imageUrl: url ?? null,
           answer: q.answer,
           options: q.options,
           correctIndex: q.correctIndex,
@@ -56943,7 +56907,7 @@ router2.post("/questions", async (req, res, next) => {
         };
       })
     );
-    res.json({ questions, meta: { textProvider: textProvider ?? "mock" } });
+    res.json({ questions, meta: { textProvider } });
   } catch (err) {
     next(err);
   }
@@ -56957,8 +56921,12 @@ router2.post("/images", async (req, res, next) => {
     }
     const trimmedPrompt = prompt.trim();
     const { url, providerUsed } = await generateImageWithFallback(trimmedPrompt);
-    const fallbackUrl = `https://picsum.photos/seed/${encodeURIComponent(trimmedPrompt)}/400/400`;
-    res.json({ url: url ?? fallbackUrl, provider: providerUsed ?? "mock" });
+    if (!url) {
+      logger.warn({ prompt: trimmedPrompt }, "Image generation: all providers failed \u2014 no image generated");
+      res.status(503).json({ error: "AI image generation is currently unavailable. Please check your API keys and try again." });
+      return;
+    }
+    res.json({ url, provider: providerUsed });
   } catch (err) {
     next(err);
   }
