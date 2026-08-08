@@ -8,6 +8,8 @@ import { Stack, router } from 'expo-router';
 import { GameColors } from '@/theme/colors';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { notificationService } from '@/services/NotificationService';
+import { savePushToken } from '@/services/firestoreService';
+import { initAuth } from '@/services/authService';
 
 const queryClient = new QueryClient();
 
@@ -15,6 +17,23 @@ const queryClient = new QueryClient();
 function FirestoreSyncProvider() {
   useFirestoreSync();
   return null;
+}
+
+/**
+ * Fetch the Expo push token (if permission is granted) and persist it to
+ * Firestore.  Awaits `initAuth()` first so the UID is always available —
+ * `initAuth()` is idempotent and resolves immediately after the first call.
+ */
+async function persistPushToken(): Promise<void> {
+  try {
+    const token = await notificationService.getExpoPushToken();
+    if (!token) return;
+    if (__DEV__) console.log('[Push token]', token);
+    const uid = await initAuth();
+    await savePushToken(uid, token);
+  } catch (err) {
+    console.warn('[Push token] failed to persist:', err);
+  }
 }
 
 /** Initialises push-notification permissions, channels, and recurring reminders. */
@@ -31,19 +50,14 @@ function NotificationProvider() {
       await notificationService.scheduleDailyReward();
       await notificationService.scheduleWeeklyReward();
 
-      // Attempt to obtain the Expo push token for remote notifications
-      // (events, leaderboard, shop offers, new content — triggered server-side)
-      notificationService.getExpoPushToken().then((token) => {
-        if (token) {
-          // TODO: send token to your backend
-          // e.g. firestoreService.savePushToken(playerId, token)
-          if (__DEV__) console.log('[Push token]', token);
-        }
-      });
+      // Permission is now confirmed — fetch and persist the push token.
+      // initAuth() is awaited inside so UID is guaranteed even on first launch.
+      await persistPushToken();
     });
 
     // AppState: schedule 3-day inactive reminder when app backgrounds,
-    // cancel it when the player returns.
+    // cancel it when the player returns.  Also retry token persistence on
+    // resume so users who grant permission via OS Settings are covered.
     const sub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
       const prev = appState.current;
       appState.current = nextState;
@@ -52,6 +66,8 @@ function NotificationProvider() {
         notificationService.scheduleInactiveReminder();
       } else if (prev !== 'active' && nextState === 'active') {
         notificationService.cancelInactiveReminder();
+        // Retry token save in case permission was just enabled in OS Settings.
+        persistPushToken();
       }
     });
 

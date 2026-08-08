@@ -230,3 +230,26 @@ export async function saveSpinHistory(
     console.warn('[Firestore] saveSpinHistory failed:', err);
   }
 }
+
+// ─── Push token ───────────────────────────────────────────────────────────────
+
+/**
+ * Persist the player's Expo push token so the server can send targeted
+ * remote notifications (leaderboard updates, events, shop offers, new content).
+ *
+ * Stored at `players/{uid}/private/pushToken` — a private subcollection whose
+ * Firestore rules deny all client reads.  Only the owning device can write it,
+ * and only the server-side Admin SDK can read it for delivery.
+ * Fire-and-forget — never throws to the UI.
+ */
+export async function savePushToken(uid: string, token: string): Promise<void> {
+  try {
+    await setDoc(
+      doc(collection(db, 'players', uid, 'private'), 'pushToken'),
+      { token, updatedAt: serverTimestamp() },
+      { merge: false },
+    );
+  } catch (err) {
+    console.warn('[Firestore] savePushToken failed:', err);
+  }
+}

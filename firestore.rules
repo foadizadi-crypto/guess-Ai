@@ -19,6 +19,15 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // ── Private player data ───────────────────────────────────────────────────
+    // Subcollection for sensitive per-player data (e.g. push token) that must
+    // not be readable by other players.  Only the owner may write; all client
+    // reads are denied — the server Admin SDK reads these for notification delivery.
+    match /players/{userId}/private/{doc} {
+      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read:  if false;
+    }
+
     // ── Game sessions ─────────────────────────────────────────────────────────
     // Players may create sessions where playerId matches their own UID.
     // No client-side updates or deletes — aggregate stats are updated server-side
