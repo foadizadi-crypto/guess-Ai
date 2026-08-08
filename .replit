@@ -90,3 +90,7 @@ router = "path"
 
 [workflows.workflow.tasks.env]
 PORT = "8080"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 180000
