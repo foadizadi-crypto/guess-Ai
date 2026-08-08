@@ -74,6 +74,7 @@ export default function GameScreen() {
   const [gameImageUrl, setGameImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [removedOptions, setRemovedOptions] = useState<number[]>([]);
@@ -126,7 +127,7 @@ export default function GameScreen() {
     setLoading(true);
     setLoadError(null);
     openAIService.generateQuestions(category, difficulty, 20)
-      .then((items) => {
+      .then(({ questions: items, fromCache }) => {
         if (!active) return;
         const shuffled = items.map((q) => {
           const { options, correctIndex } = shuffleOptions(q);
@@ -134,6 +135,7 @@ export default function GameScreen() {
         });
         setGameImageUrl(shuffled[0]?.imageUrl ?? null);
         setQuestions(shuffled);
+        setIsOffline(fromCache);
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -395,6 +397,13 @@ export default function GameScreen() {
           <Text style={styles.score}>+{score}</Text>
         </View>
 
+        {isOffline && !loading && !loadError && (
+          <View style={styles.offlineBanner}>
+            <Ionicons name="cloud-offline-outline" size={13} color="#A78BFA" />
+            <Text style={styles.offlineBannerText}>Offline — using cached questions</Text>
+          </View>
+        )}
+
         {loadError ? (
           <View style={styles.loading}>
             <Ionicons name="cloud-offline-outline" size={48} color={GameColors.textSecondary} />
@@ -605,6 +614,8 @@ const styles = StyleSheet.create({
   answerLetter: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   answerLetterText: { ...Typography.small, fontFamily: 'Inter_700Bold' },
   answerText: { ...Typography.small, flex: 1, fontFamily: 'Inter_600SemiBold' },
+  offlineBanner: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(167,139,250,0.35)', backgroundColor: 'rgba(167,139,250,0.10)' },
+  offlineBannerText: { color: '#A78BFA', fontFamily: 'Inter_600SemiBold', fontSize: 10, letterSpacing: 0.4 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
   loadingText: { ...Typography.caption, color: GameColors.textSecondary },
   // ── Countdown ─────────────────────────────────────────────────────────────
