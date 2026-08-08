@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { GameColors } from '@/theme/colors';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { notificationService } from '@/services/NotificationService';
@@ -55,7 +55,12 @@ function NotificationProvider() {
       }
     });
 
-    return () => sub.remove();
+    // Navigate to the correct screen when the user taps a notification
+    const removeResponseListener = notificationService.addResponseListener((screen) => {
+      router.push(screen as Parameters<typeof router.push>[0]);
+    });
+
+    return () => { sub.remove(); removeResponseListener(); };
   }, []);
 
   return null;

@@ -50,4 +50,12 @@ export const notificationService = {
    * leaderboard updates, new categories/cosmetics).
    */
   getExpoPushToken: async (): Promise<string | null> => null,
+
+  // ── Notification tap navigation ───────────────────────────────────────────
+  /**
+   * Register a listener that fires when the user taps a notification.
+   * `callback` receives the target route (e.g. '/lobby', '/spin').
+   * Returns an unsubscribe function.  No-op on web.
+   */
+  addResponseListener: (_callback: (screen: string) => void): (() => void) => () => {},
 };

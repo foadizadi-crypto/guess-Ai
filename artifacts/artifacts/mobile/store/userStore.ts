@@ -97,6 +97,8 @@ interface UserState {
   spendGems: (amount: number) => boolean;
   addXP: (amount: number) => void;
   unlockAvatar: (avatarId: string) => boolean;
+  /** Purchase an avatar from the shop — deducts coinCost from the player's balance. */
+  buyAvatar: (avatarId: string, coinCost: number) => boolean;
   selectAvatar: (avatarId: string) => void;
   buyPowerUp: (powerUpId: PowerUpId, quantity?: number) => boolean;
   usePowerUp: (powerUpId: PowerUpId) => boolean;
@@ -377,6 +379,27 @@ export const useUserStore = create<UserState>()(
             ? newAvatars.map((a) => a.id === 'avatar_10' ? { ...a, unlocked: true } : a)
             : newAvatars;
           return { avatars: finalAvatars };
+        });
+        return true;
+      },
+
+      buyAvatar: (avatarId, coinCost) => {
+        const { avatars, coins } = get();
+        const avatar = avatars.find((a) => a.id === avatarId);
+        if (!avatar || avatar.unlocked) return false;
+        if (coins < coinCost) return false;
+        set((state) => {
+          const newAvatars = state.avatars.map((a) =>
+            a.id === avatarId ? { ...a, unlocked: true } : a,
+          );
+          // Collector achievement: owning 5+ avatars auto-unlocks avatar_10
+          const ownedCount = newAvatars.filter((a) => a.unlocked).length;
+          const collectorUnlocked =
+            ownedCount >= 5 && !newAvatars.find((a) => a.id === 'avatar_10')?.unlocked;
+          const finalAvatars = collectorUnlocked
+            ? newAvatars.map((a) => (a.id === 'avatar_10' ? { ...a, unlocked: true } : a))
+            : newAvatars;
+          return { avatars: finalAvatars, coins: state.coins - coinCost };
         });
         return true;
       },

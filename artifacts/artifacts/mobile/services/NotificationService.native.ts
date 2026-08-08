@@ -242,6 +242,26 @@ async function getExpoPushToken(): Promise<string | null> {
   }
 }
 
+/**
+ * Register a listener for when the user taps a notification.
+ * Maps notification identifiers to Expo Router screen paths.
+ * Returns an unsubscribe function.
+ */
+function addResponseListener(callback: (screen: string) => void): () => void {
+  const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+    const id = response.notification.request.identifier;
+    let screen = '/lobby';
+    if (id === IDS.SPIN_READY)                         screen = '/spin';
+    else if (id === IDS.DAILY_REWARD ||
+             id === IDS.WEEKLY_REWARD)                 screen = '/lobby'; // auto-pops daily modal on focus
+    else if (id === IDS.STAMINA_FULL ||
+             id === IDS.INACTIVE)                      screen = '/lobby';
+    else if (id.includes('achievement'))               screen = '/achievements';
+    callback(screen);
+  });
+  return () => sub.remove();
+}
+
 export const notificationService = {
   setup,
   requestPermission,
@@ -255,4 +275,5 @@ export const notificationService = {
   scheduleInactiveReminder,
   cancelInactiveReminder,
   getExpoPushToken,
+  addResponseListener,
 };

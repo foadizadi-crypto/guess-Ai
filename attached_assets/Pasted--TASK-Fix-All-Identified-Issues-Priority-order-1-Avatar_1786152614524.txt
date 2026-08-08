@@ -1,0 +1,76 @@
+**TASK: Fix All Identified Issues**
+
+Priority order:
+
+1. Avatar coin deduction – make it actually deduct coins via buyCosmetic or add fromShop flag.
+2. Stamina pack description – reword to "Adds 50 stamina to your reserve."
+3. Notification tap navigation – add addNotificationResponseReceivedListener in _layout.tsx.
+4. Reserve pill label – add "Reserve" label or tooltip.
+5. as any casts – remove and use proper TypeScript types.
+
+After fixes, restart Metro with --clear and confirm all issues are resolved. Reply with a summary of changes.**TASK: Fix All Identified Issues in the BlurQuiz Game**
+
+You previously identified several bugs and issues in the game. Please fix all of them in one go, in the following priority order:
+
+---
+
+## 🔴 HIGH PRIORITY (Economy & Core Logic)
+
+### 1. Avatar Coin Deduction Bug
+- **Problem:** `unlockAvatar` in the shop never deducts coins. Avatars are effectively free.
+- **Fix:** 
+  - Route avatar purchases through `buyCosmetic` (which handles coin deduction), OR
+  - Add a `fromShop: boolean` flag to `unlockAvatar` and explicitly deduct coins when purchasing from the shop.
+  - Ensure the success toast shows the correct remaining balance.
+
+### 2. Stamina Pack Description Misleading
+- **Problem:** `shopConfig.ts` describes "Full Refill" as "tops your active stamina to max", but all purchases go to `staminaReserve` and never touch active stamina.
+- **Fix:**
+  - Reword the description to: **"Adds 50 stamina to your reserve."**
+  - Make sure this matches the descriptions for Quick Refill and Mega packs.
+
+---
+
+## 🟡 MEDIUM PRIORITY (UX & Navigation)
+
+### 3. Notification Tap Navigation
+- **Problem:** No `addNotificationResponseReceivedListener` in `_layout.tsx`. Tapping a push notification does nothing.
+- **Fix:**
+  - Add `addNotificationResponseReceivedListener` in `_layout.tsx`.
+  - Handle navigation based on notification type (e.g., "stamina_full" → go to Lobby, "daily_reward" → open Daily Reward modal).
+
+### 4. Reserve Pill Has No Label
+- **Problem:** The bare number (e.g., "42") in the lobby header has no tooltip or label. New players don't know what it means.
+- **Fix:**
+  - Add a one-word label like "Reserve" next to the number, OR
+  - Add a long-press tooltip explaining: "Reserve stamina – used when active stamina runs out."
+
+---
+
+## 🟢 LOW PRIORITY (Code Quality)
+
+### 5. `as any` Casts in shop.tsx
+- **Problem:** `buyCoinGemExchange(id as any)` and IconNames cast as `any`. This hides type errors and makes refactors riskier.
+- **Fix:**
+  - Remove all `as any` casts.
+  - Use proper TypeScript types (e.g., `ProductId` type for `buyCoinGemExchange`, proper union type for IconNames).
+
+---
+
+## ✅ VERIFICATION STEPS AFTER FIXES
+
+1. Test avatar purchase – coins should be deducted correctly.
+2. Check stamina pack description – should clearly say "adds to reserve."
+3. Tap a push notification – should navigate to the correct screen.
+4. Check lobby header – "Reserve" label should appear next to the number.
+5. Run TypeScript compiler – no `as any` warnings should remain.
+
+---
+
+## 📌 IMPORTANT NOTES
+
+- Do not change the core logic of working systems (energy, coin→gem exchange, notifications service, level rewards).
+- Only touch the files mentioned above.
+- After fixing, restart Metro with `npx expo start --clear` and confirm the app runs without errors.
+
+**Reply with a summary of what you changed and confirm all issues are resolved.**

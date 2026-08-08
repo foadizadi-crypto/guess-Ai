@@ -259,7 +259,7 @@ export const STAMINA_PACKS: GemPackItem[] = [
   {
     id:          'stamina_standard',
     name:        'Full Refill',
-    description: 'Tops up your active stamina to the max (5 full games)',
+    description: 'Adds 50 stamina to your reserve',
     icon:        'battery-full-outline',
     rarity:      'rare',
     gemCost:     8,

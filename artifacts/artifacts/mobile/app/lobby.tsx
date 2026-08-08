@@ -372,7 +372,7 @@ export default function LobbyScreen() {
               activeOpacity={0.75}
             >
               <Text style={styles.reservePillIcon}>📦</Text>
-              <Text style={styles.reservePillText}>{staminaReserve}</Text>
+              <Text style={styles.reservePillText}>Reserve {staminaReserve}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.gearBtn} onPress={() => nav(ROUTES.SETTINGS)}>

@@ -46,7 +46,7 @@ import {
   STAMINA_PACKS,
   RARITY_COLORS,
 } from '@/constants/shopConfig';
-import { IAP_GEM_PACKS, COIN_GEM_EXCHANGES } from '@/constants/economy';
+import { IAP_GEM_PACKS, COIN_GEM_EXCHANGES, type CoinGemExchangeId } from '@/constants/economy';
 import type { PowerUpId } from '@/types';
 import type { ConsumableId } from '@/constants/shopData';
 
@@ -103,7 +103,7 @@ export default function ShopScreen() {
   const buyPowerUp         = useUserStore((s) => s.buyPowerUp);
   const buyGemCosmetic     = useUserStore((s) => s.buyGemCosmetic);
   const equipGemCosmetic   = useUserStore((s) => s.equipGemCosmetic);
-  const unlockAvatar       = useUserStore((s) => s.unlockAvatar);
+  const buyAvatar          = useUserStore((s) => s.buyAvatar);
   const selectAvatar       = useUserStore((s) => s.selectAvatar);
   const selectedAvatarId   = useUserStore((s) => s.selectedAvatarId);
   const mockPurchaseCoins  = useUserStore((s) => s.mockPurchaseCoins);
@@ -163,7 +163,7 @@ export default function ShopScreen() {
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Convert', onPress: () => {
-          const result = buyCoinGemExchange(id as any);
+          const result = buyCoinGemExchange(id as CoinGemExchangeId);
           result ? ok(`+${gemGrant} 💎`) : fail('Failed', 'Something went wrong.');
         }},
       ],
@@ -212,7 +212,7 @@ export default function ShopScreen() {
     const item = AVATAR_SHOP_ITEMS.find(i => i.id === id);
     if (!item) return;
     if (coins < item.price) { fail('Not enough coins', `You need ${item.price} 🪙.`); return; }
-    const result = unlockAvatar(id);
+    const result = buyAvatar(id, item.price);
     if (result) { selectAvatar(id); ok(`−${item.price} 🪙`); }
     else fail('Failed', 'Something went wrong.');
   }, [avatars, selectedAvatarId, coins, unlockAvatar, selectAvatar, ok, fail, toast]);
@@ -271,7 +271,7 @@ export default function ShopScreen() {
               style={[s.tab, tab === i && s.tabActive]}
               onPress={() => { setTab(i); setCosmFilter('All'); }}
             >
-              <Ionicons name={icon as any} size={16} color={tab === i ? GameColors.backgroundPrimary : GameColors.textSecondary} />
+              <Ionicons name={icon as React.ComponentProps<typeof Ionicons>['name']} size={16} color={tab === i ? GameColors.backgroundPrimary : GameColors.textSecondary} />
               <Text style={[s.tabText, tab === i && s.tabTextActive]}>{label}</Text>
             </TouchableOpacity>
           ))}
@@ -560,7 +560,7 @@ export default function ShopScreen() {
                       <View style={[s.cosmIcon, { backgroundColor: `${rarityColor}18` }]}>
                         {SHOP_IMAGES[item.id]
                           ? <Image source={SHOP_IMAGES[item.id]} style={s.itemImg} resizeMode="contain" />
-                          : <Ionicons name={item.icon as any} size={28} color={owned ? rarityColor : GameColors.textSecondary} />
+                          : <Ionicons name={item.icon as React.ComponentProps<typeof Ionicons>['name']} size={28} color={owned ? rarityColor : GameColors.textSecondary} />
                         }
                       </View>
                       <Text style={s.cosmName} numberOfLines={1}>{item.name}</Text>
