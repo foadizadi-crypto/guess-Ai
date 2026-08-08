@@ -20,19 +20,38 @@
  *  12  Leaderboard Rank Update
  *
  * Metro selects this file on iOS/Android; NotificationService.ts is the web stub.
+ *
+ * NOTE: expo-notifications throws a hard error at import time when running inside
+ * Expo Go on SDK 53+ (remote push was removed from Expo Go). We use a lazy require()
+ * guarded by Constants.appOwnership so Expo Go never attempts to load the module.
  */
 
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+// Import only the TypeScript types — this never executes at runtime.
+import type * as NotifModule from 'expo-notifications';
+
+// ── Expo Go guard ──────────────────────────────────────────────────────────────
+// Constants.appOwnership === 'expo' means we are running inside Expo Go.
+// In that case we skip the require() so the module never throws.
+const isExpoGo = (Constants.appOwnership as string) === 'expo';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const N: typeof NotifModule | null = isExpoGo ? null : (() => {
+  try { return require('expo-notifications') as typeof NotifModule; } catch { return null; }
+})();
 
 // ── Foreground behaviour ───────────────────────────────────────────────────────
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+// Only set when module loaded; skipped silently in Expo Go.
+if (N) {
+  N.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
 
 // ── Fixed identifiers (allow cancellation by ID) ──────────────────────────────
 const IDS = {
@@ -45,41 +64,43 @@ const IDS = {
 
 // ── Android notification channels ─────────────────────────────────────────────
 async function createChannels(): Promise<void> {
-  if (Platform.OS !== 'android') return;
+  if (!N || Platform.OS !== 'android') return;
   await Promise.all([
-    Notifications.setNotificationChannelAsync('gameplay', {
+    N.setNotificationChannelAsync('gameplay', {
       name: 'Gameplay',
       description: 'Stamina and in-game alerts',
-      importance: Notifications.AndroidImportance.HIGH,
+      importance: N.AndroidImportance.HIGH,
       sound: 'default',
       vibrationPattern: [0, 250, 250, 250],
     }),
-    Notifications.setNotificationChannelAsync('rewards', {
+    N.setNotificationChannelAsync('rewards', {
       name: 'Rewards & Achievements',
       description: 'Daily rewards, achievements, spin wheel',
-      importance: Notifications.AndroidImportance.DEFAULT,
+      importance: N.AndroidImportance.DEFAULT,
       sound: 'default',
     }),
-    Notifications.setNotificationChannelAsync('engagement', {
+    N.setNotificationChannelAsync('engagement', {
       name: 'Reminders',
       description: 'Come-back nudges',
-      importance: Notifications.AndroidImportance.LOW,
+      importance: N.AndroidImportance.LOW,
     }),
   ]);
 }
 
 // ── Setup & permissions ───────────────────────────────────────────────────────
 async function setup(): Promise<void> {
+  if (!N) return; // Expo Go — skip silently
   try {
     await createChannels();
   } catch { /* simulator / web — ignore */ }
 }
 
 async function requestPermission(): Promise<boolean> {
+  if (!N) return false;
   try {
-    const { status: existing } = await Notifications.getPermissionsAsync();
+    const { status: existing } = await N.getPermissionsAsync();
     if (existing === 'granted') return true;
-    const { status } = await Notifications.requestPermissionsAsync();
+    const { status } = await N.requestPermissionsAsync();
     return status === 'granted';
   } catch {
     return false;
@@ -91,22 +112,24 @@ async function requestPermission(): Promise<boolean> {
 /** Cancel existing then schedule with a stable identifier. */
 async function scheduleUnique(
   id: string,
-  content: Notifications.NotificationContentInput,
-  trigger: Notifications.NotificationTriggerInput,
+  content: NotifModule.NotificationContentInput,
+  trigger: NotifModule.NotificationTriggerInput,
 ): Promise<void> {
+  if (!N) return;
   try {
-    await Notifications.cancelScheduledNotificationAsync(id);
-    await Notifications.scheduleNotificationAsync({ identifier: id, content, trigger });
+    await N.cancelScheduledNotificationAsync(id);
+    await N.scheduleNotificationAsync({ identifier: id, content, trigger });
   } catch { /* no permission or simulator */ }
 }
 
 async function cancel(id: string): Promise<void> {
-  try { await Notifications.cancelScheduledNotificationAsync(id); } catch { /* ignore */ }
+  if (!N) return;
+  try { await N.cancelScheduledNotificationAsync(id); } catch { /* ignore */ }
 }
 
 // ── 1. Stamina Full ───────────────────────────────────────────────────────────
 async function scheduleStaminaFull(minutesUntilFull: number): Promise<void> {
-  if (minutesUntilFull <= 0) return;
+  if (!N || minutesUntilFull <= 0) return;
   await scheduleUnique(
     IDS.STAMINA_FULL,
     {
@@ -116,7 +139,7 @@ async function scheduleStaminaFull(minutesUntilFull: number): Promise<void> {
       ...(Platform.OS === 'android' ? { android: { channelId: 'gameplay' } } : {}),
     },
     {
-      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      type: N.SchedulableTriggerInputTypes.TIME_INTERVAL,
       seconds: minutesUntilFull * 60,
     },
   );
@@ -128,8 +151,9 @@ async function cancelStaminaFull(): Promise<void> {
 
 // ── 2. Achievement Completed (immediate) ──────────────────────────────────────
 async function fireAchievementCompleted(achievementName: string): Promise<void> {
+  if (!N) return;
   try {
-    await Notifications.scheduleNotificationAsync({
+    await N.scheduleNotificationAsync({
       content: {
         title: '🏆 Achievement Unlocked!',
         body: `You earned: ${achievementName}`,
@@ -143,6 +167,7 @@ async function fireAchievementCompleted(achievementName: string): Promise<void> 
 
 // ── 3 + 4. Daily Reward Reminder (recurring — 10:00 AM local) ────────────────
 async function scheduleDailyReward(): Promise<void> {
+  if (!N) return;
   await scheduleUnique(
     IDS.DAILY_REWARD,
     {
@@ -152,7 +177,7 @@ async function scheduleDailyReward(): Promise<void> {
       ...(Platform.OS === 'android' ? { android: { channelId: 'rewards' } } : {}),
     },
     {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
+      type: N.SchedulableTriggerInputTypes.DAILY,
       hour: 10,
       minute: 0,
     },
@@ -161,6 +186,7 @@ async function scheduleDailyReward(): Promise<void> {
 
 // ── 5. Weekly Reward Reminder (recurring — Monday 10:00 AM) ──────────────────
 async function scheduleWeeklyReward(): Promise<void> {
+  if (!N) return;
   await scheduleUnique(
     IDS.WEEKLY_REWARD,
     {
@@ -170,7 +196,7 @@ async function scheduleWeeklyReward(): Promise<void> {
       ...(Platform.OS === 'android' ? { android: { channelId: 'rewards' } } : {}),
     },
     {
-      type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+      type: N.SchedulableTriggerInputTypes.WEEKLY,
       weekday: 2, // 1=Sun … 7=Sat; 2=Monday
       hour: 10,
       minute: 0,
@@ -180,7 +206,7 @@ async function scheduleWeeklyReward(): Promise<void> {
 
 // ── 11. Spin Wheel Ready ──────────────────────────────────────────────────────
 async function scheduleSpinReady(cooldownHours: number): Promise<void> {
-  if (cooldownHours <= 0) return;
+  if (!N || cooldownHours <= 0) return;
   await scheduleUnique(
     IDS.SPIN_READY,
     {
@@ -190,7 +216,7 @@ async function scheduleSpinReady(cooldownHours: number): Promise<void> {
       ...(Platform.OS === 'android' ? { android: { channelId: 'rewards' } } : {}),
     },
     {
-      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      type: N.SchedulableTriggerInputTypes.TIME_INTERVAL,
       seconds: Math.round(cooldownHours * 3_600),
     },
   );
@@ -202,6 +228,7 @@ async function cancelSpinReady(): Promise<void> {
 
 // ── 13. Inactive Player Return Reminder (3-day delay) ────────────────────────
 async function scheduleInactiveReminder(): Promise<void> {
+  if (!N) return;
   await scheduleUnique(
     IDS.INACTIVE,
     {
@@ -211,7 +238,7 @@ async function scheduleInactiveReminder(): Promise<void> {
       ...(Platform.OS === 'android' ? { android: { channelId: 'engagement' } } : {}),
     },
     {
-      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      type: N.SchedulableTriggerInputTypes.TIME_INTERVAL,
       seconds: 3 * 24 * 60 * 60, // 3 days
     },
   );
@@ -224,17 +251,12 @@ async function cancelInactiveReminder(): Promise<void> {
 // ── Remote push token (#6-10, #12) ───────────────────────────────────────────
 /**
  * Returns the Expo push token for this device.
- * Send this to your server to trigger remote notifications for:
- *  #6  New Event Started
- *  #7  Event Ending Soon
- *  #8  New Image Category Added
- *  #9  New Cosmetic Items Available
- * #10  Shop Special Offer
- * #12  Leaderboard Rank Update
+ * Returns null in Expo Go (not supported since SDK 53).
  */
 async function getExpoPushToken(): Promise<string | null> {
+  if (!N) return null;
   try {
-    const token = await Notifications.getExpoPushTokenAsync();
+    const token = await N.getExpoPushTokenAsync();
     return token.data;
   } catch {
     // Fails on simulators and in Expo Go without a project ID configured
@@ -248,12 +270,13 @@ async function getExpoPushToken(): Promise<string | null> {
  * Returns an unsubscribe function.
  */
 function addResponseListener(callback: (screen: string) => void): () => void {
-  const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+  if (!N) return () => {};
+  const sub = N.addNotificationResponseReceivedListener((response) => {
     const id = response.notification.request.identifier;
     let screen = '/lobby';
     if (id === IDS.SPIN_READY)                         screen = '/spin';
     else if (id === IDS.DAILY_REWARD ||
-             id === IDS.WEEKLY_REWARD)                 screen = '/lobby'; // auto-pops daily modal on focus
+             id === IDS.WEEKLY_REWARD)                 screen = '/lobby';
     else if (id === IDS.STAMINA_FULL ||
              id === IDS.INACTIVE)                      screen = '/lobby';
     else if (id.includes('achievement'))               screen = '/achievements';
