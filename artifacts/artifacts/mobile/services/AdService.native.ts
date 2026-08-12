@@ -1,23 +1,30 @@
 /**
- * AdService — NATIVE build (iOS / Android).
+ * services/AdService.native.ts — NATIVE AdMob advertising integration service.
+ * Strict Expo EAS Production Framework + TypeScript Compilable
  *
- * Metro resolves this file instead of `AdService.ts` when bundling for native
- * platforms.  It safely requires `react-native-google-mobile-ads` (which is
- * only available when the native bridge is linked — EAS production/preview
- * builds).  In Expo Go the NativeModules check guards every call and falls
- * back to mock behaviour so the app still works without real ads.
+ * CRITICAL AUDIT FIXES APPLIED:
+ * 1. APP STATE RESET (P2): Listens to background events to reset throttle timers properly.
+ * 2. LEAK DETECTOR PROTECTION (P3): Enforces real ad unit configuration checks during production.
  */
 
-import { NativeModules } from 'react-native';
+import { NativeModules, AppState, AppStateStatus } from 'react-native';
 
-// ─── Re-export shared constants so importers need only one path ────────────
+// ─── Shared Ad Unit Configurations ──────────────────────────────────────────
 export const AD_UNIT_IDS = {
   banner:       process.env.EXPO_PUBLIC_ADMOB_BANNER_ID       ?? 'ca-app-pub-3940256099942544/6300978111',
   interstitial: process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID ?? 'ca-app-pub-3940256099942544/1033173712',
   rewarded:     process.env.EXPO_PUBLIC_ADMOB_REWARDED_ID     ?? 'ca-app-pub-3940256099942544/5224354917',
 };
 
-// ─── Native availability (Expo Go lacks the linked native module) ─────────
+// --- CRITICAL AUDIT FIX (P3): Production Environment Safety Guard Block ---
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.EXPO_PUBLIC_ADMOB_BANNER_ID || 
+      AD_UNIT_IDS.banner.includes('3940256099942544')) {
+    throw new Error('❌ FATAL: EXPO_PUBLIC_ADMOB_* real deployment unit IDs must be configured for official production releases.');
+  }
+}
+
+// ─── Native Bridges Verification Module ──────────────────────────────────────
 const ADMOB_LINKED = !!NativeModules.RNGoogleMobileAds;
 
 let _Inter: any = null;
@@ -34,47 +41,67 @@ if (ADMOB_LINKED) {
     _AdEventType       = m.AdEventType;
     _RewardedEventType = m.RewardedAdEventType;
     _TestIds           = m.TestIds;
-  } catch { /* linked but errored — stay in mock mode */ }
+  } catch {
+    // Linked but fallback needed for simulator threads
+  }
 }
 
-// Use TestIds when the module is available and no custom ID is provided
-if (_TestIds) {
+// Populate official fallback IDs automatically when available outside production
+if (_TestIds && process.env.NODE_ENV !== 'production') {
   if (!process.env.EXPO_PUBLIC_ADMOB_BANNER_ID)       AD_UNIT_IDS.banner       = _TestIds.BANNER;
   if (!process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID) AD_UNIT_IDS.interstitial = _TestIds.INTERSTITIAL;
   if (!process.env.EXPO_PUBLIC_ADMOB_REWARDED_ID)     AD_UNIT_IDS.rewarded     = _TestIds.REWARDED;
 }
 
-// ─── Throttle ─────────────────────────────────────────────────────────────
 const INTERSTITIAL_COOLDOWN_MS = 3 * 60 * 1000;
-let lastInterstitialAt = 0;
 const mockDelay = (ms = 600) => new Promise<void>((r) => setTimeout(r, ms));
 
-// ─── Service ──────────────────────────────────────────────────────────────
-
 class AdService {
-  get bannerAdUnitId(): string { return AD_UNIT_IDS.banner; }
+  private lastInterstitialAt = 0;
+  private currentAppState: AppStateStatus = AppState.currentState;
+
+  constructor() {
+    // --- CRITICAL AUDIT FIX (P2): AppState Listener Pipeline to reset throttling loops ---
+    AppState.addEventListener('change', this.handleAppStateChange);
+  }
+
+  private handleAppStateChange = (nextAppState: AppStateStatus) => {
+    // Reset structural tracking loops when application goes out of active focus focus trees
+    if (this.currentAppState === 'active' && nextAppState.match(/inactive|background/)) {
+      console.log('[Ad System] App entered background state. Throttling loops cleared.');
+      this.lastInterstitialAt = 0; 
+    }
+    this.currentAppState = nextAppState;
+  };
+
+  get bannerAdUnitId(): string { 
+    return AD_UNIT_IDS.banner; 
+  }
 
   async showInterstitial(): Promise<void> {
     const now = Date.now();
-    if (now - lastInterstitialAt < INTERSTITIAL_COOLDOWN_MS) return;
+    if (now - this.lastInterstitialAt < INTERSTITIAL_COOLDOWN_MS) return;
 
     if (!ADMOB_LINKED || !_Inter || !_AdEventType) {
       await mockDelay(300);
-      lastInterstitialAt = now;
+      this.lastInterstitialAt = now;
       return;
     }
 
     try {
       const ad = _Inter.createForAdRequest(AD_UNIT_IDS.interstitial);
       await new Promise<void>((resolve, reject) => {
-        ad.addAdEventListener(_AdEventType.LOADED, () => { ad.show(); resolve(); });
+        ad.addAdEventListener(_AdEventType.LOADED, () => { 
+          ad.show(); 
+          resolve(); 
+        });
         ad.addAdEventListener(_AdEventType.ERROR, reject);
         ad.load();
       });
-      lastInterstitialAt = now;
+      this.lastInterstitialAt = now;
     } catch (err) {
-      if (__DEV__) console.warn('[AdService] interstitial error', err);
-      lastInterstitialAt = now;
+      if (__DEV__) console.warn('[AdService] interstitial pipeline failed:', err);
+      this.lastInterstitialAt = now;
     }
   }
 
@@ -88,14 +115,16 @@ class AdService {
       return await new Promise<boolean>((resolve) => {
         const ad = _Rewarded.createForAdRequest(AD_UNIT_IDS.rewarded);
         let rewarded = false;
-        ad.addAdEventListener(_RewardedEventType.EARNED_REWARD, () => { rewarded = true; });
+        ad.addAdEventListener(_RewardedEventType.EARNED_REWARD, () => { 
+          rewarded = true; 
+        });
         ad.addAdEventListener(_AdEventType.CLOSED, () => resolve(rewarded));
         ad.addAdEventListener(_AdEventType.ERROR, () => resolve(false));
         ad.addAdEventListener(_AdEventType.LOADED, () => ad.show());
         ad.load();
       });
     } catch (err) {
-      if (__DEV__) console.warn('[AdService] rewarded error', err);
+      if (__DEV__) console.warn('[AdService] rewarded pipeline failed:', err);
       return false;
     }
   }
