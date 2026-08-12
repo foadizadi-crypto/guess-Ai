@@ -1,0 +1,12 @@
+[
+  { "id": "q_001", "question": "What object is used to write on paper?", "answer": "pen", "category": "general", "difficulty": "easy" },
+  { "id": "q_002", "question": "Which animal says 'meow'?", "answer": "cat", "category": "animals", "difficulty": "easy" },
+  { "id": "q_003", "question": "What color is the sky on a clear day?", "answer": "blue", "category": "general", "difficulty": "easy" },
+  { "id": "q_004", "question": "What is the capital city of France?", "answer": "paris", "category": "geography", "difficulty": "medium" },
+  { "id": "q_005", "question": "How many legs does a spider have?", "answer": "8", "category": "science", "difficulty": "easy" },
+  { "id": "q_006", "question": "Which planet in our solar system is known as the Red Planet?", "answer": "mars", "category": "science", "difficulty": "medium" },
+  { "id": "q_007", "question": "What is the largest mammal on Earth?", "answer": "blue whale", "category": "animals", "difficulty": "medium" },
+  { "id": "q_008", "question": "Which instrument has keys and is used to play music?", "answer": "piano", "category": "music", "difficulty": "easy" },
+  { "id": "q_009", "question": "What is 5 + 7?", "answer": "12", "category": "math", "difficulty": "easy" },
+  { "id": "q_010", "question": "Which holiday is celebrated on December 25th?", "answer": "christmas", "category": "culture", "difficulty": "easy" }
+]
