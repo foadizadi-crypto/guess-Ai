@@ -1,9 +1,28 @@
-import React, { useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, View, ImageBackground, Switch, ViewStyle } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  ImageBackground,
+  Switch,
+  Pressable,
+  ViewStyle,
+  Dimensions,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withParallel,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
+import { useRouter } from 'expo-router';
 import { AvatarFrame } from '@/components/AvatarFrame';
-import { BackButton } from '@/components/BackButton';
 import { CoinDisplay } from '@/components/CoinDisplay';
 import { ProgressBar } from '@/components/ProgressBar';
 import { GameColors } from '@/theme/colors';
@@ -11,16 +30,20 @@ import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
 import { calculateXPProgress, formatScore, xpInCurrentLevel, xpForCurrentLevel } from '@/utils';
 
+const { width: SW, height: SH } = Dimensions.get('window');
+
 /**
- * Production-Grade Strict TypeScript Player Profile Screen Component
- * File Path: app/profile.tsx (Strict Expo Router TSX Compliance)
- * Synchronized with 1080x2340 resolution metrics and global Zustand user store schema.
+ * Strict TypeScript 1080x2340 Active UI Profile Screen Component
+ * File Path: app/profile.tsx (Expo Router TypeScript Structure)
+ * Integrates haptics, tap audio feeds, and dynamic store bindings safely.
  */
 export default function ProfileScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [debugMode, setDebugMode] = useState<boolean>(false);
+  const [soundInstance, setSoundInstance] = useState<Audio.Sound | null>(null);
   
-  // --- 1. Fetching Typed Live Player Global States from User Store Context ---
+  // --- 1. Pulling live player records directly from your real store context ---
   const { 
     username, 
     coins, 
@@ -42,33 +65,61 @@ export default function ProfileScreen() {
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 6;
   const bottomPad = Platform.OS === 'web' ? 20 : insets.bottom + 20;
 
-  // Strict tuple compilation mapping layout array
+  // Real statistics data matrix layout
   const stats = [
-    ['game-controller-outline', 'Games Played', `${statistics?.totalGamesPlayed ?? 0}`],
+    ['game-controller-outline', 'Games Played', `${statistics?.totalGamesPlayed || 0}`],
     ['trophy-outline', 'Win Rate', `${winRate}%`],
-    ['analytics-outline', 'Total Score', formatScore(statistics?.bestScore ?? 0)],
-    ['checkmark-circle-outline', 'Correct Answers', `${statistics?.totalCorrectAnswers ?? 0}`],
+    ['analytics-outline', 'Total Score', formatScore(statistics?.bestScore || 0)],
+    ['checkmark-circle-outline', 'Correct Answers', `${statistics?.totalCorrectAnswers || 0}`],
     ['grid-outline', 'Favorite Category', statistics?.favoriteCategory ? statistics.favoriteCategory[0].toUpperCase() + statistics.favoriteCategory.slice(1) : '—'],
-    ['flame-outline', 'Best Streak', `${statistics?.longestStreak ?? 0}`],
+    ['flame-outline', 'Best Streak', `${statistics?.longestStreak || 0}`],
   ] as const;
 
-  // Strict layout compiler type calibration helper utility
-  const getProportionalStyle = (
-    left: string, 
-    top: string, 
-    width: string, 
-    height: string
-  ): ViewStyle[] => [
+  // --- 2. Stable Native UI Tap Feedback Sound Player ---
+  async function playTapSound() {
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/click.mp3'),
+        { shouldPlay: true }
+      );
+      setSoundInstance(sound);
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
+    } catch (error) {
+      console.log('[Profile Audio Engine] Sound asset missing or click error:', error);
+    }
+  }
+
+  useEffect(() => {
+    return soundInstance ? () => { soundInstance.unloadAsync(); } : undefined;
+  }, [soundInstance]);
+
+  // --- 3. Unified Touch Interaction Feedback Pipeline ---
+  const handleBackNavigation = async () => {
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e) {
+      console.log('Haptics engine unavailable on active device layer');
+    }
+    await playTapSound();
+    router.back();
+  };
+
+  // Helper utility to draw clean layout caliper boxes during calibration phases
+  const getProportionalStyle = (left: string, top: string, width: string, height: string): ViewStyle[] => [
     styles.absoluteRegion,
     {
       left,
       top,
       width,
       height,
-      backgroundColor: debugMode ? 'rgba(56, 189, 248, 0.3)' : 'transparent',
+      backgroundColor: debugMode ? 'rgba(56, 189, 248, 0.25)' : 'transparent',
       borderWidth: debugMode ? 1 : 0,
       borderColor: '#38bdf8',
-    } as ViewStyle
+    }
   ];
 
   return (
@@ -79,9 +130,13 @@ export default function ProfileScreen() {
         resizeMode="stretch"
       >
         
-        {/* --- A. TOP CONTROL HEADER BAR (BACK ACTION CONTROL) --- */}
+        {/* --- A. TOP CONTROL HEADER BAR (BACK BUTTON MESH) --- */}
         <View style={[styles.headerContainerOverlay, { top: topPad }]}>
-          <BackButton />
+          <WaveWrapper onPress={handleBackNavigation} style={styles.backButtonTouchWrapper}>
+            <View style={styles.backButtonInnerFrame}>
+              <Ionicons name="chevron-back" size={24} color={GameColors.textWhite} />
+            </View>
+          </WaveWrapper>
           <Text style={styles.titleText}>Profile</Text>
           <View style={styles.spacerNode} />
         </View>
@@ -104,6 +159,7 @@ export default function ProfileScreen() {
               <CoinDisplay amount={coins} size="medium" animate />
             </View>
 
+            {/* Proportional Level Progression Tracker elements */}
             <View style={styles.xpWrap}>
               <View style={styles.xpLabelsRow}>
                 <Text style={styles.mutedLevelLabel}>Level {level}</Text>
@@ -117,7 +173,8 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* --- C. SCROLLABLE STATISTICS DATA SCROLL BOUNDARY CONTAINER --- */}
+
+        {/* --- C. SCROLLABLE STATISTICS HOUSING OVERLAY --- */}
         <View style={styles.scrollContainerLayoutBoundary}>
           <ScrollView 
             contentContainerStyle={[styles.scrollContentLayout, { paddingBottom: bottomPad }]} 
@@ -146,7 +203,8 @@ export default function ProfileScreen() {
           </ScrollView>
         </View>
 
-        {/* --- D. VISUAL INTERFACE GRID ALIGN SWITCH LAYER PANEL --- */}
+
+        {/* --- D. VISUAL INTERFACE CALIBRATION MESH PANEL --- */}
         <View style={[styles.debugPanel, { bottom: insets.bottom + 20 }]}>
           <Text style={styles.debugText}>Profile Grid Align:</Text>
           <Switch 
@@ -162,10 +220,47 @@ export default function ProfileScreen() {
   );
 }
 
+// ─── Custom Animated Response Effect Framework Wrappers ───
+
+function WaveWrapper({ style, onPress, children }: any) {
+  const waveScale = useSharedValue(0);
+  const waveOpacity = useSharedValue(0);
+
+  const handlePressIn = () => {
+    waveScale.value = 0.2;
+    waveOpacity.value = 0.55;
+    waveScale.value = withTiming(1.35, { duration: 400 });
+    waveOpacity.value = withTiming(0, { duration: 400 });
+  };
+
+  const animatedWaveStyle = useAnimatedStyle(() => ({
+    position: 'absolute',
+    top: '25%',
+    left: '25%',
+    width: '50%',
+    height: '50%',
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.35)',
+    transform: [{ scale: waveScale.value }],
+    opacity: waveOpacity.value,
+  }));
+
+  return (
+    <Pressable
+      onPressIn={handlePressIn}
+      onPress={onPress}
+      style={[style, { overflow: 'hidden' }]}
+    >
+      <Animated.View style={animatedWaveStyle} />
+      {children}
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   viewViewportContainer: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#02000A',
   },
   responsiveImageContainerBg: {
     width: '100%',
@@ -187,13 +282,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     zIndex: 10,
   },
+  backButtonTouchWrapper: {
+    borderRadius: 99,
+  },
+  backButtonInnerFrame: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   titleText: {
     ...Typography.header, 
     color: GameColors.textWhite, 
-    fontSize: 26 
+    fontSize: 26,
+    fontWeight: 'bold',
   },
   spacerNode: { 
-    width: 44 
+    width: 40 
   },
   heroBoxCenterContent: {
     flex: 1,
@@ -232,8 +341,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    top: '43%', 
-    bottom: 0,
+    top: '43%', // Locks the tracking boundary cleanly below the upper hero stats panel cards graphic
+    bottom: 80,
   },
   scrollContentLayout: {
     paddingHorizontal: 20,
@@ -242,49 +351,50 @@ const styles = StyleSheet.create({
   sectionTitleText: { 
     color: GameColors.textWhite, 
     fontFamily: 'Inter_700Bold', 
-    fontSize: 18, 
-    marginBottom: 12 
+    fontSize: 18,
+    marginBottom: 12,
   },
-  statsGridMesh: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    gap: 10 
+  statsGridMesh: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'space-between',
   },
-  statCardNode: { 
-    width: '47%', 
-    flexGrow: 1, 
-    minHeight: 86,
-    padding: 12, 
-    borderRadius: 14, 
-    backgroundColor: 'rgba(255,255,255,0.045)', 
-    borderWidth: 1, 
-    borderColor: 'rgba(255,255,255,0.08)',
-    justifyContent: 'center',
+  statCardNode: {
+    width: '48%',
+    minHeight: 96,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    gap: 4,
+    marginBottom: 2,
   },
   statIcon: {
     marginBottom: 2,
   },
-  statLabelText: { 
-    color: GameColors.textSecondary, 
-    fontSize: 11 
+  statLabelText: {
+    color: GameColors.textSecondary,
+    fontSize: 11,
   },
-  statValueText: { 
-    color: GameColors.textWhite, 
-    fontFamily: 'Inter_700Bold', 
-    fontSize: 15,
-    marginTop: 2,
+  statValueText: {
+    color: GameColors.textWhite,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
-  footerNoteText: { 
-    color: GameColors.textSecondary, 
-    textAlign: 'center', 
-    fontSize: 11, 
+  footerNoteText: {
+    color: GameColors.textSecondary,
+    textAlign: 'center',
+    fontSize: 11,
     marginTop: 24,
-    opacity: 0.7
+    opacity: 0.7,
   },
   debugPanel: {
     position: 'absolute',
     alignSelf: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
     borderWidth: 1,
     borderColor: '#334155',
     borderRadius: 99,
