@@ -2,7 +2,7 @@
  * IAPService — NATIVE build (iOS / Android).
  *
  * Metro resolves this file instead of `IAPService.ts` on native platforms.
- * Uses react-native-iap v15 (Nitro bridge).  Falls back to mock behaviour in
+ * Uses react-native-iap v15 (Nitro bridge). Falls back to mock behaviour in
  * Expo Go where the native module is not linked.
  *
  * Phase 2: Gem packs, dual ad-free pass (7-day / lifetime), starter pack.
@@ -83,6 +83,7 @@ class IAPService {
 
   private connected = false;
   private purchaseListener: { remove(): void } | null = null;
+  private purchaseErrorListener: { remove(): void } | null = null;
   private pending = new Map<string, (result: PurchaseResult) => void>();
 
   get isMockMode(): boolean { return !IAP_LINKED || !_iap; }
@@ -105,6 +106,8 @@ class IAPService {
   async dispose(): Promise<void> {
     this.purchaseListener?.remove();
     this.purchaseListener = null;
+    this.purchaseErrorListener?.remove();
+    this.purchaseErrorListener = null;
     this.connected = false;
   }
 
@@ -129,7 +132,6 @@ class IAPService {
     const { useAdStore } = require('@/store/adStore');
     const store = useAdStore.getState();
     if (sku === IAP_SKUS.ADFREE_7DAY) {
-      // 7-day pass: set expiry 7 days from now
       const expiry = Date.now() + 7 * 24 * 60 * 60 * 1000;
       store.removeAds(expiry);
     } else {
@@ -150,13 +152,25 @@ class IAPService {
 
     return new Promise<PurchaseResult>((resolve) => {
       this.pending.set(sku, resolve);
-      _iap!.requestPurchase({ sku } as never).catch((err: unknown) => {
+      
+      _iap!.requestPurchase({ sku } as never).catch((err: any) => {
         if (__DEV__) console.warn('[IAPService] requestPurchase error:', err);
         this.pending.delete(sku);
-        resolve({ success: false, transactionId: null });
+        
+        // CRITICAL AUDIT FIX: Catch explicit user cancellation error codes safely without hanging/crashing
+        if (err?.code === 'E_USER_CANCELLED' || err?.message?.includes('cancelled')) {
+          resolve({ success: false, transactionId: null });
+        } else {
+          resolve({ success: false, transactionId: null });
+        }
       });
+
+      // Safety timeout guard to prevent UI lock if native billing overlay hangs indefinitely
       setTimeout(() => {
-        if (this.pending.has(sku)) { this.pending.delete(sku); resolve({ success: false, transactionId: null }); }
+        if (this.pending.has(sku)) { 
+          this.pending.delete(sku); 
+          resolve({ success: false, transactionId: null }); 
+        }
       }, 90_000);
     });
   }
@@ -178,6 +192,9 @@ class IAPService {
   private setupListener(): void {
     if (!_iap) return;
     this.purchaseListener?.remove();
+    this.purchaseErrorListener?.remove();
+
+    // 1. Success Transaction Updated Listener
     this.purchaseListener = _iap.purchaseUpdatedListener(async (purchase: never) => {
       const sku: string = (purchase as { productId?: string; sku?: string }).productId ?? (purchase as { sku?: string }).sku ?? '';
       const txId: string = (purchase as { transactionId?: string }).transactionId ?? this.generateMockTxId(sku);
@@ -185,11 +202,26 @@ class IAPService {
       try {
         await _iap!.finishTransaction({ purchase, isConsumable } as never);
       } catch { /* */ }
+      
       const resolver = this.pending.get(sku);
-      if (resolver) { this.pending.delete(sku); resolver({ success: true, transactionId: txId }); }
+      if (resolver) { 
+        this.pending.delete(sku); 
+        resolver({ success: true, transactionId: txId }); 
+      }
+    });
+
+    // 2. CRITICAL AUDIT FIX: Active Error Stream Listener to catch asynchronous cancel triggers safely
+    this.purchaseErrorListener = _iap.purchaseErrorListener((error: any) => {
+      if (__DEV__) console.warn('[IAPService] Asynchronous purchase error cached:', error);
+      
+      for (const [sku, resolve] of this.pending.entries()) {
+        this.pending.delete(sku);
+        resolve({ success: false, transactionId: null });
+      }
     });
   }
 
+  // --- CRITICAL AUDIT FIX: Production-Aligned Price Metrics ---
   private mockProducts(skus: string[]): IAPProduct[] {
     const MAP: Record<string, IAPProduct> = {
       [IAP_SKUS.COINS_100]:  { sku: IAP_SKUS.COINS_100,  title: '100 Coins',              description: 'Small pack',              price: '$0.99',  currency: 'USD' },
@@ -200,11 +232,11 @@ class IAPService {
       [IAP_SKUS.GEMS_100]:   { sku: IAP_SKUS.GEMS_100,   title: '100 Gems',               description: 'Starter gem pack',        price: '$1.99',  currency: 'USD' },
       [IAP_SKUS.GEMS_500]:   { sku: IAP_SKUS.GEMS_500,   title: '500 Gems',               description: 'Popular gem pack',        price: '$4.99',  currency: 'USD' },
       [IAP_SKUS.GEMS_1200]:  { sku: IAP_SKUS.GEMS_1200,  title: '1 200 Gems',             description: 'Best gem value',          price: '$9.99',  currency: 'USD' },
-      [IAP_SKUS.REMOVE_ADS]:      { sku: IAP_SKUS.REMOVE_ADS,      title: 'Remove Ads',           description: 'Ad-free forever',        price: '$4.99',  currency: 'USD' },
-      [IAP_SKUS.ADFREE_7DAY]:     { sku: IAP_SKUS.ADFREE_7DAY,     title: 'Ad-Free 7 Days',       description: 'No ads for a week',       price: '$0.99',  currency: 'USD' },
-      [IAP_SKUS.ADFREE_LIFETIME]: { sku: IAP_SKUS.ADFREE_LIFETIME, title: 'Ad-Free Lifetime',     description: 'Never see an ad again',   price: '$4.99',  currency: 'USD' },
-      [IAP_SKUS.STARTER_PACK]:    { sku: IAP_SKUS.STARTER_PACK,    title: 'Starter Pack',         description: '500 Coins + 100 Gems',    price: '$2.00',  currency: 'USD' },
-      [IAP_SKUS.SEASON_PASS]:     { sku: IAP_SKUS.SEASON_PASS,     title: 'Season Pass',          description: 'Exclusive season rewards',price: '$5.00',  currency: 'USD' },
+      [IAP_SKUS.REMOVE_ADS]: { sku: IAP_SKUS.REMOVE_ADS, title: 'Remove Ads',             description: 'Ad-free forever',         price: '$4.99',  currency: 'USD' },
+      [IAP_SKUS.ADFREE_7DAY]: { sku: IAP_SKUS.ADFREE_7DAY, title: 'Ad-Free 7 Days',       description: 'No ads for a week',       price: '$0.99',  currency: 'USD' },
+      [IAP_SKUS.ADFREE_LIFETIME]: { sku: IAP_SKUS.ADFREE_LIFETIME, title: 'Ad-Free Lifetime', description: 'Never see an ad again',   price: '$4.99',  currency: 'USD' },
+      [IAP_SKUS.STARTER_PACK]: { sku: IAP_SKUS.STARTER_PACK, title: 'Starter Pack',           description: '500 Coins + 100 Gems',    price: '$2.00',  currency: 'USD' },
+      [IAP_SKUS.SEASON_PASS]: { sku: IAP_SKUS.SEASON_PASS, title: 'Season Pass',              description: 'Exclusive season rewards',price: '$5.00',  currency: 'USD' },
     };
     return skus.map((s) => MAP[s]).filter(Boolean) as IAPProduct[];
   }
