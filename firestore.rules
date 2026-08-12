@@ -1,55 +1,45 @@
-// BlurQuiz — Firestore Security Rules
-// Deploy via: Firebase Console → Firestore Database → Rules tab → paste & publish
-// OR: firebase deploy --only firestore:rules  (requires Firebase CLI)
-//
-// Rule summary:
-//  players/{userId}       — owner can write; any authenticated user can read (for leaderboard)
-//  game_sessions/{id}     — owner can create; no client-side updates/deletes (server only)
-//  config/{key}           — public read; no client writes (Admin SDK only)
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Player profiles ───────────────────────────────────────────────────────
-    // Authenticated users can read any profile (needed for leaderboard lookups).
-    // Only the owning UID may write their own document.
-    match /players/{userId} {
-      allow read:  if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+    // ─── 1. PLAYERS PROFILE COLLECTION ───────────────────────────────────────
+    // Path: players/{uid}
+    match /players/{uid} {
+      // Only the authenticated user can read or write their own core profile data
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+      
+      // ─── Subcollection: Purchases (Phase 2 §2) ────────────────────────────
+      // Path: players/{uid}/purchases/{transactionId}
+      match /purchases/{transactionId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+      
+      // ─── Subcollection: Spin Wheel History (Phase 3) ──────────────────────
+      // Path: players/{uid}/spinHistory/{autoId}
+      match /spinHistory/{spinId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+      
+      // ─── Subcollection: Private Data Secure Vault ─────────────────────────
+      // Path: players/{uid}/private/pushToken
+      match /private/pushToken {
+        // Only the authenticated device owner can write/update their own token.
+        // Client reads are strictly forbidden (Deny-All) to protect user privacy.
+        // The server-side cloud function Admin SDK retains full backend access.
+        allow write: if request.auth != null && request.auth.uid == uid;
+        allow read: if false;
+      }
     }
 
-    // ── Private player data ───────────────────────────────────────────────────
-    // Subcollection for sensitive per-player data (e.g. push token) that must
-    // not be readable by other players.  Only the owner may write; all client
-    // reads are denied — the server Admin SDK reads these for notification delivery.
-    match /players/{userId}/private/{doc} {
-      allow write: if request.auth != null && request.auth.uid == userId;
-      allow read:  if false;
-    }
-
-    // ── Game sessions ─────────────────────────────────────────────────────────
-    // Players may create sessions where playerId matches their own UID.
-    // No client-side updates or deletes — aggregate stats are updated server-side
-    // via the Admin SDK (POST /api/sessions).
+    // ─── 2. GAME SESSIONS COLLECTION ─────────────────────────────────────────
+    // Path: game_sessions/{sessionId}
     match /game_sessions/{sessionId} {
-      allow read:   if request.auth != null;
-      allow create: if request.auth != null
-                    && request.resource.data.playerId == request.auth.uid;
-      allow update, delete: if false;  // server-only via Admin SDK
+      // Allow creation of a session only if the logged-in user matches the playerId field
+      allow create: if request.auth != null && request.resource.data.playerId == request.auth.uid;
+      
+      // Allow reading or updating only if the existing document belongs to the active user
+      allow read, update, delete: if request.auth != null && resource.data.playerId == request.auth.uid;
     }
 
-    // ── Economy config ────────────────────────────────────────────────────────
-    // Public read so the mobile app can fetch without auth.
-    // No client writes — only the API server may modify via Admin SDK.
-    match /config/{key} {
-      allow read:  if true;
-      allow write: if false;
-    }
-
-    // ── Deny everything else ─────────────────────────────────────────────────
-    match /{document=**} {
-      allow read, write: if false;
-    }
   }
 }
