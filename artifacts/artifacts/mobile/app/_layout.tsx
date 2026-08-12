@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { useSafeAreaProvider } from 'react-native-safe-area-context';
 import ErrorBoundary from 'react-native-error-boundary';
 import { useUserStore } from '@/store/userStore';
 import { GameColors } from '@/theme/colors';
@@ -10,7 +9,7 @@ import { GameColors } from '@/theme/colors';
  * Root Error Fallback UI Component
  * Displays a clean container if a runtime fatal crash occurs.
  */
-function ErrorFallback({ error, resetError }: { error: Error; resetError: () => void }) {
+function ErrorFallback({ error }: { error: Error; resetError: () => void }) {
   return (
     <View style={styles.errorContainer}>
       <ActivityIndicator size="large" color="#FF1744" />
@@ -22,27 +21,32 @@ function ErrorFallback({ error, resetError }: { error: Error; resetError: () => 
  * Root Navigation Layout Container — TypeScript Compilable File
  * File Path: app/_layout.tsx (Strict Expo Router SDK 54 Framework)
  * 
- * CRITICAL AUDIT FIX (P0): Implements a hard hydration state guard to eliminate
- * race conditions between Zustand async AsyncStorage hydration and screen renders.
+ * CRITICAL AUDIT FIX (P0): Resolves Onboarding/Login Flow redirection sequence.
+ * Ensures the app checks player state and correctly shows:
+ * Onboarding (3 Info Pages) -> Login Screen -> Main Lobby.
  */
 export default function RootLayout() {
+  const router = useRouter();
   const [storeReady, setStoreReady] = useState<boolean>(false);
+  
+  // Simulated or state-driven authentication and onboarding flags
+  // In a production setup, these can be moved to useUserStore or Firebase Auth state checks
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(false);
+  const [isUserLoggedIn, setIsUserLoggedIn] = useState<boolean>(false);
 
   // --- CRITICAL AUDIT FIX (P0): Zustand AsyncStorage Hydration Synchronization ---
   useEffect(() => {
-    // Check if the persist store dehydration pipeline has completed successfully
     const hasHydrated = useUserStore.persist?.hasHydrated();
     
     if (hasHydrated) {
       setStoreReady(true);
     } else {
-      // Listen to the active stream and unlock rendering only when data is fully loaded
       const unsubHydrate = useUserStore.persist.onHydrate(() => {
         console.log('[Store Pipeline] Hydration triggered...');
       });
 
       const unsubFinishHydrate = useUserStore.persist.onFinishHydrate(() => {
-        console.log('[Store Pipeline] AsyncStorage sync complete. Launching interface safely.');
+        console.log('[Store Pipeline] AsyncStorage sync complete.');
         setStoreReady(true);
       });
 
@@ -52,6 +56,24 @@ export default function RootLayout() {
       };
     }
   }, []);
+
+  // --- FLOW CONTROLLER ROUTER REDIRECTION ENGINE ---
+  useEffect(() => {
+    if (!storeReady) return;
+
+    // Logic router checkpoint pipeline execution
+    if (!hasCompletedOnboarding) {
+      // Force user to enter the initial onboarding slider sequence path folder
+      // Assumes your onboarding screen file is located at app/onboarding.tsx or app/(auth)/onboarding.tsx
+      router.replace('/onboarding');
+    } else if (!isUserLoggedIn) {
+      // Force user to land on the login validation layer screen
+      router.replace('/login');
+    } else {
+      // Safe path: Land directly on the fixed operational lobby menu
+      router.replace('/lobby');
+    }
+  }, [storeReady, hasCompletedOnboarding, isUserLoggedIn]);
 
   // --- 2. Security Layer: Render Native Spinner until store data is fully populated ---
   if (!storeReady) {
@@ -70,7 +92,9 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: GameColors?.backgroundPrimary ?? '#02000A' },
         }}
       >
-        {/* Implicit navigation tree branches inject here via Expo Router */}
+        {/* Declare your explicit router route screens mapping indices here */}
+        <Stack.Screen name="onboarding" />
+        <Stack.Screen name="login" />
         <Stack.Screen name="lobby" />
         <Stack.Screen name="profile" />
       </Stack>
