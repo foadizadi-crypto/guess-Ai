@@ -30,13 +30,11 @@ import * as Haptics from 'expo-haptics';
 import { GradientButton } from '@/components/GradientButton';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
-import { storageService } from '@/services/StorageService';
-import { ROUTES } from '@/navigation/routes';
+import { useUserStore } from '@/store/userStore';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
 // ─── Slide data ───────────────────────────────────────────────────────────────
-
 const SLIDES = [
   { id: '1', image: require('@/assets/onboarding/1_onboarding-screen.webp') },
   { id: '2', image: require('@/assets/onboarding/2_onboarding-screen.webp') },
@@ -44,7 +42,6 @@ const SLIDES = [
 ] as const;
 
 // ─── Pagination dot ───────────────────────────────────────────────────────────
-
 const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 
 interface DotProps {
@@ -64,13 +61,12 @@ const Dot: React.FC<DotProps> = ({ index, scrollX }) => {
 };
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
-
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const scrollX = useSharedValue(0);
-  const [jsIndex, setJsIndex] = useState(0);
+  const [jsIndex, setJsIndex] = useState<number>(0);
 
   const topPad = Platform.OS === 'web' ? 40 : insets.top;
   const botPad = Platform.OS === 'web' ? 32 : Math.max(insets.bottom, 16);
@@ -85,12 +81,21 @@ export default function OnboardingScreen() {
 
   const goTo = useCallback((index: number) => {
     scrollRef.current?.scrollTo({ x: index * SW, animated: true });
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   }, []);
 
+  // --- CRITICAL FLOW FIX: Connect finishing step directly to Global State App Flow Checkpoints ---
   const finish = useCallback(async () => {
-    await storageService.setOnboardingDone();
-    router.replace(ROUTES.LOGIN);
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      
+      // Trigger the router back to root layout context handler engine
+      // This will cause app/_layout.tsx to re-evaluate state flags and swap screens seamlessly
+      router.replace('/login');
+    } catch (error) {
+      console.error('[Onboarding Pipeline] Redirection critical fail:', error);
+      router.replace('/login');
+    }
   }, [router]);
 
   const handleNext = useCallback(async () => {
@@ -107,7 +112,7 @@ export default function OnboardingScreen() {
     <View style={styles.root}>
       {/* ── Full-screen swipeable slides ─────────────────────────────────── */}
       <AnimatedScrollView
-        ref={scrollRef as React.RefObject<Animated.ScrollView>}
+        ref={scrollRef as React.RefObject<any>}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
@@ -166,18 +171,15 @@ export default function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
-
-  // semi-transparent black gradient at the bottom
   gradient: {
     position: 'absolute',
-    left: 0, right: 0, bottom: 0,
+    left: 0, 
+    right: 0, 
+    bottom: 0,
     height: SH * 0.38,
     backgroundColor: 'transparent',
-    // Expo web / iOS can't do LinearGradient without the package so we use
-    // a stacked opacity trick: the image is dark enough near bottom already.
     background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.85))',
   } as never,
-
   header: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
@@ -197,7 +199,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: 'Inter_500Medium',
   },
-
   footer: {
     position: 'absolute',
     left: 0, right: 0, bottom: 0,
