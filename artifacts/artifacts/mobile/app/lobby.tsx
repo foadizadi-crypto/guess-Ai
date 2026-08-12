@@ -9,6 +9,7 @@ import {
   Alert,
   Dimensions,
   Switch,
+  Image,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -40,12 +41,33 @@ interface HitboxItem {
   height: string;
   label: string;
   premium?: boolean;
+  hasTextOverlay?: boolean;
 }
 
+// --- 1. Static Asset Mapping Table for your Button Icons Folder ---
+// Place your individual button PNG images directly inside: assets/icons/
+const buttonIcons: Record<string, any> = {
+  coin: require('../assets/icons/coin.png'),
+  gem: require('../assets/icons/gem.png'),
+  stamina: require('../assets/icons/stamina.png'),
+  spinwheel: require('../assets/icons/spinwheel.png'),
+  settings: require('../assets/icons/settings.png'),
+  play: require('../assets/icons/play.png'),
+  legendary_pack: require('../assets/icons/legendary_pack.png'),
+  gem_pack: require('../assets/icons/gem_pack.png'),
+  admob: require('../assets/icons/admob.png'),
+  leaderboard: require('../assets/icons/leaderboard.png'),
+  dailyreward: require('../assets/icons/dailyreward.png'),
+  shop: require('../assets/icons/shop.png'),
+  friends: require('../assets/icons/friends.png'),
+  achievement: require('../assets/icons/achievement.png'),
+  stand_avatar: require('../assets/icons/stand_avatar.png'),
+};
+
 /**
- * Strict TypeScript 17-Hitbox Core Lobby Screen Component
- * File Path: app/lobby.tsx (Expo Router TypeScript Structure)
- * Retains 100% of your exact measured layout matrix dimensions.
+ * Production-Grade 1080x2340 Icon Asset-Driven Lobby Screen Component
+ * File Path: app/lobby.tsx (Strict Expo Router TSX Compliance)
+ * Loads custom button image files dynamically into your exact measured percentage bounds.
  */
 export default function LobbyScreen() {
   const router = useRouter();
@@ -54,7 +76,7 @@ export default function LobbyScreen() {
   const [dailyModal, setDailyModal] = useState<boolean>(false);
   const [soundInstance, setSoundInstance] = useState<Audio.Sound | null>(null);
 
-  // --- 1. Real-Time Global States from your User Store Context ---
+  // --- 2. Real-Time Global States from your User Store Context ---
   const {
     username,
     coins,
@@ -72,7 +94,7 @@ export default function LobbyScreen() {
   const { playMusic, stopMusic } = useAudio();
   const currentAvatar = avatars?.find((avatar) => avatar.id === selectedAvatarId);
 
-  // --- 2. Background Track Loops Handler on Screen Target Focus ---
+  // --- 3. Background Track Loops Handler on Screen Target Focus ---
   useFocusEffect(
     useCallback(() => {
       playMusic('menu_music');
@@ -95,7 +117,7 @@ export default function LobbyScreen() {
     return () => clearInterval(id);
   }, [tickEnergy]);
 
-  // --- 3. Stable Native UI Tap Feedback Sound Player ---
+  // --- 4. Stable Native UI Tap Feedback Sound Player ---
   async function playTapSound() {
     try {
       const { sound } = await Audio.Sound.createAsync(
@@ -117,9 +139,9 @@ export default function LobbyScreen() {
     return soundInstance ? () => { soundInstance.unloadAsync(); } : undefined;
   }, [soundInstance]);
 
-  // --- 4. Centralized Action Pipeline Route Switch Listener ---
+  // --- 5. Centralized Action Pipeline Route Switch Listener ---
   const handleActionTrigger = async (actionName: string) => {
-    console.log(`[Lobby Hitbox Engine] Mapped interaction captured: ${actionName}`);
+    console.log(`[Lobby Icon UI Engine] Action executed: ${actionName}`);
 
     if (actionName === 'friends') {
       console.log('[Lobby Engine] Friends action ignored per project directive.');
@@ -172,26 +194,85 @@ export default function LobbyScreen() {
     }
   };
 
-  // --- 5. Pristine 1080x2340 Proportional Percentage Hitbox Matrix Array ---
+  // --- 6. Pristine 1080x2340 Proportional UI Component Matrix Array ---
   const hitboxes: HitboxItem[] = [
-    { id: 'profile_lvl_playername', left: '4.53%', top: '1.70%', width: '20.32%', height: '13.93%', label: 'Profile UI' },
-    { id: 'coin', left: '28.72%', top: '2.37%', width: '19.35%', height: '5.39%', label: coins?.toLocaleString() || '0' },
-    { id: 'gem', left: '50.97%', top: '2.54%', width: '20.32%', height: '4.94%', label: gems?.toString() || '0' },
-    { id: 'stamina', left: '74.19%', top: '2.64%', width: '20.32%', height: '4.94%', label: `${energy || 0}/${MAX_ENERGY || 20}` },
-    { id: 'spinwheel', left: '67.42%', top: '10.70%', width: '25.15%', height: '9.89%', label: 'Spin Wheel' },
+    { id: 'profile_lvl_playername', left: '4.53%', top: '1.70%', width: '20.32%', height: '13.93%', label: 'Profile' },
+    { id: 'coin', left: '28.72%', top: '2.37%', width: '19.35%', height: '5.39%', label: coins?.toLocaleString() || '0', hasTextOverlay: true },
+    { id: 'gem', left: '50.97%', top: '2.54%', width: '20.32%', height: '4.94%', label: gems?.toString() || '0', hasTextOverlay: true },
+    { id: 'stamina', left: '74.19%', top: '2.64%', width: '20.32%', height: '4.94%', label: `${energy || 0}/${MAX_ENERGY || 20}`, hasTextOverlay: true },
+    { id: 'spinwheel', left: '67.42%', top: '10.70%', width: '25.15%', height: '9.89%', label: 'Spin' },
     { id: 'settings', left: '74.00%', top: '21.50%', width: '16.00%', height: '6.50%', label: 'Settings' },
-    { id: 'avatar_wing_frame', left: '8.40%', top: '23.20%', width: '85.14%', height: '32.36%', label: 'Avatar Center Frame' },
-    { id: 'stand_avatar', left: '29.69%', top: '56.58%', width: '37.73%', height: '6.74%', label: 'Stand Avatar Area' },
-    { id: 'play', left: '21.95%', top: '65.00%', width: '54.18%', height: '9.89%', label: '🚀 PLAY' },
-    { id: 'legendary_pack', left: '3.57%', top: '75.78%', width: '19.35%', height: '6.74%', label: 'Legendary Pack', premium: true },
+    { id: 'avatar_wing_frame', left: '8.40%', top: '23.20%', width: '85.14%', height: '32.36%', label: 'Avatar Frame' },
+    { id: 'stand_avatar', left: '29.69%', top: '56.58%', width: '37.73%', height: '6.74%', label: 'Pedestal' },
+    { id: 'play', left: '21.95%', top: '65.00%', width: '54.18%', height: '9.89%', label: 'Play' },
+    { id: 'legendary_pack', left: '3.57%', top: '75.78%', width: '19.35%', height: '6.74%', label: 'Legendary', premium: true },
     { id: 'gem_pack', left: '74.19%', top: '76.19%', width: '19.35%', height: '7.19%', label: 'Gem Pack', premium: true },
-    { id: 'admob', left: '30.66%', top: '76.40%', width: '37.73%', height: '5.84%', label: 'Watch Ad' },
-    { id: 'leaderboard', left: '4.53%', top: '83.99%', width: '15.48%', height: '13.93%', label: 'Leaderboard' },
-    { id: 'dailyreward', left: '22.92%', top: '84.60%', width: '15.48%', height: '13.03%', label: 'Daily Reward' },
-    { id: 'shop', left: '41.30%', top: '84.95%', width: '15.48%', height: '12.58%', label: 'Shop Center' },
-    { id: 'friends', left: '59.68%', top: '84.84%', width: '15.48%', height: '12.58%', label: 'Friends (Locked)' },
-    { id: 'achievement', left: '80.00%', top: '84.51%', width: '15.48%', height: '12.58%', label: 'Achievements' },
+    { id: 'admob', left: '30.66%', top: '76.40%', width: '37.73%', height: '5.84%', label: 'AdMob' },
+    { id: 'leaderboard', left: '4.53%', top: '83.99%', width: '15.48%', height: '12.58%', label: 'Leaderboard' },
+    { id: 'dailyreward', left: '22.92%', top: '84.60%', width: '15.48%', height: '12.58%', label: 'Reward' },
+    { id: 'shop', left: '41.30%', top: '84.95%', width: '15.48%', height: '12.58%', label: 'Shop' },
+    { id: 'friends', left: '59.68%', top: '84.84%', width: '15.48%', height: '12.58%', label: 'Friends' },
+    { id: 'achievement', left: '80.00%', top: '84.51%', width: '15.48%', height: '12.58%', label: 'Badges' },
   ];
+
+  // Dynamically renders the correct local graphic or component based on ID
+  const renderComponentUI = (box: HitboxItem) => {
+    switch (box.id) {
+      case 'profile_lvl_playername':
+        return (
+          <View style={styles.profileDynamicComponentCard}>
+            <AvatarFrame 
+              imageKey={currentAvatar?.imageKey ?? 'abigail'} 
+              frameId={equippedCosmetics?.frame} 
+              size={42} 
+              showLevel={false} 
+            />
+            <View style={styles.profileTextWrapperMeta}>
+              <Text style={styles.profileUserText} numberOfLines={1}>{username || 'Player'}</Text>
+              <Text style={styles.profileLvlText}>LVL {level}</Text>
+            </View>
+          </View>
+        );
+
+      case 'avatar_wing_frame':
+        return (
+          <View style={styles.centerHeroStageWrapperFrame}>
+            <AvatarFrame 
+              imageKey={currentAvatar?.imageKey ?? 'abigail'} 
+              frameId={equippedCosmetics?.frame} 
+              size={130} 
+              showLevel 
+              level={level} 
+            />
+          </View>
+        );
+
+      case 'coin':
+      case 'gem':
+      case 'stamina':
+        return (
+          <View style={styles.fullSizeContainer}>
+            <Image source={buttonIcons[box.id]} style={styles.buttonImageGraphic} />
+            <View style={styles.currencyTextContainerOverlay}>
+              <Text style={styles.currencyPillValueText} numberOfLines={1}>{box.label}</Text>
+            </View>
+          </View>
+        );
+
+      default:
+        // Renders the specific PNG asset from your icons folder directly
+        const hasIconAsset = buttonIcons[box.id] !== undefined;
+        const isFriendsLocked = box.id === 'friends';
+
+        return (
+          <View style={[styles.fullSizeContainer, isFriendsLocked && { opacity: 0.45 }]}>
+            {hasIconAsset && (
+              <Image source={buttonIcons[box.id]} style={styles.buttonImageGraphic} />
+            )}
+          </View>
+        );
+    }
+  };
 
   return (
     <View style={styles.viewViewportContainer}>
@@ -215,18 +296,18 @@ export default function LobbyScreen() {
                   top: box.top,
                   width: box.width,
                   height: box.height,
-                  backgroundColor: debugMode ? 'rgba(16, 185, 129, 0.35)' : 'transparent',
+                  backgroundColor: debugMode ? 'rgba(244, 63, 94, 0.25)' : 'transparent',
                   borderWidth: debugMode ? 1 : 0,
-                  borderColor: box.id === 'settings' ? '#f43f5e' : '#10b981',
+                  borderColor: '#f43f5e',
                 }
               ]}
               onPress={() => handleActionTrigger(box.id)}
             >
-              {debugMode && (
+              {renderComponentUI(box)}
+              
+              {debugMode && !box.hasTextOverlay && (
                 <View style={styles.debugLabelMeshCellContainer}>
-                  <Text style={styles.debugLabelMeshText} numberOfLines={1}>
-                    {box.id === 'coin' || box.id === 'gem' || box.id === 'stamina' ? box.label : box.id}
-                  </Text>
+                  <Text style={styles.debugLabelMeshText} numberOfLines={1}>{box.id}</Text>
                 </View>
               )}
             </PressableComponent>
@@ -240,7 +321,7 @@ export default function LobbyScreen() {
         />
 
         <View style={[styles.debugPanel, { bottom: insets.bottom + 20 }]}>
-          <Text style={styles.debugText}>Show Hitboxes (Debug Mesh):</Text>
+          <Text style={styles.debugText}>Caliper Debug Mode:</Text>
           <Switch
             value={debugMode}
             onValueChange={setDebugMode}
@@ -262,7 +343,7 @@ function GlowWrapper({ style, onPress, children }: any) {
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 0.65, duration: 1100, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0.55, duration: 1100, useNativeDriver: true }),
         Animated.timing(glowAnim, { toValue: 0.15, duration: 1100, useNativeDriver: true }),
       ])
     ).start();
@@ -274,10 +355,9 @@ function GlowWrapper({ style, onPress, children }: any) {
         style={[
           StyleSheet.absoluteFill,
           {
-            backgroundColor: '#ffffff',
-            opacity: glowAnim,
-            borderRadius: 6,
-            borderWidth: 2.5,
+            backgroundColor: 'rgba(251, 191, 36, 0.15)',
+            borderRadius: 12,
+            borderWidth: 2,
             borderColor: '#fbbf24',
           }
         ]}
@@ -295,10 +375,10 @@ function WaveWrapper({ style, onPress, children, accessibilityLabel }: any) {
     if (accessibilityLabel === 'friends') return;
 
     waveScale.setValue(0.2);
-    waveOpacity.setValue(0.65);
+    waveOpacity.setValue(0.5);
     Animated.parallel([
-      Animated.timing(waveScale, { toValue: 1.35, duration: 450, useNativeDriver: true }),
-      Animated.timing(waveOpacity, { toValue: 0, duration: 450, useNativeDriver: true }),
+      Animated.timing(waveScale, { toValue: 1.35, duration: 400, useNativeDriver: true }),
+      Animated.timing(waveOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
     ]).start();
   };
 
@@ -316,7 +396,7 @@ function WaveWrapper({ style, onPress, children, accessibilityLabel }: any) {
           width: '50%',
           height: '50%',
           borderRadius: 999,
-          backgroundColor: 'rgba(255, 255, 255, 0.45)',
+          backgroundColor: 'rgba(255, 255, 255, 0.35)',
           transform: [{ scale: waveScale }],
           opacity: waveOpacity,
         }}
@@ -338,28 +418,87 @@ const styles = StyleSheet.create({
   },
   hitboxAbsoluteNode: {
     position: 'absolute',
-    borderRadius: 6,
+    borderRadius: 8,
+    justifyContent: 'center',
+  },
+  fullSizeContainer: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  buttonImageGraphic: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'contain',
+  },
+  profileDynamicComponentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 99,
+    padding: 4,
+    width: '100%',
+    height: '100%',
+  },
+  profileTextWrapperMeta: {
+    marginLeft: 4,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  profileUserText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+  },
+  profileLvlText: {
+    color: '#38bdf8',
+    fontSize: 9,
+    fontWeight: 'bold',
+    marginTop: 1,
+  },
+  currencyTextContainerOverlay: {
+    position: 'absolute',
+    left: '35%',
+    right: '12%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  currencyPillValueText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: 'bold',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    textAlign: 'center',
+  },
+  centerHeroStageWrapperFrame: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   debugLabelMeshCellContainer: {
     position: 'absolute',
-    bottom: 2,
-    left: 2,
-    right: 2,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 3,
-    paddingHorizontal: 2,
+    bottom: -12,
+    alignSelf: 'center',
+    backgroundColor: '#f43f5e',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    zIndex: 10,
   },
   debugLabelMeshText: {
     color: '#ffffff',
-    fontSize: 9,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 8,
+    fontWeight: '800',
     textAlign: 'center',
   },
   debugPanel: {
     position: 'absolute',
     alignSelf: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
     borderWidth: 1,
     borderColor: '#334155',
     borderRadius: 99,
