@@ -32,20 +32,29 @@ import { MAX_ENERGY } from '@/constants/economy';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
+interface HitboxItem {
+  id: string;
+  left: string;
+  top: string;
+  width: string;
+  height: string;
+  label: string;
+  premium?: boolean;
+}
+
 /**
- * Production-Grade Dynamic 17-Hitbox Lobby Screen
- * File Path: app/lobby.tsx (Expo Router Structure Integration)
- * Mapped for 1080x2340 high-fidelity layout specification.
- * Seamlessly hooks into useUserStore, useAdStore, and useAudio hooks.
+ * Strict TypeScript 17-Hitbox Core Lobby Screen Component
+ * File Path: app/lobby.tsx (Expo Router TypeScript Structure)
+ * Retains 100% of your exact measured layout matrix dimensions.
  */
 export default function LobbyScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [debugMode, setDebugMode] = useState(false);
-  const [dailyModal, setDailyModal] = useState(false);
+  const [debugMode, setDebugMode] = useState<boolean>(false);
+  const [dailyModal, setDailyModal] = useState<boolean>(false);
   const [soundInstance, setSoundInstance] = useState<Audio.Sound | null>(null);
 
-  // --- 1. Pulling Global Real-Time States from your User Store ---
+  // --- 1. Real-Time Global States from your User Store Context ---
   const {
     username,
     coins,
@@ -56,7 +65,6 @@ export default function LobbyScreen() {
     claimDailyReward,
     energy,
     tickEnergy,
-    canFreeSpin,
     avatars,
     equippedCosmetics,
   } = useUserStore();
@@ -64,14 +72,12 @@ export default function LobbyScreen() {
   const { playMusic, stopMusic } = useAudio();
   const currentAvatar = avatars?.find((avatar) => avatar.id === selectedAvatarId);
 
-  // --- 2. Background Loop Music & Energy Tickers on Screen Focus ---
+  // --- 2. Background Track Loops Handler on Screen Target Focus ---
   useFocusEffect(
     useCallback(() => {
-      // Fires up your global background music track wrapper safely
       playMusic('menu_music');
       tickEnergy();
       
-      // Auto-pop daily reward modal if today's reward remains unclaimed
       const claimed = isToday(dailyReward?.lastClaimed);
       if (!claimed) {
         const t = setTimeout(() => setDailyModal(true), 900);
@@ -84,13 +90,12 @@ export default function LobbyScreen() {
     }, [dailyReward?.lastClaimed, playMusic, stopMusic, tickEnergy])
   );
 
-  // Periodic energy refill checking loop interval rule
   useEffect(() => {
     const id = setInterval(() => tickEnergy(), 60_000);
     return () => clearInterval(id);
   }, [tickEnergy]);
 
-  // --- 3. Clean Audio SFX Tap Controller Engine ---
+  // --- 3. Stable Native UI Tap Feedback Sound Player ---
   async function playTapSound() {
     try {
       const { sound } = await Audio.Sound.createAsync(
@@ -99,7 +104,7 @@ export default function LobbyScreen() {
       );
       setSoundInstance(sound);
       sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) {
+        if (status.isLoaded && status.didJustFinish) {
           sound.unloadAsync();
         }
       });
@@ -112,27 +117,23 @@ export default function LobbyScreen() {
     return soundInstance ? () => { soundInstance.unloadAsync(); } : undefined;
   }, [soundInstance]);
 
-  // --- 4. Centralized Hitbox Action Route Controller ---
+  // --- 4. Centralized Action Pipeline Route Switch Listener ---
   const handleActionTrigger = async (actionName: string) => {
-    console.log(`[Lobby Hitbox Engine] Tapped element event targeted: ${actionName}`);
+    console.log(`[Lobby Hitbox Engine] Mapped interaction captured: ${actionName}`);
 
-    // Ignore action processing rule for specific pending features
     if (actionName === 'friends') {
       console.log('[Lobby Engine] Friends action ignored per project directive.');
       return;
     }
 
-    // Fire Native Haptic Feedback Impulse Pulse safely
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (e) {
-      console.log('Haptics engine unavailable on active device layer');
+      console.log('Haptics engine unavailable on active device hardware layer');
     }
 
-    // Execute standard click audio response thread asset
     await playTapSound();
 
-    // Context route router navigation logic pipelines
     switch (actionName) {
       case 'profile_lvl_playername':
       case 'avatar_wing_frame':
@@ -154,7 +155,7 @@ export default function LobbyScreen() {
         setDailyModal(true);
         break;
       case 'play':
-        router.push('/play'); // Next step flow routing target context
+        router.push('/play');
         break;
       case 'admob':
         router.push('/admob');
@@ -171,8 +172,8 @@ export default function LobbyScreen() {
     }
   };
 
-  // --- 5. Precise 1080x2340 Proportional Percentage Hitbox Matrix Array ---
-  const hitboxes = [
+  // --- 5. Pristine 1080x2340 Proportional Percentage Hitbox Matrix Array ---
+  const hitboxes: HitboxItem[] = [
     { id: 'profile_lvl_playername', left: '4.53%', top: '1.70%', width: '20.32%', height: '13.93%', label: 'Profile UI' },
     { id: 'coin', left: '28.72%', top: '2.37%', width: '19.35%', height: '5.39%', label: coins?.toLocaleString() || '0' },
     { id: 'gem', left: '50.97%', top: '2.54%', width: '20.32%', height: '4.94%', label: gems?.toString() || '0' },
@@ -195,12 +196,10 @@ export default function LobbyScreen() {
   return (
     <View style={styles.viewViewportContainer}>
       <ImageBackground
-        source={require('../assets/background/lobby_bg.png')} // Configured directly to point to your new asset file location
+        source={require('../assets/background/lobby_bg.png')}
         style={styles.responsiveImageContainerBg}
         resizeMode="stretch"
       >
-        
-        {/* --- DYNAMIC INTERACTIVE LAYER REGIONS --- */}
         {hitboxes.map((box) => {
           const isPremium = box.premium;
           const PressableComponent = isPremium ? GlowWrapper : WaveWrapper;
@@ -208,6 +207,7 @@ export default function LobbyScreen() {
           return (
             <PressableComponent
               key={box.id}
+              accessibilityLabel={box.id}
               style={[
                 styles.hitboxAbsoluteNode,
                 {
@@ -217,13 +217,11 @@ export default function LobbyScreen() {
                   height: box.height,
                   backgroundColor: debugMode ? 'rgba(16, 185, 129, 0.35)' : 'transparent',
                   borderWidth: debugMode ? 1 : 0,
-                  borderColor: box.id === 'settings' ? '#f43f5e' : '#10b981', // Unique boundary hue coloring indicator for calibrated settings nodes
+                  borderColor: box.id === 'settings' ? '#f43f5e' : '#10b981',
                 }
               ]}
               onPress={() => handleActionTrigger(box.id)}
-              accessibilityLabel={box.id}
             >
-              {/* If debug overlay dashboard mesh mode active, display contextual helper labels values markers */}
               {debugMode && (
                 <View style={styles.debugLabelMeshCellContainer}>
                   <Text style={styles.debugLabelMeshText} numberOfLines={1}>
@@ -235,14 +233,12 @@ export default function LobbyScreen() {
           );
         })}
 
-        {/* --- GLOBAL LIVE EXPERIENCE DAILY REWARD MODAL COMPONENT --- */}
         <DailyRewardModal
           visible={dailyModal}
           onClose={() => setDailyModal(false)}
           onClaim={claimDailyReward}
         />
 
-        {/* --- CONSOLE CALIBRATION RUNTIME MESH SWITCH CONTROLLER BAR --- */}
         <View style={[styles.debugPanel, { bottom: insets.bottom + 20 }]}>
           <Text style={styles.debugText}>Show Hitboxes (Debug Mesh):</Text>
           <Switch
@@ -296,7 +292,6 @@ function WaveWrapper({ style, onPress, children, accessibilityLabel }: any) {
   const waveOpacity = useRef(new Animated.Value(0)).current;
 
   const handlePressIn = () => {
-    // Prevent animation crash bugs or triggers on static locked parameters fields actions
     if (accessibilityLabel === 'friends') return;
 
     waveScale.setValue(0.2);
