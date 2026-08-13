@@ -105,6 +105,7 @@ interface UserState {
   gemCosmetics: Record<string, { owned: boolean; equipped: boolean }>;
   ownedCosmetics: Record<string, boolean>;
   equippedCosmetics: Partial<Record<CosmeticType, string>>;
+  coinGemExchanges: Record<CoinGemExchangeId, number>;
 
   // Spin Wheel Probability State Elements
   lastSpinDate:    string | null;
@@ -159,6 +160,7 @@ interface UserState {
   addStamina: (amount: number) => void;
   refillEnergyWithGems: (gemCost: number) => boolean;
   buyGemPack: (packId: string) => boolean;
+  buyCoinGemExchange: (id: CoinGemExchangeId) => boolean;
 }
 
 const defaultSettings: UserSettings = {
@@ -187,6 +189,11 @@ const defaultDailyReward: DailyReward = {
   nextRewardAmount: 15,
 };
 
+const defaultCoinGemExchanges: Record<CoinGemExchangeId, number> = {
+  coin_gem_30k: 0,
+  coin_gem_100k: 0,
+};
+
 export const useUserStore = create<UserState>()(
   persist(
     (set, get) => ({
@@ -209,6 +216,7 @@ export const useUserStore = create<UserState>()(
       gemCosmetics: {},
       ownedCosmetics: {},
       equippedCosmetics: {},
+      coinGemExchanges: { ...defaultCoinGemExchanges },
       lastSpinDate:       null,
       extraSpinsToday:    0,
       lastExtraSpinDate:  null,
@@ -566,6 +574,7 @@ export const useUserStore = create<UserState>()(
         gemCosmetics: {},
         ownedCosmetics: {},
         equippedCosmetics: {},
+        coinGemExchanges: { ...defaultCoinGemExchanges },
         energy: MAX_ENERGY,
         staminaReserve: 0,
         statistics: { ...defaultStatistics }
@@ -786,7 +795,31 @@ export const useUserStore = create<UserState>()(
           isPremium: packId === 'premium_pass_lifetime' ? true : state.isPremium
         }));
         return true;
-      }
+      },
+
+      buyCoinGemExchange: (id) => {
+        const tier = COIN_GEM_EXCHANGES.find((exchange) => exchange.id === id);
+        if (!tier) return false;
+
+        let success = false;
+        set((state) => {
+          const purchased = state.coinGemExchanges[id] ?? 0;
+          if (purchased >= tier.maxPurchases || state.coins < tier.coins) {
+            return {};
+          }
+
+          success = true;
+          return {
+            coins: state.coins - tier.coins,
+            gems: state.gems + tier.gems,
+            coinGemExchanges: {
+              ...state.coinGemExchanges,
+              [id]: purchased + 1,
+            },
+          };
+        });
+        return success;
+      },
     }),
     {
       name: 'user-store',
