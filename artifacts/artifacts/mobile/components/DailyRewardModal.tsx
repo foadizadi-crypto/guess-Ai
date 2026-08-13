@@ -20,11 +20,14 @@ import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { CoinDisplay } from './CoinDisplay';
 import { useRTL } from '@/hooks/useRTL';
+import { DAILY_REWARDS } from '@/constants';
 
 interface DailyRewardModalProps {
   visible: boolean;
   amount: number;
   streak: number;
+  /** Index into DAILY_REWARDS of the reward claimable right now. */
+  currentDay: number;
   alreadyClaimed: boolean;
   onClaim: () => void;
   onClose: () => void;
@@ -34,6 +37,7 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
   visible,
   amount,
   streak,
+  currentDay,
   alreadyClaimed,
   onClaim,
   onClose,
@@ -73,12 +77,15 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
     onClaim();
   }, [alreadyClaimed, onClaim, onClose]);
 
-  // Build next 3 streak reward preview
-  const streakPreview = [1, 2, 3].map((offset) => ({
-    day: streak + offset,
-    coins: 100 + (streak + offset) * 50,
-    active: offset === 0 && !alreadyClaimed,
-  }));
+  // Preview of the current claim day plus the next two, from the configured schedule
+  const streakPreview = [0, 1, 2].map((offset) => {
+    const idx = (currentDay + offset) % DAILY_REWARDS.length;
+    return {
+      day: DAILY_REWARDS[idx].day,
+      coins: DAILY_REWARDS[idx].coins,
+      active: offset === 0 && !alreadyClaimed,
+    };
+  });
 
   return (
     <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>

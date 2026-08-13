@@ -6,7 +6,12 @@
     "emitDeclarationOnly": true,
     "outDir": "dist",
     "rootDir": "src",
-    "types": ["node"]
+    "types": [
+      "node"
+    ],
+    "noEmit": false
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

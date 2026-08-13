@@ -426,25 +426,27 @@ export const useUserStore = create<UserState>()(
       
       // --- CALIBRATED DAILY STREAK SCHEDULER ---
       claimDailyReward: () => {
-        const amt = get().dailyReward.nextRewardAmount;
         const todayStr = getTodayUTCString();
-        
+        // Award the configured reward for the current schedule day, so a stale
+        // persisted nextRewardAmount can never pay out the wrong number of coins.
+        const currentDayIdx = get().dailyReward.currentDay ?? 0;
+        const amt = DAILY_REWARDS[currentDayIdx]?.coins ?? DAILY_REWARDS[0].coins;
+
         set((state) => {
           let currentStreak = state.dailyReward.streak;
-          let currentDayIdx = state.dailyReward.currentDay;
 
           if (state.dailyReward.lastClaimDate === todayStr) {
             console.log('[Daily Streak Engine] Reward already claimed for today.');
             return {};
           }
 
-          const nextDayIdx = (currentDayIdx + 1) % 7;
-          const configNextAmount = DAILY_REWARDS[nextDayIdx]?.amount || 15;
+          const nextDayIdx = (currentDayIdx + 1) % DAILY_REWARDS.length;
+          const configNextAmount = DAILY_REWARDS[nextDayIdx].coins;
 
           return {
             coins: state.coins + amt,
             dailyReward: {
-              lastClaimed: Date.now(),
+              lastClaimed: new Date().toISOString(),
               lastClaimDate: todayStr,
               streak: currentStreak + 1,
               currentDay: nextDayIdx,

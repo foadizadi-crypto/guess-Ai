@@ -23,6 +23,7 @@ import { useUserStore } from '@/store/userStore';
 import { useAudio } from '@/hooks/useAudio';
 import { isToday } from '@/utils';
 import { MAX_ENERGY } from '@/constants/economy';
+import { DAILY_REWARDS } from '@/constants';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
@@ -318,6 +319,10 @@ export default function LobbyScreen() {
 
         <DailyRewardModal
           visible={dailyModal}
+          amount={DAILY_REWARDS[dailyReward?.currentDay ?? 0]?.coins ?? DAILY_REWARDS[0].coins}
+          streak={dailyReward?.streak ?? 0}
+          currentDay={dailyReward?.currentDay ?? 0}
+          alreadyClaimed={isToday(dailyReward?.lastClaimed ?? null)}
           onClose={() => setDailyModal(false)}
           onClaim={claimDailyReward}
         />
