@@ -10,7 +10,7 @@
 import React, { useEffect, useState } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import ErrorBoundary from 'react-native-error-boundary';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useUserStore } from '@/store/userStore';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { GameColors } from '@/theme/colors';

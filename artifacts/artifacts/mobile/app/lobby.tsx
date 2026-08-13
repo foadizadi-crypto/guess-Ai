@@ -55,13 +55,15 @@ const buttonIcons: Record<string, any> = {
   play: require('../assets/icons/play.png'),
   legendary_pack: require('../assets/icons/legendary_pack.png'),
   gem_pack: require('../assets/icons/gem_pack.png'),
-  admob: require('../assets/icons/admob.png'),
+  admob: require('../assets/icons/AdMob_BG.png'),
   leaderboard: require('../assets/icons/leaderboard.png'),
-  dailyreward: require('../assets/icons/dailyreward.png'),
+  // dailyreward: no standalone icon asset exists; the button art is painted
+  //   into lobby_BG.png and the renderer guards on `hasIconAsset`, so omitting
+  //   this entry skips the overlay instead of breaking the bundle.
   shop: require('../assets/icons/shop.png'),
   friends: require('../assets/icons/friends.png'),
   achievement: require('../assets/icons/achievement.png'),
-  stand_avatar: require('../assets/icons/stand_avatar.png'),
+  stand_avatar: require('../assets/icons/avatar_pedestal.png'),
 };
 
 /**
@@ -121,7 +123,7 @@ export default function LobbyScreen() {
   async function playTapSound() {
     try {
       const { sound } = await Audio.Sound.createAsync(
-        require('../assets/click.mp3'),
+        require('@/assets/audio/button_click.wav'),
         { shouldPlay: true }
       );
       setSoundInstance(sound);
@@ -277,7 +279,7 @@ export default function LobbyScreen() {
   return (
     <View style={styles.viewViewportContainer}>
       <ImageBackground
-        source={require('../assets/background/lobby_bg.png')}
+        source={require('../assets/background/lobby_BG.png')}
         style={styles.responsiveImageContainerBg}
         resizeMode="stretch"
       >

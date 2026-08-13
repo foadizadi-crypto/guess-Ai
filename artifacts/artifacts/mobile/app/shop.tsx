@@ -123,7 +123,7 @@ export default function ShopScreen() {
   // --- Audio Feedback Engine Interface and Local GC Management ---
   async function playClickSound() {
     try {
-      const { sound } = await Audio.Sound.createAsync(require('../assets/click.mp3'));
+      const { sound } = await Audio.Sound.createAsync(require('@/assets/audio/button_click.wav'));
       setSoundInstance(sound);
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) {

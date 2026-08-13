@@ -79,7 +79,7 @@ export default function ProfileScreen() {
   async function playTapSound() {
     try {
       const { sound } = await Audio.Sound.createAsync(
-        require('../assets/click.mp3'),
+        require('@/assets/audio/button_click.wav'),
         { shouldPlay: true }
       );
       setSoundInstance(sound);

@@ -48,12 +48,12 @@ import type { Question, PowerUpId } from '@/types';
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 // ─── Local Button Power-up Asset Mapping Pipeline ───────────────────────────
-const POWER_UP_ICONS: Record<PowerUpId, ReturnType<typeof require>> = {
-  'hint': require('@/assets/icons/hint.png'),
-  'reveal-blur': require('@/assets/icons/reveal-blur.png'),
-  'skip-question': require('@/assets/icons/skip-question.png'),
-  'double-xp': require('@/assets/icons/double-xp.png'),
-};
+// No bespoke power-up artwork exists yet. Entries here are optional: the
+// power-up row below falls back to the matching Ionicon when a key is absent,
+// so an empty map renders correctly. A `require()` pointing at a missing file
+// fails at BUILD time, which the runtime guard cannot rescue — add a key here
+// only once the real asset exists in assets/icons/.
+const POWER_UP_ICONS: Partial<Record<PowerUpId, ReturnType<typeof require>>> = {};
 
 export default function GameScreen() {
   const router = useRouter();
