@@ -27,6 +27,7 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
 import { Audio } from 'expo-av';
 
 import { AnimatedBackground } from '@/components/AnimatedBackground';
@@ -74,6 +75,13 @@ const TABS = [
   { label: 'Cosmetics',  icon: 'sparkles-outline',       imageKey: 'tab_cosmetics' },
 ] as const;
 
+/** Deep-link keys accepted via ?tab= so other screens can open a specific tab. */
+const TAB_PARAM_INDEX: Record<string, number> = {
+  play: 0,
+  gems: 1,
+  cosmetics: 2,
+};
+
 const COSM_FILTERS = ['All', 'Avatars', 'Frames', 'Badges', 'Effects'] as const;
 type CosmFilter = typeof COSM_FILTERS[number];
 
@@ -92,7 +100,17 @@ export default function ShopScreen() {
   const bottomPad = Platform.OS === 'web' ? 28 : insets.bottom + 24;
   const { playEffect } = useAudio();
 
-  const [tab,         setTab]         = useState<number>(0);
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
+  const [tab,         setTab]         = useState<number>(TAB_PARAM_INDEX[tabParam ?? ''] ?? 0);
+
+  // Honour ?tab= even when the shop is already mounted (deep link from lobby).
+  useEffect(() => {
+    if (tabParam === undefined) return;
+    const target = TAB_PARAM_INDEX[tabParam];
+    if (target === undefined) return;
+    setTab(target);
+    setCosmFilter('All');
+  }, [tabParam]);
   const [cosmFilter,  setCosmFilter]  = useState<CosmFilter>('All');
   const [floating,    setFloating]    = useState<string | null>(null);
   const [loading,     setLoading]     = useState<string | null>(null);

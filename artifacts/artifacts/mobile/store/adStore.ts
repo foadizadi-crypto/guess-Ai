@@ -96,8 +96,15 @@ interface AdState {
   lastStaminaAdDate: string | null;
   /** True when fewer than STAMINA_ADS_PER_DAY ads have been watched today. */
   canWatchStaminaAd: () => boolean;
-  /** Increment the daily stamina-ad counter. Call after a successful ad watch. */
-  recordStaminaAdWatched: () => void;
+  /**
+   * Atomically claim one of today's stamina-ad slots. Returns false when the
+   * daily cap is already reached. Call this BEFORE showing the ad so two
+   * concurrent watches can never both pass the check, and release the slot
+   * again if the ad does not complete.
+   */
+  reserveStaminaAd: () => boolean;
+  /** Give back a slot claimed by reserveStaminaAd when no reward was earned. */
+  releaseStaminaAd: () => void;
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────
@@ -159,12 +166,24 @@ export const useAdStore = create<AdState>()(
         return usedToday < STAMINA_ADS_PER_DAY;
       },
 
-      recordStaminaAdWatched: () => {
+      reserveStaminaAd: () => {
         const today = todayUTC();
-        set((s) => ({
-          staminaAdsToday: s.lastStaminaAdDate === today ? s.staminaAdsToday + 1 : 1,
-          lastStaminaAdDate: today,
-        }));
+        let reserved = false;
+        set((s) => {
+          const usedToday = s.lastStaminaAdDate === today ? s.staminaAdsToday : 0;
+          if (usedToday >= STAMINA_ADS_PER_DAY) return {};
+          reserved = true;
+          return { staminaAdsToday: usedToday + 1, lastStaminaAdDate: today };
+        });
+        return reserved;
+      },
+
+      releaseStaminaAd: () => {
+        const today = todayUTC();
+        set((s) => {
+          if (s.lastStaminaAdDate !== today || s.staminaAdsToday <= 0) return {};
+          return { staminaAdsToday: s.staminaAdsToday - 1 };
+        });
       },
     }),
     {

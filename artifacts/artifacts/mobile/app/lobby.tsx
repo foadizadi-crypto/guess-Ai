@@ -21,9 +21,11 @@ import { AnimatedIcon } from '@/components/AnimatedIcon';
 import { DailyRewardModal } from '@/components/DailyRewardModal';
 import { useUserStore } from '@/store/userStore';
 import { useAudio } from '@/hooks/useAudio';
+import { useAdStore } from '@/store/adStore';
 import { isToday } from '@/utils';
-import { MAX_ENERGY } from '@/constants/economy';
+import { MAX_ENERGY, STAMINA_AD_REWARD, STAMINA_ADS_PER_DAY } from '@/constants/economy';
 import { DAILY_REWARDS } from '@/constants';
+import { ROUTES } from '@/navigation/routes';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
@@ -86,8 +88,48 @@ export default function LobbyScreen() {
     equippedCosmetics,
   } = useUserStore();
 
+  const addStamina = useUserStore((s) => s.addStamina);
+  const showRewarded = useAdStore((s) => s.showRewarded);
+  const reserveStaminaAd = useAdStore((s) => s.reserveStaminaAd);
+  const releaseStaminaAd = useAdStore((s) => s.releaseStaminaAd);
+  // Ref, not state: a second tap in the same tick must be rejected before the
+  // next render, otherwise two ads can be in flight at once.
+  const adInFlight = useRef<boolean>(false);
+
   const { playMusic, stopMusic } = useAudio();
   const currentAvatar = avatars?.find((avatar) => avatar.id === selectedAvatarId);
+
+  // --- Rewarded ad → stamina, capped per day by the ad store ---
+  const handleWatchStaminaAd = useCallback(async () => {
+    if (adInFlight.current) return;
+
+    // Claim the daily slot up front so the cap holds even if two watches race.
+    if (!reserveStaminaAd()) {
+      Alert.alert(
+        'No ads left today',
+        `You can watch up to ${STAMINA_ADS_PER_DAY} ads a day for stamina. Come back tomorrow.`,
+      );
+      return;
+    }
+
+    adInFlight.current = true;
+    let earned = false;
+    try {
+      earned = await showRewarded();
+    } finally {
+      adInFlight.current = false;
+      if (!earned) releaseStaminaAd();
+    }
+
+    if (!earned) {
+      Alert.alert('No reward', 'The ad did not finish, so no stamina was added.');
+      return;
+    }
+
+    addStamina(STAMINA_AD_REWARD);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    Alert.alert('Stamina added', `+${STAMINA_AD_REWARD} stamina added to your reserve.`);
+  }, [addStamina, releaseStaminaAd, reserveStaminaAd, showRewarded]);
 
   // --- 3. Background Track Loops Handler on Screen Target Focus ---
   useFocusEffect(
@@ -154,34 +196,34 @@ export default function LobbyScreen() {
     switch (actionName) {
       case 'profile_lvl_playername':
       case 'avatar_wing_frame':
-        router.push('/profile');
+        router.push(ROUTES.PROFILE);
         break;
       case 'shop':
-        router.push('/shop');
+        router.push(ROUTES.SHOP);
         break;
       case 'leaderboard':
-        router.push('/leaderboard');
+        router.push(ROUTES.LEADERBOARD);
         break;
       case 'achievement':
-        router.push('/achievement');
+        router.push(ROUTES.ACHIEVEMENTS);
         break;
       case 'settings':
-        router.push('/settings');
+        router.push(ROUTES.SETTINGS);
         break;
       case 'dailyreward':
         setDailyModal(true);
         break;
       case 'play':
-        router.push('/play');
+        router.push(ROUTES.LEVEL_SELECT);
         break;
       case 'admob':
-        router.push('/admob');
+        await handleWatchStaminaAd();
         break;
       case 'gem_pack':
-        router.push('/gem_pack');
+        router.push({ pathname: ROUTES.SHOP, params: { tab: 'gems' } });
         break;
       case 'legendary_pack':
-        router.push('/legendary_pack');
+        router.push({ pathname: ROUTES.SHOP, params: { tab: 'cosmetics' } });
         break;
       default:
         Alert.alert("Interaction Captured", `Action Variable Name executed: ${actionName}`);

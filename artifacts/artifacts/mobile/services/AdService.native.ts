@@ -107,8 +107,16 @@ class AdService {
 
   async showRewarded(): Promise<boolean> {
     if (!ADMOB_LINKED || !_Rewarded || !_RewardedEventType || !_AdEventType) {
+      // No ad can play (Expo Go, simulator, or a build missing the native
+      // module). Fail closed in release builds — reporting a reward for an ad
+      // that never ran would hand out real currency. In development the mock
+      // stays so the reward flows can be exercised without AdMob linked.
       await mockDelay(600);
-      return true;
+      if (__DEV__) {
+        console.warn('[AdService] AdMob not linked — granting mock reward (development only).');
+        return true;
+      }
+      return false;
     }
 
     try {
