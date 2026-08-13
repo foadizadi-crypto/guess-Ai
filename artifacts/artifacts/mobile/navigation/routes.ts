@@ -19,6 +19,8 @@ export const ROUTES = {
   COLLECTIONS:  '/collections',
   COLLECTION_DETAIL: '/collection-detail',
   SPIN:         '/spin',
+  FRIENDS:      '/friends',
+  STAMINA:      '/stamina',
 } as const;
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];

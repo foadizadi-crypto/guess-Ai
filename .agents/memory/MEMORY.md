@@ -7,3 +7,5 @@
 - [Coin economy](coin-economy.md) — Levels 1-100 give coins every level (300/700/1500). Coin→gem exchange: 30k→5💎 (max 2) and 100k→25💎 (max 1), tracked in coinGemExchanges state.
 - [Asset reference pitfalls](asset-references.md) — require() of a missing asset breaks the build despite runtime guards; sweep all refs at once and expand the `@/` alias first.
 - [Typecheck silently disabled](typecheck-silently-disabled.md) — a lone TS6310 config error means tsc never checked your files; fix composite libs noEmit before trusting a "clean" run.
+- [Fast Refresh stale bundles](expo-web-fast-refresh-stale.md) — a ReferenceError for a symbol that exists in the source means restart Metro + fresh context, not a real bug.
+- [Overlapping hitbox z-order](overlapping-hitbox-zorder.md) — absolutely positioned tap targets must be z-ordered by area, or a big box silently eats a small button's taps.

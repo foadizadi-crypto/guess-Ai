@@ -779,11 +779,12 @@ export const useUserStore = create<UserState>()(
       refillEnergyWithGems: (gemCost) => {
         let success = false;
         set((state) => {
-          if (state.gems >= gemCost) {
-            success = true;
-            return { gems: state.gems - gemCost, energy: MAX_ENERGY, lastEnergyRefillTime: Date.now() };
-          }
-          return {};
+          // Both guards live inside the transaction: a disabled button is not a
+          // concurrency guard, and charging gems for a full bar loses currency.
+          if (state.energy >= MAX_ENERGY) return {};
+          if (state.gems < gemCost) return {};
+          success = true;
+          return { gems: state.gems - gemCost, energy: MAX_ENERGY, lastEnergyRefillTime: Date.now() };
         });
         return success;
       },

@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { GameColors } from '@/theme/colors';
 import { pressIn, pressOut } from '@/animations';
 import { useRTL } from '@/hooks/useRTL';
+import { ROUTES } from '@/navigation/routes';
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -15,6 +16,11 @@ interface BackButtonProps {
   style?: ViewStyle;
   iconColor?: string;
   testID?: string;
+  /**
+   * Where to go when there is nothing to go back to (deep link, cold start,
+   * or a screen reached via router.replace). Defaults to the lobby.
+   */
+  fallbackRoute?: string;
 }
 
 export const BackButton: React.FC<BackButtonProps> = ({
@@ -22,6 +28,7 @@ export const BackButton: React.FC<BackButtonProps> = ({
   style,
   iconColor = GameColors.textWhite,
   testID,
+  fallbackRoute = ROUTES.LOBBY,
 }) => {
   const { isRTL } = useRTL();
   const router = useRouter();
@@ -38,10 +45,16 @@ export const BackButton: React.FC<BackButtonProps> = ({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (onPress) {
       onPress();
-    } else {
-      router.back();
+      return;
     }
-  }, [onPress, router]);
+    // router.back() is a no-op with an empty history stack, which strands the
+    // player on the screen. Fall back to a real destination in that case.
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace(fallbackRoute as never);
+    }
+  }, [fallbackRoute, onPress, router]);
 
   // Flip arrow direction for RTL
   const iconName = isRTL ? 'chevron-forward' : 'chevron-back';

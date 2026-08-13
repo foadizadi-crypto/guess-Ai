@@ -29,6 +29,11 @@ import { ROUTES } from '@/navigation/routes';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+/**
+ * Base z-index for lobby hitboxes. Each box gets `HITBOX_Z_BASE - its area`, so
+ * a small control layered inside a large one still receives the tap.
+ */
+const HITBOX_Z_BASE = 10000;
 
 interface HitboxItem {
   id: string;
@@ -180,11 +185,6 @@ export default function LobbyScreen() {
   const handleActionTrigger = async (actionName: string) => {
     console.log(`[Lobby Icon UI Engine] Action executed: ${actionName}`);
 
-    if (actionName === 'friends') {
-      console.log('[Lobby Engine] Friends action ignored per project directive.');
-      return;
-    }
-
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (e) {
@@ -196,6 +196,7 @@ export default function LobbyScreen() {
     switch (actionName) {
       case 'profile_lvl_playername':
       case 'avatar_wing_frame':
+      case 'stand_avatar':
         router.push(ROUTES.PROFILE);
         break;
       case 'shop':
@@ -225,8 +226,24 @@ export default function LobbyScreen() {
       case 'legendary_pack':
         router.push({ pathname: ROUTES.SHOP, params: { tab: 'cosmetics' } });
         break;
+      case 'coin':
+        // Coins are spent on the shop's Play tab (power-ups and consumables).
+        router.push({ pathname: ROUTES.SHOP, params: { tab: 'play' } });
+        break;
+      case 'gem':
+        router.push({ pathname: ROUTES.SHOP, params: { tab: 'gems' } });
+        break;
+      case 'stamina':
+        router.push(ROUTES.STAMINA);
+        break;
+      case 'spinwheel':
+        router.push(ROUTES.SPIN);
+        break;
+      case 'friends':
+        router.push(ROUTES.FRIENDS);
+        break;
       default:
-        Alert.alert("Interaction Captured", `Action Variable Name executed: ${actionName}`);
+        console.warn(`[Lobby Engine] No destination wired for hitbox "${actionName}".`);
         break;
     }
   };
@@ -301,10 +318,9 @@ export default function LobbyScreen() {
       default:
         // Renders the specific PNG asset from your icons folder directly
         const hasIconAsset = buttonIcons[box.id] !== undefined;
-        const isFriendsLocked = box.id === 'friends';
 
         return (
-          <View style={[styles.fullSizeContainer, isFriendsLocked && { opacity: 0.45 }]}>
+          <View style={styles.fullSizeContainer}>
             {hasIconAsset && (
               <AnimatedIcon
                 animation={box.id === 'spinwheel' ? 'spin' : 'float'}
@@ -329,6 +345,12 @@ export default function LobbyScreen() {
         {hitboxes.map((box, index) => {
           const isPremium = box.premium;
           const PressableComponent = isPremium ? GlowWrapper : WaveWrapper;
+          // Several hitboxes overlap — the full-width avatar frame sits on top of
+          // the settings gear and the spin wheel, for example. Stack the smaller
+          // box above the larger one so the specific control always wins the tap
+          // instead of whichever happens to be declared last.
+          const areaPct = parseFloat(box.width) * parseFloat(box.height);
+          const zIndex = Math.max(1, Math.round(HITBOX_Z_BASE - areaPct));
 
           return (
             <PressableComponent
@@ -341,6 +363,7 @@ export default function LobbyScreen() {
                   top: box.top,
                   width: box.width,
                   height: box.height,
+                  zIndex,
                   backgroundColor: debugMode ? 'rgba(244, 63, 94, 0.25)' : 'transparent',
                   borderWidth: debugMode ? 1 : 0,
                   borderColor: '#f43f5e',
@@ -422,8 +445,6 @@ function WaveWrapper({ style, onPress, children, accessibilityLabel }: any) {
   const waveOpacity = useRef(new RNAnimated.Value(0)).current;
 
   const handlePressIn = () => {
-    if (accessibilityLabel === 'friends') return;
-
     waveScale.setValue(0.2);
     waveOpacity.setValue(0.5);
     RNAnimated.parallel([
