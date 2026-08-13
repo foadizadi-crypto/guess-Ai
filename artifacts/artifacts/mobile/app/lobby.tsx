@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import { AvatarFrame } from '@/components/AvatarFrame';
+import { AnimatedIcon } from '@/components/AnimatedIcon';
 import { DailyRewardModal } from '@/components/DailyRewardModal';
 import { useUserStore } from '@/store/userStore';
 import { useAudio } from '@/hooks/useAudio';
@@ -45,25 +46,23 @@ interface HitboxItem {
 }
 
 // --- 1. Static Asset Mapping Table for your Button Icons Folder ---
-// Place your individual button PNG images directly inside: assets/icons/
+// Place your individual button PNG images directly inside: assets/icon/
 const buttonIcons: Record<string, any> = {
-  coin: require('../assets/icons/coin.png'),
-  gem: require('../assets/icons/gem.png'),
-  stamina: require('../assets/icons/stamina.png'),
-  spinwheel: require('../assets/icons/spinwheel.png'),
-  settings: require('../assets/icons/settings.png'),
-  play: require('../assets/icons/play.png'),
-  legendary_pack: require('../assets/icons/legendary_pack.png'),
-  gem_pack: require('../assets/icons/gem_pack.png'),
-  admob: require('../assets/icons/AdMob_BG.png'),
-  leaderboard: require('../assets/icons/leaderboard.png'),
-  // dailyreward: no standalone icon asset exists; the button art is painted
-  //   into lobby_BG.png and the renderer guards on `hasIconAsset`, so omitting
-  //   this entry skips the overlay instead of breaking the bundle.
-  shop: require('../assets/icons/shop.png'),
-  friends: require('../assets/icons/friends.png'),
-  achievement: require('../assets/icons/achievement.png'),
-  stand_avatar: require('../assets/icons/avatar_pedestal.png'),
+  coin: require('../assets/icon/coin.png'),
+  gem: require('../assets/icon/gem.png'),
+  stamina: require('../assets/icon/stamina.png'),
+  spinwheel: require('../assets/icon/spinwheel.png'),
+  settings: require('../assets/icon/settings.png'),
+  play: require('../assets/icon/play.png'),
+  legendary_pack: require('../assets/icon/legendary_pack.png'),
+  gem_pack: require('../assets/icon/gem_pack.png'),
+  admob: require('../assets/icon/AdMob_BG.png'),
+  leaderboard: require('../assets/icon/leaderboard.png'),
+  dailyreward: require('../assets/icon/daily-reward.jpg'),
+  shop: require('../assets/icon/shop.png'),
+  friends: require('../assets/icon/friends.png'),
+  achievement: require('../assets/icon/achievement.png'),
+  stand_avatar: require('../assets/icon/avatar_pedestal.png'),
 };
 
 /**
@@ -218,7 +217,7 @@ export default function LobbyScreen() {
   ];
 
   // Dynamically renders the correct local graphic or component based on ID
-  const renderComponentUI = (box: HitboxItem) => {
+  const renderComponentUI = (box: HitboxItem, animationDelay = 0) => {
     switch (box.id) {
       case 'profile_lvl_playername':
         return (
@@ -254,7 +253,9 @@ export default function LobbyScreen() {
       case 'stamina':
         return (
           <View style={styles.fullSizeContainer}>
-            <Image source={buttonIcons[box.id]} style={styles.buttonImageGraphic} />
+            <AnimatedIcon animation="pulse" delay={animationDelay} style={styles.fullSizeContainer}>
+              <Image source={buttonIcons[box.id]} style={styles.buttonImageGraphic} />
+            </AnimatedIcon>
             <View style={styles.currencyTextContainerOverlay}>
               <Text style={styles.currencyPillValueText} numberOfLines={1}>{box.label}</Text>
             </View>
@@ -269,7 +270,13 @@ export default function LobbyScreen() {
         return (
           <View style={[styles.fullSizeContainer, isFriendsLocked && { opacity: 0.45 }]}>
             {hasIconAsset && (
-              <Image source={buttonIcons[box.id]} style={styles.buttonImageGraphic} />
+              <AnimatedIcon
+                animation={box.id === 'spinwheel' ? 'spin' : 'float'}
+                delay={animationDelay}
+                style={styles.fullSizeContainer}
+              >
+                <Image source={buttonIcons[box.id]} style={styles.buttonImageGraphic} />
+              </AnimatedIcon>
             )}
           </View>
         );
@@ -283,7 +290,7 @@ export default function LobbyScreen() {
         style={styles.responsiveImageContainerBg}
         resizeMode="stretch"
       >
-        {hitboxes.map((box) => {
+        {hitboxes.map((box, index) => {
           const isPremium = box.premium;
           const PressableComponent = isPremium ? GlowWrapper : WaveWrapper;
 
@@ -305,7 +312,7 @@ export default function LobbyScreen() {
               ]}
               onPress={() => handleActionTrigger(box.id)}
             >
-              {renderComponentUI(box)}
+              {renderComponentUI(box, index * 85)}
               
               {debugMode && !box.hasTextOverlay && (
                 <View style={styles.debugLabelMeshCellContainer}>

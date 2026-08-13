@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
-import { CoinIcon } from '@/assets/icons';
+import { CoinIcon } from '@/assets/icon';
 import { formatCoins } from '@/utils';
 
 interface CoinDisplayProps {

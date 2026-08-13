@@ -5,7 +5,7 @@
  * CRITICAL AUDIT FIXES APPLIED:
  * 1. NULL GUARD CHECK (P1): Prevents runtime crashes if currentQuestion is null/undefined.
  * 2. AUDIO GC INJECTION (P2): Automatically unloads and disposes effects/music on unmount.
- * 3. LOCAL ICON PIPELINE: Leverages your custom assets/icons directory configuration.
+ * 3. LOCAL ICON PIPELINE: Leverages your custom assets/icon directory configuration.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -30,6 +30,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { AnimatedBackground } from '@/components/AnimatedBackground';
+import { AnimatedIcon } from '@/components/AnimatedIcon';
 import { BackButton } from '@/components/BackButton';
 import { GlassCard } from '@/components/GlassCard';
 import { GradientButton } from '@/components/GradientButton';
@@ -48,12 +49,13 @@ import type { Question, PowerUpId } from '@/types';
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 // ─── Local Button Power-up Asset Mapping Pipeline ───────────────────────────
-// No bespoke power-up artwork exists yet. Entries here are optional: the
-// power-up row below falls back to the matching Ionicon when a key is absent,
-// so an empty map renders correctly. A `require()` pointing at a missing file
-// fails at BUILD time, which the runtime guard cannot rescue — add a key here
-// only once the real asset exists in assets/icons/.
-const POWER_UP_ICONS: Partial<Record<PowerUpId, ReturnType<typeof require>>> = {};
+// All four power-ups use the customized artwork from the canonical icon folder.
+const POWER_UP_ICONS: Record<PowerUpId, ReturnType<typeof require>> = {
+  'hint': require('@/assets/icon/hint.jpg'),
+  'reveal-blur': require('@/assets/icon/reveal-blur.png'),
+  'skip-question': require('@/assets/icon/skip-question.png'),
+  'double-xp': require('@/assets/icon/double-xp.jpg'),
+};
 
 export default function GameScreen() {
   const router = useRouter();
@@ -503,7 +505,9 @@ export default function GameScreen() {
                   disabled={powerUps[id] < 1 || Boolean(feedback)}
                 >
                   {POWER_UP_ICONS[id] ? (
-                    <Image source={POWER_UP_ICONS[id]} style={styles.powerIconImg} resizeMode="contain" />
+                    <AnimatedIcon animation="pulse" style={styles.powerIconMotion}>
+                      <Image source={POWER_UP_ICONS[id]} style={styles.powerIconImg} resizeMode="contain" />
+                    </AnimatedIcon>
                   ) : (
                     <Ionicons name={icon} size={14} color={powerUps[id] > 0 ? GameColors.accentGold : GameColors.textSecondary} />
                   )}
@@ -590,6 +594,7 @@ const styles = StyleSheet.create({
   powerBar: { flexDirection: 'row', gap: 6 },
   powerButton: { flex: 1, minHeight: 42, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,215,0,0.35)', backgroundColor: 'rgba(255,215,0,0.08)', alignItems: 'center', justifyContent: 'center', gap: 1 },
   powerButtonDisabled: { opacity: 0.4, borderColor: GameColors.border, backgroundColor: 'rgba(255,255,255,0.04)' },
+  powerIconMotion: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
   powerIconImg: { width: 16, height: 16, marginBottom: 1 },
   powerLabel: { color: GameColors.textWhite, fontFamily: 'Inter_600SemiBold', fontSize: 9 },
   powerCount: { color: GameColors.accentGold, fontFamily: 'Inter_700Bold', fontSize: 9 },

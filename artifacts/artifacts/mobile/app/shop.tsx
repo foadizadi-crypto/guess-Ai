@@ -30,6 +30,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 
 import { AnimatedBackground } from '@/components/AnimatedBackground';
+import { AnimatedIcon } from '@/components/AnimatedIcon';
 import { BackButton } from '@/components/BackButton';
 import { CoinDisplay } from '@/components/CoinDisplay';
 import { GameColors } from '@/theme/colors';
@@ -62,9 +63,9 @@ const SHOP_IMAGES: Record<string, ReturnType<typeof require>> = {
   multiplier_2x:   require('@/assets/shop/x2_multiplier.png'),
   rare_sticker:    require('@/assets/shop/rare_sticker.png'),
   // Tab local graphics setup from icons folder
-  tab_play:        require('@/assets/icons/shop.png'), // Reuse core shop graphics for layout consistency
-  tab_gems:        require('@/assets/icons/gem_pack.png'),
-  tab_cosmetics:   require('@/assets/icons/legendary_pack.png'),
+  tab_play:        require('@/assets/icon/shop.png'), // Reuse core shop graphics for layout consistency
+  tab_gems:        require('@/assets/icon/gem_pack.png'),
+  tab_cosmetics:   require('@/assets/icon/legendary_pack.png'),
 };
 
 const TABS = [
@@ -329,7 +330,9 @@ export default function ShopScreen() {
               onPress={() => handleTabSelection(i)}
             >
               {SHOP_IMAGES[imageKey] ? (
-                <Image source={SHOP_IMAGES[imageKey]} style={[s.tabIconImg, tab === i && { tintColor: GameColors.backgroundPrimary }]} resizeMode="contain" />
+                <AnimatedIcon animation="float" delay={i * 120} style={s.tabIconMotion}>
+                  <Image source={SHOP_IMAGES[imageKey]} style={[s.tabIconImg, tab === i && { tintColor: GameColors.backgroundPrimary }]} resizeMode="contain" />
+                </AnimatedIcon>
               ) : (
                 <Ionicons name={icon as React.ComponentProps<typeof Ionicons>['name']} size={16} color={tab === i ? GameColors.backgroundPrimary : GameColors.textSecondary} />
               )}
@@ -599,7 +602,9 @@ export default function ShopScreen() {
                     >
                       <View style={[s.cosmIcon, { backgroundColor: `${rarityColor}18` }]}>
                         {SHOP_IMAGES[item.id] ? (
-                          <Image source={SHOP_IMAGES[item.id]} style={s.itemImg} resizeMode="contain" />
+                          <AnimatedIcon animation="float" style={s.itemMotion}>
+                            <Image source={SHOP_IMAGES[item.id]} style={s.itemImg} resizeMode="contain" />
+                          </AnimatedIcon>
                         ) : (
                           <Ionicons name={item.icon as React.ComponentProps<typeof Ionicons>['name']} size={28} color={owned ? rarityColor : GameColors.textSecondary} />
                         )}
@@ -656,7 +661,9 @@ function PlayCard({ item, qty, balance, onPress }: PlayCardProps) {
     <TouchableOpacity style={[s.playCard, { borderColor: `${rarityColor}44` }]} onPress={onPress} activeOpacity={0.8}>
       <View style={[s.playIconWrap, { backgroundColor: `${rarityColor}18` }]}>
         {SHOP_IMAGES[item.id] ? (
-          <Image source={SHOP_IMAGES[item.id]} style={s.itemImg} resizeMode="contain" />
+          <AnimatedIcon animation="pulse" style={s.itemMotion}>
+            <Image source={SHOP_IMAGES[item.id]} style={s.itemImg} resizeMode="contain" />
+          </AnimatedIcon>
         ) : (
           <Ionicons name={item.icon as any} size={26} color={rarityColor} />
         )}
@@ -741,6 +748,7 @@ const s = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 8 },
   tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: GameColors.border, backgroundColor: 'rgba(255,255,255,0.04)' },
   tabActive: { backgroundColor: GameColors.accentGold, borderColor: GameColors.accentGold },
+  tabIconMotion: { width: 14, height: 14 },
   tabIconImg: { width: 14, height: 14, tintColor: GameColors.textSecondary },
   tabText: { color: GameColors.textSecondary, fontFamily: 'Inter_600SemiBold', fontSize: 12 },
   tabTextActive: { color: GameColors.backgroundPrimary, fontFamily: 'Inter_700Bold', fontSize: 12 },
@@ -768,6 +776,7 @@ const s = StyleSheet.create({
   cosmDesc: { color: GameColors.textSecondary, fontSize: 10, textAlign: 'center', lineHeight: 14, minHeight: 28, fontFamily: 'Inter_400Regular' },
   cosmBtn: { width: '100%', paddingVertical: 8, borderRadius: 12, alignItems: 'center', marginTop: 2 },
   cosmBtnText: { fontFamily: 'Inter_700Bold', fontSize: 12 },
+  itemMotion: { width: 42, height: 42 },
   itemImg: { width: 42, height: 42 },
   qtyBadge: { position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   qtyText: { color: '#000', fontFamily: 'Inter_700Bold', fontSize: 10 },
