@@ -10,16 +10,8 @@ import {
   Dimensions,
   Switch,
   Image,
+  Animated as RNAnimated,
 } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withDelay,
-  withRepeat,
-  withSequence,
-  Easing,
-} from 'react-native-reanimated';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -33,6 +25,7 @@ import { isToday } from '@/utils';
 import { MAX_ENERGY } from '@/constants/economy';
 
 const { width: SW, height: SH } = Dimensions.get('window');
+const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
 interface HitboxItem {
   id: string;
@@ -347,20 +340,20 @@ export default function LobbyScreen() {
 // ─── Custom Animated Response Effect Framework Wrappers ───
 
 function GlowWrapper({ style, onPress, children }: any) {
-  const glowAnim = useRef(new Animated.Value(0.15)).current;
+  const glowAnim = useRef(new RNAnimated.Value(0.15)).current;
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 0.55, duration: 1100, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0.15, duration: 1100, useNativeDriver: true }),
+    RNAnimated.loop(
+      RNAnimated.sequence([
+        RNAnimated.timing(glowAnim, { toValue: 0.55, duration: 1100, useNativeDriver: USE_NATIVE_DRIVER }),
+        RNAnimated.timing(glowAnim, { toValue: 0.15, duration: 1100, useNativeDriver: USE_NATIVE_DRIVER }),
       ])
     ).start();
   }, [glowAnim]);
 
   return (
     <Pressable onPress={onPress} style={style}>
-      <Animated.View
+      <RNAnimated.View
         style={[
           StyleSheet.absoluteFill,
           {
@@ -368,6 +361,7 @@ function GlowWrapper({ style, onPress, children }: any) {
             borderRadius: 12,
             borderWidth: 2,
             borderColor: '#fbbf24',
+            opacity: glowAnim,
           }
         ]}
       />
@@ -377,17 +371,17 @@ function GlowWrapper({ style, onPress, children }: any) {
 }
 
 function WaveWrapper({ style, onPress, children, accessibilityLabel }: any) {
-  const waveScale = useRef(new Animated.Value(0)).current;
-  const waveOpacity = useRef(new Animated.Value(0)).current;
+  const waveScale = useRef(new RNAnimated.Value(0)).current;
+  const waveOpacity = useRef(new RNAnimated.Value(0)).current;
 
   const handlePressIn = () => {
     if (accessibilityLabel === 'friends') return;
 
     waveScale.setValue(0.2);
     waveOpacity.setValue(0.5);
-    Animated.parallel([
-      Animated.timing(waveScale, { toValue: 1.35, duration: 400, useNativeDriver: true }),
-      Animated.timing(waveOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+    RNAnimated.parallel([
+      RNAnimated.timing(waveScale, { toValue: 1.35, duration: 400, useNativeDriver: USE_NATIVE_DRIVER }),
+      RNAnimated.timing(waveOpacity, { toValue: 0, duration: 400, useNativeDriver: USE_NATIVE_DRIVER }),
     ]).start();
   };
 
@@ -397,7 +391,7 @@ function WaveWrapper({ style, onPress, children, accessibilityLabel }: any) {
       onPress={onPress}
       style={[style, { overflow: 'hidden' }]}
     >
-      <Animated.View
+      <RNAnimated.View
         style={{
           position: 'absolute',
           top: '25%',
