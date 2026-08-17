@@ -7,13 +7,13 @@
  * and handles the correct entry tree flow:
  * Onboarding (Tutorial) -> Login Screen -> Main Lobby Menu.
  */
-import React, { useEffect, useState } from 'react';
-import { Stack, useRouter } from 'expo-router';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { useUserStore } from '@/store/userStore';
-import { useFirestoreSync } from '@/hooks/useFirestoreSync';
-import { GameColors } from '@/theme/colors';
+import React, { useEffect, useState } from "react";
+import { Stack, useRouter } from "expo-router";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useUserStore } from "@/store/userStore";
+import { useFirestoreSync } from "@/hooks/useFirestoreSync";
+import { GameColors } from "@/theme/colors";
 
 /**
  * Root Error Fallback UI Component
@@ -30,7 +30,7 @@ function ErrorFallback({ error }: { error: Error; resetError: () => void }) {
 export default function RootLayout() {
   const router = useRouter();
   const [storeReady, setStoreReady] = useState<boolean>(false);
-  
+
   // --- 1. Hooking into your live firestore sync & authentication boot layer ---
   useFirestoreSync();
 
@@ -43,12 +43,12 @@ export default function RootLayout() {
   useEffect(() => {
     // Check if the store has already initialized from AsyncStorage cache buffer
     const hasHydrated = useUserStore.persist?.hasHydrated();
-    
+
     if (hasHydrated) {
       setStoreReady(true);
     } else {
       const unsubFinishHydrate = useUserStore.persist.onFinishHydrate(() => {
-        console.log('[Store Pipeline] AsyncStorage persistence sync complete.');
+        console.log("[Store Pipeline] AsyncStorage persistence sync complete.");
         setStoreReady(true);
       });
 
@@ -71,14 +71,14 @@ export default function RootLayout() {
 
     if (!hasCompletedOnboarding) {
       // Force user to land on the initial onboarding tutorial path folder
-      router.replace('/onboarding');
+      router.replace("/onboarding");
     } else if (!isUserLoggedIn) {
       // Force user to cross the login authentication layer gate
-      router.replace('/login');
+      router.replace("/login");
     } else {
       // Safe Path: Auto-load live missions and launch directly into the main lobby
       refreshDailyMissions();
-      router.replace('/lobby');
+      router.replace("/lobby");
     }
   }, [storeReady, username, missionsDate]);
 
@@ -96,7 +96,9 @@ export default function RootLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: GameColors?.backgroundPrimary ?? '#02000A' },
+          contentStyle: {
+            backgroundColor: GameColors?.backgroundPrimary ?? "#02000A",
+          },
         }}
       >
         {/* Explicit route screen matching indices mapping */}
@@ -114,15 +116,15 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#02000A',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#02000A",
+    justifyContent: "center",
+    alignItems: "center",
   },
   errorContainer: {
     flex: 1,
-    backgroundColor: '#02000A',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#02000A",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 24,
   },
 });

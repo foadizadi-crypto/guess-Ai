@@ -1,26 +1,26 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, View, Text, ViewStyle } from 'react-native';
+import React, { useEffect } from "react";
+import { StyleSheet, View, Text, ViewStyle } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSequence,
   withSpring,
-} from 'react-native-reanimated';
-import { GameColors } from '@/theme/colors';
-import { Typography } from '@/theme/typography';
-import { CoinIcon } from '@/assets/icon';
-import { formatCoins } from '@/utils';
+} from "react-native-reanimated";
+import { GameColors } from "@/theme/colors";
+import { Typography } from "@/theme/typography";
+import { CoinIcon } from "@/assets/icon";
+import { formatCoins } from "@/utils";
 
 interface CoinDisplayProps {
   amount: number;
-  size?: 'small' | 'medium' | 'large';
+  size?: "small" | "medium" | "large";
   style?: ViewStyle;
   animate?: boolean;
 }
 
 export const CoinDisplay: React.FC<CoinDisplayProps> = ({
   amount,
-  size = 'medium',
+  size = "medium",
   style,
   animate = false,
 }) => {
@@ -39,7 +39,7 @@ export const CoinDisplay: React.FC<CoinDisplayProps> = ({
     transform: [{ scale: scale.value }],
   }));
 
-  const iconSize = size === 'small' ? 14 : size === 'large' ? 26 : 20;
+  const iconSize = size === "small" ? 30 : size === "large" ? 45 : 35;
 
   const textStyles = {
     small: styles.textSmall,
@@ -54,7 +54,9 @@ export const CoinDisplay: React.FC<CoinDisplayProps> = ({
   };
 
   return (
-    <Animated.View style={[styles.base, containerStyles[size], animatedStyle, style]}>
+    <Animated.View
+      style={[styles.base, containerStyles[size], animatedStyle, style]}
+    >
       <CoinIcon size={iconSize} />
       <Text style={[styles.text, textStyles[size]]}>{formatCoins(amount)}</Text>
     </Animated.View>
@@ -63,8 +65,8 @@ export const CoinDisplay: React.FC<CoinDisplayProps> = ({
 
 const styles = StyleSheet.create({
   base: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: GameColors.coinBg,
     borderWidth: 1,
     borderColor: GameColors.coinBorder,
@@ -74,10 +76,22 @@ const styles = StyleSheet.create({
   containerMedium: { gap: 6, paddingHorizontal: 12, paddingVertical: 6 },
   containerLarge: { gap: 8, paddingHorizontal: 16, paddingVertical: 8 },
   text: {
-    fontFamily: 'Inter_700Bold',
+    fontFamily: "Inter_700Bold",
     color: GameColors.accentGold,
   },
-  textSmall: { ...Typography.small, fontFamily: 'Inter_700Bold', color: GameColors.accentGold },
-  textMedium: { ...Typography.bodyMedium, fontFamily: 'Inter_700Bold', color: GameColors.accentGold },
-  textLarge: { ...Typography.body, fontFamily: 'Inter_700Bold', color: GameColors.accentGold },
+  textSmall: {
+    ...Typography.small,
+    fontFamily: "Inter_700Bold",
+    color: GameColors.accentGold,
+  },
+  textMedium: {
+    ...Typography.bodyMedium,
+    fontFamily: "Inter_700Bold",
+    color: GameColors.accentGold,
+  },
+  textLarge: {
+    ...Typography.body,
+    fontFamily: "Inter_700Bold",
+    color: GameColors.accentGold,
+  },
 });

@@ -9,3 +9,5 @@
 - [Typecheck silently disabled](typecheck-silently-disabled.md) — a lone TS6310 config error means tsc never checked your files; fix composite libs noEmit before trusting a "clean" run.
 - [Fast Refresh stale bundles](expo-web-fast-refresh-stale.md) — a ReferenceError for a symbol that exists in the source means restart Metro + fresh context, not a real bug.
 - [Overlapping hitbox z-order](overlapping-hitbox-zorder.md) — absolutely positioned tap targets must be z-ordered by area, or a big box silently eats a small button's taps.
+- [RN Web layout pitfalls](rn-web-layout-pitfalls.md) — LottieView ignores absoluteFill on web and pushes content down a viewport per layer; wrap full-bleed layers yourself.
+- [Dev servers vs external deps](dev-server-external-deps.md) — an ngrok outage kills `expo start --tunnel` and the whole workflow; fall back only on tunnel-specific errors, and forward signals.

@@ -4,7 +4,7 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_REPL_ID=$REPL_ID EXPO_PUBLIC_API_URL=https://$REPLIT_DEV_DOMAIN:8080 pnpm exec expo start --tunnel --port $PORT",
+    "dev": "EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_REPL_ID=$REPL_ID EXPO_PUBLIC_API_URL=https://$REPLIT_DEV_DOMAIN:8080 bash scripts/dev-start.sh",
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -55,6 +55,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "@lottiefiles/dotlottie-react": "^0.6.5",
     "@react-native-community/slider": "5.0.1",
     "axios": "^1.18.1",
     "expo-av": "^16.0.8",
@@ -62,6 +63,7 @@
     "expo-notifications": "^0.32.17",
     "expo-secure-store": "~15.0.8",
     "firebase": "^12.16.0",
+    "lottie-react-native": "^7.3.1",
     "react-native-google-mobile-ads": "^16.4.0",
     "react-native-iap": "^15.6.0",
     "react-native-nitro-modules": "^0.36.1",

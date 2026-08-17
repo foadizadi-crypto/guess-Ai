@@ -21,6 +21,21 @@ Metro reports only the *first* unresolved module, so fixing one and re-bundling 
 
 **Also:** filenames are case-sensitive on Linux and on Android devices, so casing mismatches survive on case-insensitive machines and only fail here. Suspect casing and on-disk typos before assuming a file is missing.
 
+**Cover every extension.** A sweep regex that lists `png|jpg|json` and omits `webp` (or `gif`, `avif`, `m4a`, `mp4`) reports "all resolve OK" and then the very next bundle fails on the extension you forgot. Enumerate generously — a false positive costs one `ls`, a miss costs a whole restart-and-rebundle cycle.
+
+---
+
+## Deleted artwork looks like a code bug, so check the working tree before reading code
+
+A bundle that suddenly 500s on `Unable to resolve module ../assets/...` is usually not a code change at all: someone replaced or pruned artwork and left the references behind. `git status --porcelain <artifact>` answers this in one command — ` D` lines are tracked files deleted from the working tree, and `git checkout --` on *only those paths* restores them without touching modified files or new untracked ones.
+
+Two variants that show up together with a deletion sweep:
+
+- **A reference to a file that never existed.** Code updated to a new format (e.g. `lobby_BG.webp`) while only the old `lobby_BG.png` is on disk. Converting the restored original (`ffmpeg -i in.png -c:v libwebp -quality 90 out.webp`) honours the newer intent and matches the rest of the pipeline; repointing the reference at the old file is the alternative.
+- **Casing drift in newly added assets.** Hand-added files (`Particles.json` vs a `particles.json` reference) fail only on case-sensitive filesystems.
+
+**Why:** an app "failing to run" was four independent breakages stacked — a dead tunnel, 14 deleted PNGs, a casing mismatch, and a reference to a never-created `.webp`. Each one masked the next, because Metro only ever reports the first unresolved module.
+
 ---
 
 ## Line-1 syntax errors are often literal placeholder text
