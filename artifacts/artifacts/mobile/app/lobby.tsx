@@ -112,6 +112,20 @@ const getIconAnimation = (id: string): "float" | "pulse" | "spin" | "none" => {
 // LOBBY
 // =====================================================
 
+/**
+ * Ambient background animation layers (wave.json + Particles.json).
+ *
+ * Switched OFF on request: the current artwork reads as a plain blue circle
+ * and a handful of near-invisible dots over the lobby background. To bring
+ * them back, drop replacement files with the SAME names into
+ * assets/animations/ and set this to true. Do not delete those two files
+ * while this stays in the tree — Metro resolves require() at build time, so a
+ * missing asset breaks the bundle even though the layer never renders.
+ *
+ * The one-shot entry burst (splash.json) is unaffected and still plays.
+ */
+const SHOW_AMBIENT_FX = false;
+
 export default function LobbyScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -599,25 +613,29 @@ export default function LobbyScreen() {
         pointerEvents="none" stops them from swallowing taps meant for the
         buttons underneath.
       */}
-      <View style={styles.animationLayer} pointerEvents="none">
-        <LottieView
-          source={require("../assets/animations/wave.json")}
-          style={StyleSheet.absoluteFill}
-          autoPlay
-          loop
-          resizeMode="cover"
-        />
-      </View>
+      {SHOW_AMBIENT_FX && (
+        <>
+          <View style={styles.animationLayer} pointerEvents="none">
+            <LottieView
+              source={require("../assets/animations/wave.json")}
+              style={StyleSheet.absoluteFill}
+              autoPlay
+              loop
+              resizeMode="cover"
+            />
+          </View>
 
-      <View style={styles.animationLayer} pointerEvents="none">
-        <LottieView
-          source={require("../assets/animations/Particles.json")}
-          style={StyleSheet.absoluteFill}
-          autoPlay
-          loop
-          resizeMode="cover"
-        />
-      </View>
+          <View style={styles.animationLayer} pointerEvents="none">
+            <LottieView
+              source={require("../assets/animations/Particles.json")}
+              style={StyleSheet.absoluteFill}
+              autoPlay
+              loop
+              resizeMode="cover"
+            />
+          </View>
+        </>
+      )}
 
       {showSplash && (
         <View style={styles.animationLayer} pointerEvents="none">
