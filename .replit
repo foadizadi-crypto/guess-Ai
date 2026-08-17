@@ -31,7 +31,7 @@ externalPort = 3001
 [[workflows.workflow]]
 name = "artifacts/artifacts/mockup-sandbox: Component Preview Server"
 author = "agent"
-mode = "sequential"
+mode = "parallel"
 
 [workflows.workflow.metadata]
 outputType = "webview"
@@ -53,7 +53,7 @@ BASE_PATH = "/__mockup"
 [[workflows.workflow]]
 name = "artifacts/artifacts/mobile: expo"
 author = "agent"
-mode = "parallel"
+mode = "sequential"
 
 [workflows.workflow.metadata]
 outputType = "webview"
@@ -70,6 +70,7 @@ router = "expo-domain"
 [workflows.workflow.tasks.env]
 PORT = "18115"
 BASE_PATH = "/"
+EXPO_USE_TUNNEL = "1"
 
 [[workflows.workflow]]
 name = "artifacts/artifacts/api-server: API Server"
