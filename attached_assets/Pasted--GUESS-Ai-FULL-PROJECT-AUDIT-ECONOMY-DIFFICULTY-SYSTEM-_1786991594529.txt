@@ -1,0 +1,663 @@
+
+
+GUESS Ai — FULL PROJECT AUDIT + ECONOMY & DIFFICULTY SYSTEM
+
+You are working on an existing GUESS Ai mobile game project.
+
+Your job is NOT to rebuild the project from scratch.
+
+Your job is to fully inspect, repair, complete, and verify the existing project while preserving all working functionality.
+
+Your workflow must be:
+
+AUDIT → PLAN INTERNALLY → IMPLEMENT → VERIFY → FIX → VERIFY AGAIN
+
+Do not stop after the first successful edit.
+
+PHASE 0 — PROTECT THE EXISTING PROJECT
+
+Before making changes:
+
+1. Inspect the current repository state.
+2. Inspect the existing Git status if Git is available.
+3. Do not overwrite or discard existing user changes.
+4. Do not reset, hard-reset, revert, or delete existing work unless explicitly required.
+5. Preserve all currently working functionality.
+6. Use the existing project architecture whenever possible.
+
+Do not create a new architecture simply because another architecture might be cleaner.
+
+PHASE 1 — FULL PROJECT AUDIT
+
+Before implementing anything, inspect the ENTIRE repository.
+
+Check:
+
+- Project structure
+- App structure
+- Expo configuration
+- React Native configuration
+- TypeScript configuration
+- Navigation
+- Screens
+- Components
+- Stores/state management
+- Economy-related code
+- Energy system
+- XP and level system
+- Difficulty system
+- Shop
+- Inventory
+- Frames
+- Wings
+- Avatars
+- Themes
+- Rewards
+- IAP structure
+- Ads/rewarded ads structure
+- Assets
+- Asset imports
+- Asset filenames
+- Case-sensitive path mismatches
+- Missing imports
+- Missing dependencies
+- Broken dependencies
+- TypeScript errors
+- Runtime-risky code
+- Placeholder implementations
+- TODO implementations
+- Duplicate implementations
+- Hardcoded values conflicting with this specification
+- Broken or missing files
+- Broken or missing folders
+- Missing screens
+- Missing components
+- Missing stores
+- Missing services
+- Navigation routes pointing to missing screens
+- References to files/assets that no longer exist
+
+IMPORTANT:
+
+Do NOT assume something is missing simply because it is not immediately visible.
+
+Search the repository thoroughly before creating a new file, folder, component, store, screen, service, or system.
+
+First understand the existing architecture.
+
+After completing the audit, internally determine:
+
+- What already exists and works
+- What exists but is broken
+- What exists but is incomplete
+- What has been removed or is missing
+- What is genuinely NEW functionality required by this specification
+
+Then proceed automatically with implementation.
+
+Do NOT wait for user confirmation after the audit.
+
+PHASE 2 — SAFETY RULES
+
+These rules are mandatory.
+
+DO NOT:
+
+- Do not rebuild the project from scratch.
+- Do not delete working files unnecessarily.
+- Do not replace working architecture with a different architecture.
+- Do not rename files unless absolutely required.
+- Do not rename existing assets unless absolutely required.
+- Do not remove existing UI or game functionality just to implement the economy system.
+- Do not replace existing screens with placeholders.
+- Do not remove existing navigation.
+- Do not remove existing assets.
+- Do not change the Lobby artwork or established Lobby UI layout unless required for integration.
+- Do not change existing Photopea hitbox coordinates.
+- Do not invent unrelated features.
+- Do not rewrite large portions of working code without a concrete reason.
+- Do not create duplicate stores.
+- Do not create duplicate economy systems.
+- Do not create duplicate implementations of existing functionality.
+- Do not reset or discard existing user work.
+
+If an existing implementation already performs the required function, improve or integrate it instead of creating a second implementation.
+
+MISSING FILES AND FOLDERS
+
+If a required file is genuinely missing:
+
+- Create it.
+- Follow the existing project's architecture and naming conventions.
+- Reuse existing utilities/components/stores where possible.
+
+If a required folder is genuinely missing:
+
+- Create it in the appropriate existing project location.
+
+If an existing file is broken or incomplete:
+
+- Repair it rather than replacing it unnecessarily.
+
+If a required screen/component/store/service does not exist:
+
+- Create it using the existing project's architecture.
+
+Do not create files simply because you think they might be useful.
+
+Create files/folders when they are required by:
+
+1. The existing architecture,
+2. An existing broken reference/import,
+3. Or a feature explicitly required by this specification.
+
+IMPORTANT — DISTINGUISH MISSING VS NEW
+
+Treat these situations differently:
+
+A. Previously existing but broken/missing functionality
+
+Find the intended implementation and repair it.
+
+B. Required project infrastructure that is genuinely missing
+
+Create the required file/folder/system.
+
+C. NEW functionality explicitly requested in this specification
+
+Implement the new functionality even if nothing related currently exists.
+
+A NEW feature is not automatically considered a project error.
+
+NEW FEATURES THAT DO NOT CURRENTLY EXIST
+
+Some features in this specification are NEW decisions and may not currently exist anywhere in the repository.
+
+Examples include:
+
+- 30 premium Wings
+- Wing data/model system
+- Wing Shop integration
+- New Frames
+- Economy data
+- New reward definitions
+- Other economy features defined below
+
+If a feature is explicitly required by this specification and does not exist:
+
+1. Create the required code/data structure.
+2. Create required files and folders.
+3. Integrate it with the existing architecture.
+4. Reuse existing systems wherever possible.
+5. Make the implementation scalable.
+6. Do not create duplicate systems.
+7. Do not generate fake visual assets unless explicitly requested.
+8. Do not create fake PNG/JPG/WebP artwork just to satisfy the specification.
+9. If visual assets are missing, create the correct asset references/data structure so real assets can be added later.
+10. Do not use random placeholder artwork in production UI.
+
+For example, if the project has no Wings system:
+
+Create the required Wing data/model/inventory/shop/unlock structure.
+
+Define all required Wings in centralized data rather than creating 30 separate code implementations.
+
+The same principle applies to Frames, Shop items, rewards, economy systems, and other features explicitly required below.
+
+PHASE 3 — ECONOMY SYSTEM
+
+Use the following specification as the SINGLE SOURCE OF TRUTH.
+
+Do not silently change these values.
+
+CURRENCIES
+
+Coins
+
+Free currency.
+
+Coins may be earned from:
+
+- Gameplay
+- Level rewards
+- Daily rewards
+- Achievements
+- Other explicitly defined free rewards
+
+Gems
+
+Premium currency.
+
+Gems may ONLY be obtained through:
+
+- IAP
+- Explicit special events
+
+Gems must NOT be awarded through:
+
+- Normal gameplay
+- XP
+- Normal level rewards
+- Daily rewards
+- Achievements
+
+unless explicitly added later as a special event.
+
+ENERGY SYSTEM
+
+- Maximum energy: 100
+- Cost per game: 5 energy
+- Refill: 1 energy every 10 minutes
+- Daily reward: +10 energy
+- Rewarded ad: +5 energy
+- Maximum rewarded ads per day: 3
+
+Energy must never exceed the configured maximum unless the existing architecture explicitly supports temporary overflow.
+
+Do not create duplicate energy systems if one already exists.
+
+Find the existing energy implementation and repair/integrate it.
+
+DIFFICULTY SYSTEM
+
+Multipliers:
+
+Difficulty | Multiplier
+Easy       | ×1.0
+Medium     | ×1.25
+Hard       | ×1.5
+
+Apply the multiplier ONLY to:
+
+- XP per correct answer
+- Session completion XP
+- Session completion coin reward
+- Perfect game XP
+- Perfect game coin reward
+
+Do NOT apply the multiplier to:
+
+- Wrong-answer penalties
+- Initial blur
+- Shop prices
+- Level rewards
+
+IMPORTANT:
+
+The Difficulty Values table contains the FINAL player-facing values that must be used by the game.
+
+Do NOT apply the multiplier a second time to the already-calculated Medium or Hard values.
+
+The multiplier defines how the final values are derived from Easy/Base values:
+
+Easy = Base × 1.0
+Medium = Base × 1.25
+Hard = Base × 1.5
+
+After calculating a reward, use one consistent integer-rounding rule.
+
+The final player-facing values MUST match the table below.
+
+DIFFICULTY VALUES
+
+Feature                  | Easy         | Medium        | Hard
+Initial Blur             | 50%          | 80%           | 100%
+XP / Correct Answer      | 10 XP        | 13 XP         | 15 XP
+Wrong Answer Penalty     | 3%           | 5%            | 7%
+Session Completion       | 50c + 30XP   | 63c + 38XP    | 75c + 45XP
+Perfect Game             | 100c + 50XP  | 125c + 63XP   | 150c + 75XP
+
+The explicitly specified table values above are the expected final values.
+
+LEVEL SYSTEM
+
+Levels: 1–500.
+
+Preserve existing level progression if already implemented unless it conflicts with this specification.
+
+LEVEL REWARDS
+
+Levels 1–100
+
+Every 5 levels:
+
+- 50 coins
+
+Every 10 levels:
+
+- 100 coins
+- Error Nullifier
+
+Special:
+
+- Level 10: 200 coins + Fox Avatar
+
+Levels 101–250
+
+Every 5 levels:
+
+- 100 coins
+- Rare Sticker
+
+Every 10 levels:
+
+- 250 coins
+- Silver Badge
+
+Special:
+
+- Level 50: 500 coins + Astronaut Avatar
+
+Levels 251–400
+
+Every 5 levels:
+
+- 200 coins
+- Legendary Skin Piece
+
+Every 10 levels:
+
+- 500 coins
+- Game Theme
+
+Special:
+
+- Level 100: 1000 coins + Dragon Avatar
+
+Levels 401–500
+
+Every 5 levels:
+
+- 300 coins
+- Legendary Skin Piece
+
+Every 10 levels:
+
+- 700 coins
+- Animated Frame
+
+Special:
+
+- Level 200: 2000 coins + Legend Avatar
+
+MAJOR SPECIAL REWARDS
+
+Level 300:
+
+- 3000 coins
+- 1500 XP
+- Golden Theme
+- Time Boost
+
+Level 400:
+
+- 4000 coins
+- 2000 XP
+- Diamond Frame
+- 2x Multiplier
+
+Level 500:
+
+- Crown
+- Legendary Title
+- Golden Skin
+- Particle Effect
+- MAX LEVEL Badge
+
+IMPORTANT:
+
+If a level qualifies for both a recurring reward and a special reward, BOTH rewards must be granted.
+
+Do not silently replace one reward with another.
+
+SHOP — COIN ITEMS
+
+Item              | Price      | Effect
+Error Nullifier   | 200 coins  | Prevents clarity loss on 1 wrong answer
+Clarity Bomb      | 200 coins  | Removes 15% blur instantly
+Combo Shield      | 150 coins  | Combo drops by 1 tier instead of reset
+Time Boost        | 100 coins  | Adds 20 seconds to next session
+2x Multiplier     | 300 coins  | Doubles coins & XP for 3 sessions
+
+Prices must NOT be affected by difficulty.
+
+SHOP — GEM ITEMS
+
+Item                 | Price
+Premium Avatar       | 50 gems
+Premium Frame        | 80 gems
+Premium Theme        | 100 gems
+Entrance Effect      | 60 gems
+Premium Title        | 40 gems
+Premium Badge        | 30 gems
+
+IAP PRODUCTS
+
+Product                    | USD    | Contents
+Starter Pack               | $2.00  | 5 Combo Shields + 3 Clarity Bombs + Silver Frame
+100 Gems                   | $1.99  | 100 Gems
+500 Gems                   | $4.99  | 500 Gems
+1200 Gems                  | $9.99  | 1200 Gems
+Ad-Free Pass — 7 Day       | $0.99  | Removes ads for 7 days
+Ad-Free Pass — Lifetime    | $4.99  | Removes ads permanently
+Season Pass                | $5.00  | Seasonal reward track — future
+
+IMPORTANT:
+
+If real store integration is not currently configured:
+
+- Do NOT invent fake production purchase APIs.
+- Do NOT claim real purchases work.
+- Create the correct product/configuration structure.
+- Integrate with existing IAP architecture where available.
+- Clearly report any missing store configuration or credentials.
+
+FRAMES
+
+There are 10 frames.
+
+Frame              | Unlock
+Simple             | Default
+Bronze             | Level 10
+Silver             | Level 50
+Gold               | Level 100
+Diamond            | Level 200
+Neon               | 50 Gems
+Fire               | 80 Gems
+Galaxy             | 100 Gems
+Animated           | Level 400
+Legendary Crown    | Level 500
+
+If Frame artwork is missing:
+
+- Create the Frame data/unlock/shop structure.
+- Create asset references.
+- Do not invent fake final artwork.
+
+WINGS
+
+FREE WINGS
+
+Wing             | Unlock
+Basic Wings      | Level 5
+Feather Wings    | Level 15
+Star Wings       | Level 30
+Shadow Wings     | Level 50
+Angel Wings      | Level 75
+
+PREMIUM WINGS
+
+There must be 30 premium Wings, distributed exactly as follows:
+
+- 15 Common Wings → 50 Gems each
+- 10 Rare Wings → 80 Gems each
+- 5 Legendary Wings → 150 Gems each
+
+Weekly special:
+
+- 1 Wing, selected randomly from any rarity tier, is available at 50% discount.
+
+IMPORTANT:
+
+The weekly discounted Wing must be deterministic for the active week.
+
+It must NOT randomly change every app launch, screen refresh, or component remount.
+
+Use the existing persistence/backend architecture if available.
+
+If no backend exists, implement the weekly selection using a stable week-based deterministic mechanism rather than runtime randomization.
+
+Create the required centralized Wing data/model/shop/inventory/unlock structure for all 30 premium Wings.
+
+Do NOT create fake Wing image files if the artwork does not exist.
+
+The system must be ready to accept the real Wing assets later.
+
+Do not create 30 duplicate code implementations.
+
+PHASE 4 — INTEGRATION
+
+Integrate the economy system with the existing GUESS Ai architecture.
+
+Use existing:
+
+- Stores
+- Hooks
+- Constants
+- Components
+- Screens
+- Navigation
+- Services
+- Utilities
+
+whenever possible.
+
+Do not create duplicate stores or duplicate economy logic.
+
+Centralize economy constants where appropriate.
+
+Avoid hardcoding the same value in multiple unrelated files.
+
+Connect the systems to the existing UI where appropriate.
+
+Do not redesign unrelated screens.
+
+PHASE 5 — LOBBY PROTECTION
+
+The existing GUESS Ai Lobby and its established design must be preserved.
+
+Do NOT redesign the Lobby.
+
+Do NOT change existing Photopea hitbox coordinates.
+
+Do NOT move existing buttons.
+
+Do NOT remove existing artwork.
+
+Do NOT replace the existing Lobby with a new implementation.
+
+Economy integration should connect to the existing UI rather than replacing it.
+
+PHASE 6 — ERROR CORRECTION
+
+After implementation, run all available project checks.
+
+At minimum, check:
+
+- TypeScript
+- Imports
+- Asset resolution
+- Navigation
+- Expo bundling
+- Android bundling/build if available
+- Web bundling if available
+- Existing tests if available
+- App/runtime testing if available
+
+Fix errors discovered during verification.
+
+Then run the checks again.
+
+Do not stop at the first error.
+
+If a build/test fails because of:
+
+- Missing external credentials
+- Missing store configuration
+- Unavailable external service
+- Missing visual assets
+- Other external blockers
+
+do not fabricate a success.
+
+Fix everything that can safely be fixed locally and clearly report external blockers.
+
+PHASE 7 — FINAL VERIFICATION
+
+Verify every item against the ACTUAL implementation.
+
+- [ ] Coins are awarded correctly
+- [ ] Gems follow the premium-only rule
+- [ ] Energy max = 100
+- [ ] Game cost = 5 energy
+- [ ] Refill = 1 energy / 10 minutes
+- [ ] Daily reward = +10 energy
+- [ ] Ad reward = +5 energy
+- [ ] Ads/day = 3
+- [ ] Easy = ×1.0
+- [ ] Medium = ×1.25
+- [ ] Hard = ×1.5
+- [ ] Blur values correct
+- [ ] XP values correct
+- [ ] Wrong-answer penalties correct
+- [ ] Session completion rewards correct
+- [ ] Perfect-game rewards correct
+- [ ] Level rewards correct
+- [ ] Special rewards correct
+- [ ] Coin shop prices correct
+- [ ] Gem shop prices correct
+- [ ] IAP configuration matches specification
+- [ ] Frame unlocks correct
+- [ ] Free Wing unlocks correct
+- [ ] 30 premium Wings are defined: 15 Common, 10 Rare, 5 Legendary
+- [ ] Premium Wing pricing correct: 50 / 80 / 150 Gems
+- [ ] Weekly Wing discount structure exists
+- [ ] Weekly Wing selection is stable for the active week
+- [ ] Required missing files are created
+- [ ] Required missing folders are created
+- [ ] No duplicate economy systems
+- [ ] No broken imports
+- [ ] No broken asset paths
+- [ ] No unnecessary deletion of existing functionality
+- [ ] TypeScript passes
+- [ ] Available builds/bundles pass
+- [ ] App/runtime testing passes where available
+
+FINAL REPORT
+
+Do not report "ECONOMY VERIFIED" merely because the code was written.
+
+Only report:
+
+ECONOMY VERIFIED
+
+after the implementation has actually been inspected and the verification checks have been completed.
+
+At the end, provide a concise report containing:
+
+1. Files created
+2. Files modified
+3. Files intentionally left unchanged
+4. Folders created
+5. Major problems found
+6. Major problems fixed
+7. Economy features implemented
+8. New features created because they were missing
+9. Missing visual assets that still need to be provided
+10. TypeScript/build/bundle verification results
+11. App/runtime testing results
+12. Any remaining issues that cannot safely be fixed without additional assets, credentials, store configuration, or external services
+
+Do not fabricate successful tests, builds, integrations, or assets.
+
+Do not claim a feature is complete if only its data structure exists but its required runtime integration is missing.
