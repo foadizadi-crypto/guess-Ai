@@ -92,9 +92,15 @@ fi
 if grep -qiE "failed to start tunnel|remote gone away|ngrok" "$tunnel_log"; then
   echo ""
   echo "[dev] The ngrok tunnel failed to start (exit ${exit_code})."
-  echo "[dev] Starting a normal dev server instead — the web preview is"
-  echo "[dev] unaffected, and the QR code will point at the public Repl"
-  echo "[dev] domain so Expo Go can still connect."
+  echo "[dev] Starting a normal dev server instead, so the web preview keeps"
+  echo "[dev] working."
+  echo ""
+  echo "[dev] NOTE: Expo Go on a phone will NOT be able to connect while the"
+  echo "[dev] tunnel is down. Expo Go speaks plain http over exp://, but this"
+  echo "[dev] Repl's public ports are HTTPS-only, so the printed QR code"
+  echo "[dev] cannot be reached from a device. Use the web preview until"
+  echo "[dev] ngrok recovers (https://status.ngrok.com), then restart this"
+  echo "[dev] workflow to get a working QR code."
   echo ""
   start_direct
 fi
