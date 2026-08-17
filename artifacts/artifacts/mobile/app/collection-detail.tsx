@@ -10,6 +10,7 @@ import React, { useState, useMemo } from 'react';
 import {
   Alert,
   Image,
+  ImageSourcePropType,
   Platform,
   ScrollView,
   StyleSheet,
@@ -19,7 +20,7 @@ import {
 } from 'react-native';
 
 // ─── Badge PNG images ──────────────────────────────────────────────────────────
-const BADGE_IMAGES: Record<string, ReturnType<typeof require>> = {
+const BADGE_IMAGES: Record<string, ImageSourcePropType> = {
   badge_bronze:   require('@/assets/badges/badge_first_win.png'),
   badge_silver:   require('@/assets/badges/badge_quiz_veteran.png'),
   badge_gold:     require('@/assets/badges/badge_perfect_game.png'),
@@ -28,7 +29,7 @@ const BADGE_IMAGES: Record<string, ReturnType<typeof require>> = {
 };
 
 // ─── Avatar PNG images (for avatar collection cards) ──────────────────────────
-const AVATAR_IMAGES: Record<string, ReturnType<typeof require>> = {
+const AVATAR_IMAGES: Record<string, ImageSourcePropType> = {
   avatar_1:  require('@/assets/avatar/Abigail.webp'),
   avatar_2:  require('@/assets/avatar/chlöe.webp'),
   avatar_3:  require('@/assets/avatar/Daveigh.webp'),
@@ -42,7 +43,7 @@ const AVATAR_IMAGES: Record<string, ReturnType<typeof require>> = {
 };
 
 // ─── Frame PNG images (for frame collection cards) ────────────────────────────
-const FRAME_IMAGES: Record<string, ReturnType<typeof require>> = {
+const FRAME_IMAGES: Record<string, ImageSourcePropType> = {
   frame_0_simple:    require('@/assets/frames/0-simple.jpg'),
   frame_1_bronze:    require('@/assets/frames/1-bronze.jpg'),
   frame_2_silver:    require('@/assets/frames/2-silver.jpg'),
@@ -325,7 +326,7 @@ export default function CollectionDetailScreen() {
     }
 
     if (item.currency === 'free') {
-      buyCosmetic(item.id);
+      buyCosmetic(item.id, 0);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast('Claimed!');
       return;
@@ -351,7 +352,7 @@ export default function CollectionDetailScreen() {
     }
 
     // Generic buyCosmetic
-    const ok = buyCosmetic(item.id);
+    const ok = buyCosmetic(item.id, item.price);
     Haptics.notificationAsync(ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error);
     if (ok) { playEffect('purchase'); showToast(`−${item.price} ${item.currency === 'gems' ? '💎' : '🪙'}`); }
     else Alert.alert('Purchase failed', 'Something went wrong. Please try again.');

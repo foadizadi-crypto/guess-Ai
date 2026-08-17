@@ -31,6 +31,8 @@ interface DailyRewardModalProps {
   alreadyClaimed: boolean;
   onClaim: () => void;
   onClose: () => void;
+  /** Energy granted on claim (spec: +10 energy per daily reward). */
+  energyReward?: number;
 }
 
 export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
@@ -41,6 +43,7 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
   alreadyClaimed,
   onClaim,
   onClose,
+  energyReward = 0,
 }) => {
   const { textAlign } = useRTL();
   const scale = useSharedValue(0.7);
@@ -122,6 +125,11 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
             {!alreadyClaimed && (
               <View style={styles.rewardRow}>
                 <CoinDisplay amount={amount} size="large" animate={visible} />
+                {energyReward > 0 && (
+                  <View style={styles.energyPill}>
+                    <Text style={styles.energyText}>+{energyReward} ⚡</Text>
+                  </View>
+                )}
               </View>
             )}
 
@@ -229,7 +237,21 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 20,
   },
-  rewardRow: { alignItems: 'center', marginBottom: 20 },
+  rewardRow: { alignItems: 'center', marginBottom: 20, gap: 10 },
+  energyPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 107, 53, 0.15)',
+    borderWidth: 1,
+    borderColor: GameColors.accentOrange,
+  },
+  energyText: {
+    ...Typography.caption,
+    color: GameColors.accentOrange,
+    fontFamily: 'Inter_700Bold',
+    fontWeight: '700',
+  },
   streakRow: {
     flexDirection: 'row',
     justifyContent: 'center',

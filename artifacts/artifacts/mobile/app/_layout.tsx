@@ -46,7 +46,7 @@ export default function RootLayout() {
     if (hasHydrated) {
       setStoreReady(true);
     } else {
-      const unsubFinishHydrate = useUserStore.persist.onFinishHydrate(() => {
+      const unsubFinishHydrate = useUserStore.persist.onFinishHydration(() => {
         console.log("[Store Pipeline] AsyncStorage persistence sync complete.");
         setStoreReady(true);
       });

@@ -58,4 +58,8 @@ export const notificationService = {
    * Returns an unsubscribe function.  No-op on web.
    */
   addResponseListener: (_callback: (screen: string) => void): (() => void) => () => {},
+
+  // ── Generic local notification (fallback stub) ────────────────────────────
+  /** No-op on web. Native version schedules an immediate local notification. */
+  scheduleLocalNotification: async (_opts: { title: string; body: string; trigger: null }): Promise<void> => {},
 };

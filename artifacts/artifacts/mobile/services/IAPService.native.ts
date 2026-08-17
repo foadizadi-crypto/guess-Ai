@@ -13,6 +13,7 @@
  */
 
 import { NativeModules } from 'react-native';
+import type { Purchase } from 'react-native-iap';
 
 // ─── Product IDs ──────────────────────────────────────────────────────────────
 export const IAP_SKUS = {
@@ -180,7 +181,7 @@ class IAPService {
     try {
       const purchases = await _iap!.getAvailablePurchases();
       const adFreeSkus = [IAP_SKUS.REMOVE_ADS, IAP_SKUS.ADFREE_LIFETIME];
-      const found = (purchases ?? []).some((p: never) => {
+      const found = (purchases ?? []).some((p: Purchase) => {
         const id = (p as { productId?: string; sku?: string }).productId ?? (p as { sku?: string }).sku ?? '';
         return adFreeSkus.includes(id as never);
       });
@@ -195,7 +196,7 @@ class IAPService {
     this.purchaseErrorListener?.remove();
 
     // 1. Success Transaction Updated Listener
-    this.purchaseListener = _iap.purchaseUpdatedListener(async (purchase: never) => {
+    this.purchaseListener = _iap.purchaseUpdatedListener(async (purchase: Purchase) => {
       const sku: string = (purchase as { productId?: string; sku?: string }).productId ?? (purchase as { sku?: string }).sku ?? '';
       const txId: string = (purchase as { transactionId?: string }).transactionId ?? this.generateMockTxId(sku);
       const isConsumable = sku !== IAP_SKUS.REMOVE_ADS && sku !== IAP_SKUS.ADFREE_LIFETIME;

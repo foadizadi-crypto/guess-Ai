@@ -1,0 +1,637 @@
+
+
+GUESS Ai — FINAL IMPLEMENTATION, ERROR FIX, WINGS LOBBY INTEGRATION & VERIFICATION
+
+You have already completed the full Economy + Difficulty audit and implementation pass.
+
+Your previous verification identified:
+
+- 56 pre-existing TypeScript errors across 11 files
+- Task #39: Level reward items are not fully granted to inventory
+- Task #40: Wings Shop UI is not built
+- Task #41: Daily Reward UI does not clearly display the +10 Energy reward
+- Wing data/store/purchase/equip logic already exists
+- 30 premium Wings are already defined as:
+  15 Common / 10 Rare / 5 Legendary
+
+Now complete the remaining work.
+
+IMPORTANT:
+
+This is NOT a request to rebuild the project.
+
+This is a FINAL REPAIR + INTEGRATION + VERIFICATION pass.
+
+Workflow:
+
+AUDIT CURRENT STATE → IMPLEMENT MISSING PARTS → FIX ERRORS → VERIFY → FIX AGAIN → FINAL VERIFY
+
+Do not stop after the first successful edit.
+
+==================================================
+PART 1 — PROTECT THE EXISTING PROJECT
+==================================================
+
+Before modifying anything:
+
+1. Inspect the current repository state.
+2. Inspect Git status if available.
+3. Preserve all current user work.
+4. Do not reset, hard-reset, revert, or discard changes.
+5. Do not rebuild the project from scratch.
+6. Do not replace the existing architecture.
+7. Do not delete working functionality.
+8. Do not redesign unrelated screens.
+
+Use the existing architecture and systems wherever possible.
+
+==================================================
+PART 2 — TASK #39
+LEVEL REWARDS → INVENTORY
+==================================================
+
+Complete the level reward claiming system.
+
+The existing levelRewards.ts contains reward definitions through Level 500.
+
+The current problem is:
+
+claimLevelReward() grants coins but does not correctly process all non-coin reward items.
+
+Fix this.
+
+When a player claims a level reward, ALL applicable reward types must actually be granted to the player's existing inventory/state.
+
+This includes, where defined:
+
+- Avatars
+- Badges
+- Consumables
+- Error Nullifier
+- Rare Sticker
+- Legendary Skin Piece
+- Themes
+- Frames
+- Titles
+- Effects
+- Time Boost
+- 2x Multiplier
+- XP
+- Coins
+- Any other reward item defined by the specification
+
+Do NOT silently ignore items[].
+
+IMPORTANT:
+
+- Use the existing inventory/store architecture.
+- Do not create a duplicate inventory system.
+- Do not create a second reward store.
+- Preserve existing reward claiming behavior.
+- Prevent duplicate claiming if the existing architecture supports claimed-state tracking.
+- If a reward is both a recurring reward and a special reward, grant BOTH.
+- Verify that rewards actually appear in the player's state/inventory after claiming.
+
+Do not merely define the reward data.
+
+Verify the runtime flow:
+
+LEVEL UP
+→ REWARD AVAILABLE
+→ CLAIM
+→ REWARD APPLIED
+→ INVENTORY/PLAYER STATE UPDATED
+
+==================================================
+PART 3 — TASK #40
+WINGS SHOP
+==================================================
+
+Build and integrate the Wings Shop using the existing project architecture.
+
+The existing Wing data/store implementation already contains:
+
+- 30 premium Wings
+- 15 Common
+- 10 Rare
+- 5 Legendary
+- Gem prices
+- purchaseWing()
+- equipWing()
+- Weekly discount logic
+
+Do NOT recreate these systems.
+
+Create the missing user-facing Shop UI and connect it to the existing systems.
+
+Players must be able to:
+
+- Browse all 30 premium Wings
+- See Wing name/identifier where appropriate
+- See rarity
+- See Gem price
+- See weekly discounted Wing
+- See discounted price
+- Preview/select a Wing
+- Purchase a Wing
+- Equip an owned Wing
+- Unequip if supported by the existing architecture
+- See locked state
+- See owned state
+- See equipped state
+- See insufficient Gems state
+
+The Shop must use the existing purchaseWing() and equipWing() actions.
+
+Do not create duplicate Wing purchase logic.
+
+Do not create duplicate Wing inventory logic.
+
+Do not create fake production artwork.
+
+If real Wing artwork is missing:
+
+- Use the existing asset-reference architecture.
+- Keep the correct asset references ready.
+- Do not generate random placeholder PNG/JPG/WebP files.
+- Clearly report missing visual assets in the final report.
+
+==================================================
+PART 4 — WINGS → AVATAR → LOBBY
+==================================================
+
+IMPORTANT VISUAL REQUIREMENT.
+
+The existing Lobby already contains the central Avatar Face/display area.
+
+Previously, Wings were NOT visibly rendered in the Lobby.
+
+Now connect the equipped Wing to the existing Avatar display.
+
+The final user experience must be:
+
+SHOP
+→ PURCHASE WING
+→ INVENTORY
+→ EQUIP WING
+→ RETURN TO LOBBY
+→ WING IS VISIBLY ATTACHED TO AVATAR
+
+The visual goal is:
+
+"AVATAR WITH WINGS"
+
+NOT:
+
+"AVATAR + SEPARATE WING IMAGE"
+
+When a Wing is equipped:
+
+- The Wing must appear behind the Avatar Face.
+- The CENTER of the Wing must align with the CENTER of the Avatar Face.
+- The Wing must use the existing Avatar display area as its positioning reference.
+- The Wing must NOT have an arbitrary independent screen position.
+- The Wing must NOT appear beside the Avatar.
+- The Wing must NOT appear below the Avatar.
+- The Wing must NOT appear above the Avatar.
+- The Wing must NOT be randomly offset.
+
+The composition should visually look as if the Avatar naturally has Wings.
+
+Conceptual layer order:
+
+BACKGROUND
+↓
+WING
+↓
+AVATAR / AVATAR FACE
+↓
+FRAME / FOREGROUND AVATAR ELEMENTS
+↓
+UI
+
+The exact existing layer architecture should be respected.
+
+IMPORTANT:
+
+Do NOT redesign the Lobby.
+
+Do NOT move the Avatar.
+
+Do NOT move existing buttons.
+
+Do NOT change existing Photopea hitbox coordinates.
+
+Do NOT replace the Lobby artwork.
+
+Do NOT create a new Lobby layout.
+
+Use the existing Avatar/Wings/Frame display architecture if available.
+
+If an Avatar anchor/center already exists, use it as the single source of truth.
+
+Wing positioning must be derived from the Avatar's existing center/anchor.
+
+The Wing scale and vertical positioning should be adjusted relative to the Avatar so the final composition looks natural.
+
+The final test must confirm:
+
+Equip Wing
+→ navigate to Lobby
+→ Wing visibly appears behind Avatar
+→ Avatar remains centered
+→ Frame remains correct
+→ Wing remains equipped after navigation/reload according to existing persistence architecture.
+
+==================================================
+PART 5 — TASK #41
+DAILY REWARD UI
+==================================================
+
+The existing Daily Reward logic now grants:
+
++10 Energy
+
+Update the Daily Reward UI so the player clearly sees:
+
+"+10 Energy"
+
+The actual reward logic must remain connected to the existing Energy system.
+
+Do not create duplicate energy logic.
+
+Verify:
+
+Daily Reward
+→ +10 Energy
+→ Energy state updates
+→ UI displays the reward clearly
+
+==================================================
+PART 6 — FIX ALL REMAINING TYPESCRIPT ERRORS
+==================================================
+
+The previous verification found:
+
+56 pre-existing TypeScript errors
+across 11 files.
+
+Fix ALL safely fixable TypeScript errors.
+
+Do not assume the previous list is complete.
+
+Run the actual project TypeScript checker.
+
+Fix every remaining error.
+
+Known affected areas include:
+
+- store/userStore.ts
+- app/spin.tsx
+- app/shop.tsx
+- app/collection-detail.tsx
+- app/profile.tsx
+- layout
+- components
+- hooks
+- notification
+- remote config
+- services/IAPService.native.ts
+
+Known examples include:
+
+- ActiveMission field mismatches
+- scheduleLocalNotification missing
+- SpinWheelConfig property mismatch
+- GemPackItem.gems mismatch
+- Achievement.unlockedAt type mismatch
+- SpinReward type mismatches
+- CosmeticType import issues
+- Avatar.owned mismatch
+- Image source typing issues
+- withParallel issues
+- DimensionValue typing issues
+- Native IAP Purchase typing issues
+
+IMPORTANT TYPE SAFETY RULES:
+
+DO NOT:
+
+- Use any just to silence an error.
+- Use @ts-ignore just to silence an error.
+- Use @ts-expect-error without a real technical reason.
+- Disable TypeScript checking.
+- Delete functionality to remove an error.
+- Replace correct types with weak generic types.
+- Hide runtime problems behind casts.
+
+Instead:
+
+- Fix incorrect types.
+- Fix incorrect imports.
+- Fix incorrect property names.
+- Fix interfaces/types and their consumers consistently.
+- Implement missing functions when they are genuinely required.
+- Preserve existing behavior.
+- Make the smallest architecture-consistent fix.
+
+If a type error exposes an actual runtime bug, fix the runtime bug too.
+
+==================================================
+PART 7 — ECONOMY REGRESSION CHECK
+==================================================
+
+After fixing the TypeScript errors, verify that the Economy specification remains unchanged.
+
+Confirm:
+
+ENERGY
+
+- MAX ENERGY = 100
+- GAME COST = 5
+- REFILL = 1 per 10 minutes
+- DAILY REWARD = +10
+- AD REWARD = +5
+- MAX ADS/DAY = 3
+
+DIFFICULTY
+
+Easy = ×1.0
+Medium = ×1.25
+Hard = ×1.5
+
+Initial Blur:
+
+Easy = 50%
+Medium = 80%
+Hard = 100%
+
+XP per correct answer:
+
+Easy = 10
+Medium = 13
+Hard = 15
+
+Wrong answer penalty:
+
+Easy = 3%
+Medium = 5%
+Hard = 7%
+
+Session completion:
+
+Easy = 50 coins + 30 XP
+Medium = 63 coins + 38 XP
+Hard = 75 coins + 45 XP
+
+Perfect game:
+
+Easy = 100 coins + 50 XP
+Medium = 125 coins + 63 XP
+Hard = 150 coins + 75 XP
+
+Do NOT apply the difficulty multiplier twice.
+
+Shop prices must remain unchanged.
+
+Level rewards must remain unchanged.
+
+==================================================
+PART 8 — WINGS REGRESSION CHECK
+==================================================
+
+Verify exactly:
+
+FREE WINGS:
+
+Basic Wings = Level 5
+Feather Wings = Level 15
+Star Wings = Level 30
+Shadow Wings = Level 50
+Angel Wings = Level 75
+
+PREMIUM WINGS:
+
+15 Common = 50 Gems each
+10 Rare = 80 Gems each
+5 Legendary = 150 Gems each
+
+Total = 30 Premium Wings.
+
+Weekly Special:
+
+1 Wing randomly/deterministically selected according to the existing implementation.
+
+Discount:
+
+50% off.
+
+Do not change these values.
+
+==================================================
+PART 9 — LEVEL REWARD REGRESSION CHECK
+==================================================
+
+Verify Levels 1–500.
+
+Verify recurring rewards and special rewards.
+
+If a level qualifies for both:
+
+GRANT BOTH.
+
+Do not overwrite one with the other.
+
+Most importantly:
+
+Verify that reward DATA existing in levelRewards.ts actually reaches the player's runtime inventory/state when claimed.
+
+Do not mark this complete just because the data array exists.
+
+==================================================
+PART 10 — IAP REGRESSION CHECK
+==================================================
+
+Verify:
+
+100 Gems = $1.99
+500 Gems = $4.99
+1200 Gems = $9.99
+
+Verify Web and Native SKU consistency.
+
+Do not invent fake production purchase APIs.
+
+If store configuration or credentials are unavailable, report that as an external blocker.
+
+==================================================
+PART 11 — BUILD & TEST VERIFICATION
+==================================================
+
+After all implementation:
+
+Run:
+
+1. TypeScript/typecheck
+2. Existing tests
+3. Expo/web bundling
+4. Android build/check if available
+5. App testing if available
+
+Run verification AFTER fixing errors.
+
+If any check fails:
+
+FIX THE ERROR.
+
+Then run the check again.
+
+Do not stop after the first failed check.
+
+Do not claim success if a check actually failed.
+
+If a check cannot be run because of environment limitations, credentials, store configuration, unavailable services, or missing external assets:
+
+- Clearly identify the blocker.
+- Do not fabricate a successful result.
+
+==================================================
+PART 12 — FINAL FUNCTIONAL FLOW TEST
+==================================================
+
+Verify these real user flows:
+
+FLOW 1:
+
+Open Shop
+→ Open Wings
+→ Browse Wings
+→ Select Wing
+→ Purchase with Gems
+→ Wing appears as Owned
+→ Equip Wing
+→ Return to Lobby
+→ Wing visibly appears behind Avatar
+
+FLOW 2:
+
+Reach level with reward
+→ Open Level Reward
+→ Claim reward
+→ Reward appears in correct inventory/state
+
+FLOW 3:
+
+Open Daily Reward
+→ See "+10 Energy"
+→ Claim
+→ Energy increases correctly
+
+FLOW 4:
+
+Start game
+→ Select Easy/Medium/Hard
+→ Correct answer
+→ Verify XP
+→ Wrong answer
+→ Verify penalty
+→ Complete session
+→ Verify coins/XP
+→ Perfect game
+→ Verify bonus
+
+==================================================
+PART 13 — FINAL VERIFICATION
+==================================================
+
+Do not report completion merely because code was written.
+
+Verify actual runtime/data behavior wherever possible.
+
+Final checklist:
+
+[ ] All 56 pre-existing TypeScript errors fixed or individually explained if externally blocked
+[ ] No new TypeScript errors
+[ ] Level rewards 1–500 defined
+[ ] Level reward items actually enter inventory
+[ ] Coins granted correctly
+[ ] Gems follow premium-only rules
+[ ] Energy values correct
+[ ] Difficulty values correct
+[ ] Difficulty multiplier not applied twice
+[ ] Shop prices correct
+[ ] IAP configuration correct
+[ ] 10 Frames defined correctly
+[ ] 5 Free Wings defined correctly
+[ ] 30 Premium Wings defined correctly
+[ ] 15 Common / 10 Rare / 5 Legendary
+[ ] Wing prices correct
+[ ] Weekly discount works
+[ ] Wings Shop UI works
+[ ] Wing purchase works
+[ ] Wing equip works
+[ ] Equipped Wing appears in Lobby
+[ ] Wing is centered behind Avatar Face
+[ ] Avatar + Wing visually reads as one character
+[ ] Frame remains correctly positioned
+[ ] Daily Reward displays +10 Energy
+[ ] Daily Reward actually grants +10 Energy
+[ ] No duplicate economy system
+[ ] No duplicate Wing system
+[ ] No broken imports
+[ ] No broken asset paths
+[ ] No unnecessary file deletion
+[ ] Lobby artwork preserved
+[ ] Lobby layout preserved
+[ ] Photopea hitbox coordinates unchanged
+[ ] Available tests pass
+[ ] Available bundles/builds pass
+
+==================================================
+FINAL REPORT
+==================================================
+
+Provide a concise but complete final report containing:
+
+1. Files created
+2. Files modified
+3. Folders created
+4. Files intentionally left unchanged
+5. TypeScript errors BEFORE
+6. TypeScript errors AFTER
+7. Exact remaining errors, if any
+8. Task #39 result
+9. Task #40 result
+10. Task #41 result
+11. Wings Shop result
+12. Wing → Avatar → Lobby integration result
+13. Level Reward → Inventory result
+14. Daily Reward result
+15. Economy verification result
+16. IAP verification result
+17. Build/test results
+18. Remaining external blockers
+19. Missing visual assets, if any
+20. Any remaining issues
+
+IMPORTANT:
+
+Do not fabricate tests.
+
+Do not fabricate builds.
+
+Do not claim a feature works if only its data structure exists.
+
+Do not claim a feature is complete if the actual user flow is not connected.
+
+Only report:
+
+ECONOMY VERIFIED
+
+when the Economy specification has actually been verified.
+
+Only report:
+
+PROJECT VERIFICATION COMPLETE
+
+when all safely fixable TypeScript errors and the three remaining functional tasks have actually been implemented and verified.

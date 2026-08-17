@@ -123,7 +123,7 @@ const WheelSvg: React.FC = () => (
               // slight shadow via stroke
               stroke="rgba(0,0,0,0.4)"
               strokeWidth={0.5}
-              paintOrder="stroke"
+              /* paintOrder removed: not supported in RN SVG Text */
             >
               {reward.label}
             </SvgText>
@@ -407,8 +407,8 @@ const styles = StyleSheet.create({
     paddingBottom:  12,
   },
   title: {
-    ...Typography.heading2,
-    color: GameColors.textPrimary,
+    ...Typography.header,
+    color: GameColors.textWhite,
   },
   scroll: {
     alignItems:  'center',
@@ -475,8 +475,8 @@ const styles = StyleSheet.create({
     color: GameColors.textSecondary,
   },
   countdownValue: {
-    ...Typography.bodyBold,
-    color:    GameColors.textPrimary,
+    ...Typography.semibold,
+    color:    GameColors.textWhite,
     fontSize: 16,
     minWidth: 60,
   },
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   spinBtnLabel: {
-    ...Typography.bodyBold,
+    ...Typography.semibold,
     color:    'white',
     fontSize: 15,
   },
@@ -532,8 +532,8 @@ const styles = StyleSheet.create({
     gap:             10,
   },
   rewardTableTitle: {
-    ...Typography.bodyBold,
-    color:        GameColors.textPrimary,
+    ...Typography.semibold,
+    color:        GameColors.textWhite,
     marginBottom: 4,
   },
   rewardRow: {
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
   },
   rewardName: {
     ...Typography.body,
-    color:    GameColors.textPrimary,
+    color:    GameColors.textWhite,
     flex:     1,
   },
   rewardPct: {
@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
   modalCard: {
     width:           '100%',
     maxWidth:        340,
-    backgroundColor: GameColors.cardBackground,
+    backgroundColor: GameColors.backgroundSecondary,
     borderRadius:    24,
     padding:         28,
     alignItems:      'center',
@@ -589,8 +589,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalTitle: {
-    ...Typography.heading2,
-    color:     GameColors.textPrimary,
+    ...Typography.header,
+    color:     GameColors.textWhite,
     textAlign: 'center',
   },
   modalDesc: {
@@ -606,7 +606,7 @@ const styles = StyleSheet.create({
     marginTop:       4,
   },
   modalBtnText: {
-    ...Typography.bodyBold,
+    ...Typography.semibold,
     color:    '#0D0D1A',
     fontSize: 16,
   },

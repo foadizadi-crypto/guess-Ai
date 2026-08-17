@@ -11,6 +11,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import {
   Alert,
   Image,
+  ImageSourcePropType,
   Platform,
   ScrollView,
   StyleSheet,
@@ -31,6 +32,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { Audio } from 'expo-av';
 
 import { AnimatedBackground } from '@/components/AnimatedBackground';
+import { WingsShopTab } from '@/components/WingsShopTab';
 import { AnimatedIcon } from '@/components/AnimatedIcon';
 import { BackButton } from '@/components/BackButton';
 import { CoinDisplay } from '@/components/CoinDisplay';
@@ -52,11 +54,12 @@ import {
   RARITY_COLORS,
 } from '@/constants/shopConfig';
 import { IAP_GEM_PACKS, COIN_GEM_EXCHANGES, type CoinGemExchangeId } from '@/constants/economy';
-import type { PowerUpId, CosmeticType } from '@/types';
+import type { PowerUpId } from '@/types';
+import type { CosmeticType } from '@/constants/collections';
 import type { ConsumableId } from '@/constants/shopData';
 
 // ─── Item local image manifest loader mapping ──────────────────────────────
-const SHOP_IMAGES: Record<string, ReturnType<typeof require>> = {
+const SHOP_IMAGES: Record<string, ImageSourcePropType> = {
   time_boost:      require('@/assets/shop/time_boost.png'),
   combo_shield:    require('@/assets/shop/combo_shield.png'),
   clarity_bomb:    require('@/assets/shop/clarity_bomb.png'),
@@ -73,6 +76,7 @@ const TABS = [
   { label: 'Play',       icon: 'game-controller-outline', imageKey: 'tab_play' },
   { label: 'Gems',       icon: 'diamond-outline',        imageKey: 'tab_gems' },
   { label: 'Cosmetics',  icon: 'sparkles-outline',       imageKey: 'tab_cosmetics' },
+  { label: 'Wings',      icon: 'airplane-outline',       imageKey: 'tab_cosmetics' },
 ] as const;
 
 /** Deep-link keys accepted via ?tab= so other screens can open a specific tab. */
@@ -80,6 +84,7 @@ const TAB_PARAM_INDEX: Record<string, number> = {
   play: 0,
   gems: 1,
   cosmetics: 2,
+  wings: 3,
 };
 
 const COSM_FILTERS = ['All', 'Avatars', 'Frames', 'Badges', 'Effects'] as const;
@@ -202,17 +207,17 @@ export default function ShopScreen() {
   const handlePlayItem = useCallback((id: string, price: number, currencyType: 'coins' | 'gems') => {
     playClickSound();
     if (POWER_UP_IDS.has(id)) {
-      const result = buyPowerUp(id as PowerUpId);
+      const result = buyPowerUp(id as PowerUpId, price);
       result ? ok(`−${price} 🪙`) : fail('Not enough coins', 'Earn more coins by playing or claiming daily rewards.');
     } else {
-      const result = buyConsumable(id as ConsumableId);
+      const result = buyConsumable(id as ConsumableId, price);
       result ? ok(`−${price} 🪙`) : fail('Not enough coins', 'Earn more coins by playing or claiming daily rewards.');
     }
   }, [buyPowerUp, buyConsumable, ok, fail]);
 
   const handleCoinGemExchange = useCallback((id: string, coinCost: number, gemGrant: number, maxPurchases: number) => {
     playClickSound();
-    const purchased = coinGemExchanges[id] ?? 0;
+    const purchased = coinGemExchanges[id as CoinGemExchangeId] ?? 0;
     if (purchased >= maxPurchases) {
       Alert.alert('Limit reached', `You can only use this exchange ${maxPurchases} time${maxPurchases > 1 ? 's' : ''}.`);
       return;
@@ -280,7 +285,7 @@ export default function ShopScreen() {
     playClickSound();
     const av = avatars.find(a => a.id === id);
     if (!av) return;
-    if (av.owned || id === selectedAvatarId) {
+    if (av.unlocked || id === selectedAvatarId) {
       selectAvatar(id);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       toast('Equipped!');
@@ -304,7 +309,7 @@ export default function ShopScreen() {
       return;
     }
     if (gems < price) { fail('Not enough gems', `You need ${price} 💎.`); return; }
-    const result = buyGemCosmetic(id);
+    const result = buyGemCosmetic(id, price);
     result ? ok(`−${price} 💎`) : fail('Not enough gems', `You need ${price} 💎.`);
   }, [gems, gemCosmetics, buyGemCosmetic, equipGemCosmetic, ok, fail, toast]);
 
@@ -595,7 +600,7 @@ export default function ShopScreen() {
                 {cosmItems.map(item => {
                   const isAvatar  = item.subcat === 'Avatars';
                   const av        = isAvatar ? avatars.find(a => a.id === item.id) : null;
-                  const owned     = isAvatar ? (av?.owned ?? false) : (gemCosmetics[item.id]?.owned ?? false);
+                  const owned     = isAvatar ? (av?.unlocked ?? false) : (gemCosmetics[item.id]?.owned ?? false);
                   const equipped  = isAvatar ? (item.id === selectedAvatarId) : (gemCosmetics[item.id]?.equipped ?? false);
                   const rarityColor = RARITY_COLORS[item.rarity] ?? GameColors.textSecondary;
                   const balance   = item.currencyType === 'coins' ? coins : gems;
@@ -646,6 +651,11 @@ export default function ShopScreen() {
               </View>
             )}
           </>
+        )}
+
+        {/* ════════════════════════ WINGS TAB LAYOUT ════════════════════════ */}
+        {tab === 3 && (
+          <WingsShopTab scrollable={false} />
         )}
       </ScrollView>
     </AnimatedBackground>

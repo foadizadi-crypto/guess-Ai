@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, StyleSheet, View, Text, ViewStyle } from 'react-native';
+import { Image, ImageSourcePropType, StyleSheet, View, Text, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
@@ -21,7 +21,7 @@ interface AvatarFrameProps {
 }
 
 // ─── Avatar PNG map ────────────────────────────────────────────────────────────
-const AVATAR_IMAGES: Record<string, ReturnType<typeof require>> = {
+const AVATAR_IMAGES: Record<string, ImageSourcePropType> = {
   // by imageKey
   abigail: require('@/assets/avatar/Abigail.webp'),
   chloe:   require('@/assets/avatar/chlöe.webp'),
@@ -47,7 +47,7 @@ const AVATAR_IMAGES: Record<string, ReturnType<typeof require>> = {
 };
 
 // ─── Frame PNG map ─────────────────────────────────────────────────────────────
-const FRAME_IMAGES: Record<string, ReturnType<typeof require>> = {
+const FRAME_IMAGES: Record<string, ImageSourcePropType> = {
   frame_0_simple:    require('@/assets/frames/0-simple.jpg'),
   frame_1_bronze:    require('@/assets/frames/1-bronze.jpg'),
   frame_2_silver:    require('@/assets/frames/2-silver.jpg'),
@@ -128,15 +128,14 @@ export const AvatarFrame: React.FC<AvatarFrameProps> = ({
           style={[
             styles.ring,
             {
-              left: 0,
-              top:  0,
+              left:         0,
+              top:          0,
               width:        containerSz,
               height:       containerSz,
               borderRadius: containerSz / 2,
               borderColor:  ringColor,
             },
           ]}
-          pointerEvents="none"
         />
       )}
 

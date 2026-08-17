@@ -189,6 +189,8 @@ export interface GemPackItem {
   coins: number;
   /** cosmetic IDs to auto-grant on purchase (via ownedCosmetics). */
   cosmeticIds: string[];
+  /** Gems granted when purchasing this pack (for premium bundles). */
+  gems?: number;
 }
 
 export const GEM_PACKS: GemPackItem[] = [

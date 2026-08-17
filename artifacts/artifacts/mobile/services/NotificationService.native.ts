@@ -46,9 +46,11 @@ const N: typeof NotifModule | null = isExpoGo ? null : (() => {
 if (N) {
   N.setNotificationHandler({
     handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
+      shouldShowAlert:  true,
+      shouldPlaySound:  true,
+      shouldSetBadge:   false,
+      shouldShowBanner: true,
+      shouldShowList:   true,
     }),
   });
 }

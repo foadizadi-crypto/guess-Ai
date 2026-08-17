@@ -475,18 +475,67 @@ export const useUserStore = create<UserState>()(
       
       claimLevelReward: (level) => {
         let success = false;
+        let rewardBonusXP = 0;
+
         set((state) => {
-          if (state.unclaimedLevelRewards.includes(level)) {
-            success = true;
-            const configurationPack = getLevelReward(level);
-            // Gems are NOT awarded through level rewards (spec: gems via IAP only)
-            return {
-              coins: state.coins + (configurationPack?.coins || 0),
-              unclaimedLevelRewards: state.unclaimedLevelRewards.filter((l) => l !== level)
-            };
+          if (!state.unclaimedLevelRewards.includes(level)) return {};
+          success = true;
+          const configurationPack = getLevelReward(level);
+          if (!configurationPack) {
+            return { unclaimedLevelRewards: state.unclaimedLevelRewards.filter((l) => l !== level) };
           }
-          return {};
+
+          // Gems are NOT awarded through level rewards (spec: gems via IAP only)
+          let newCoins = state.coins + configurationPack.coins;
+          const newConsumables = { ...state.consumables };
+          const newOwnedCosmetics = { ...state.ownedCosmetics };
+          const avatarsToUnlock: string[] = [];
+          rewardBonusXP = configurationPack.bonusXP ?? 0;
+
+          for (const item of configurationPack.items) {
+            switch (item.type) {
+              case 'avatar':
+                avatarsToUnlock.push(item.id);
+                break;
+              case 'extra_coins':
+              case 'coins':
+                // already included in configurationPack.coins via buildLevelRewards
+                break;
+              case 'error_nullifier':
+              case 'consumable': {
+                const consId = item.id as ConsumableId;
+                newConsumables[consId] = (newConsumables[consId] ?? 0) + (item.quantity ?? 1);
+                break;
+              }
+              default:
+                // avatar_frame, animated_frame, badge, silver_badge, crown, title,
+                // legendary_skin, skin, skin_piece, rare_sticker, game_theme,
+                // particle_effect, entrance_effect → grant as owned cosmetic
+                newOwnedCosmetics[item.id] = true;
+                break;
+            }
+          }
+
+          // Unlock avatars atomically inside the set()
+          const newAvatars = avatarsToUnlock.length > 0
+            ? state.avatars.map((av) =>
+                avatarsToUnlock.includes(av.id) ? { ...av, unlocked: true } : av
+              )
+            : state.avatars;
+
+          return {
+            coins: newCoins,
+            consumables: newConsumables,
+            ownedCosmetics: newOwnedCosmetics,
+            avatars: newAvatars,
+            unclaimedLevelRewards: state.unclaimedLevelRewards.filter((l) => l !== level),
+          };
         });
+
+        // Grant bonus XP outside set() — addXP recalculates level from XP
+        if (success && rewardBonusXP > 0) {
+          get().addXP(rewardBonusXP);
+        }
         return success;
       },
 
@@ -505,14 +554,12 @@ export const useUserStore = create<UserState>()(
           label: m.label,
           description: m.description,
           target: m.target,
-          current: 0,
+          progress: 0,
           // The mission pool only defines a coin reward; gems and XP are not
           // part of the daily-mission economy.
-          rewardCoins: m.reward,
-          rewardGems: 0,
-          rewardXp: 0,
+          reward: m.reward,
           completed: false,
-          claimed: false,
+          rewardClaimed: false,
           param: m.param
         }));
 
@@ -527,20 +574,20 @@ export const useUserStore = create<UserState>()(
           if (m.type !== type || m.completed) return m;
           if (param && m.param !== param) return m;
 
-          const updatedCurrent = Math.min(m.target, m.current + increment);
+          const updatedCurrent = Math.min(m.target, m.progress + increment);
           const isNowCompleted = updatedCurrent >= m.target;
 
           if (isNowCompleted && !m.completed) {
             notificationService.scheduleLocalNotification({
               title: 'Mission Complete! 🎯',
-              body: `Your mission "${m.description}" is finished. open lobby to claim rewards!`,
+              body: `Your mission "${m.description}" is finished. Open lobby to claim rewards!`,
               trigger: null
             });
           }
 
           return {
             ...m,
-            current: updatedCurrent,
+            progress: updatedCurrent,
             completed: isNowCompleted
           };
         });
@@ -552,26 +599,18 @@ export const useUserStore = create<UserState>()(
         let success = false;
         set((state) => {
           const targetMission = state.missions.find((m) => m.id === missionId);
-          if (targetMission && targetMission.completed && !targetMission.claimed) {
+          if (targetMission && targetMission.completed && !targetMission.rewardClaimed) {
             success = true;
-            const updatedCoins = state.coins + targetMission.rewardCoins;
-            const updatedGems = state.gems + targetMission.rewardGems;
-            
             return {
-              coins: updatedCoins,
-              gems: updatedGems,
-              missions: state.missions.map((m) => m.id === missionId ? { ...m, claimed: true } : m)
+              coins: state.coins + targetMission.reward,
+              missions: state.missions.map((m) =>
+                m.id === missionId ? { ...m, rewardClaimed: true } : m
+              )
             };
           }
           return {};
         });
 
-        if (success) {
-          const missionRef = get().missions.find((m) => m.id === missionId);
-          if (missionRef && missionRef.rewardXp > 0) {
-            get().addXP(missionRef.rewardXp);
-          }
-        }
         return success;
       },
 
@@ -604,19 +643,28 @@ export const useUserStore = create<UserState>()(
 
       // --- CRITICAL AUDIT EVALUATOR ---
       checkAndUnlockAchievements: (ctx) => {
-        const stats = get().statistics;
-        const currentAchievements = get().achievements;
+        const state = get();
+        const stats = state.statistics;
+        const ownedCosmeticsCount = Object.keys(state.ownedCosmetics).length;
+        const currentAchievements = state.achievements;
         let newlyUnlocked: AchievementDef[] = [];
         let modifiedAchievements = currentAchievements.map((ach) => {
           if (ach.unlocked) return ach;
 
-          const isConditionMet = checkAchievementCondition(ach.id, stats, ctx);
+          const achievementCtx = {
+            stats,
+            avatars: state.avatars,
+            ownedCosmeticsCount,
+            isPerfectGame: ctx.isPerfectGame,
+            maxComboThisGame: ctx.maxComboThisGame,
+          };
+          const isConditionMet = checkAchievementCondition(ach.id, achievementCtx);
           if (isConditionMet) {
             newlyUnlocked.push({ id: ach.id, title: ach.title, description: ach.description } as any);
             return {
               ...ach,
               unlocked: true,
-              unlockedAt: Date.now()
+              unlockedAt: new Date().toISOString()
             };
           }
           return ach;
@@ -704,14 +752,14 @@ export const useUserStore = create<UserState>()(
       canFreeSpin: () => {
         const lastSpin = get().lastSpinDate;
         if (!lastSpin) return true;
-        return !isToday(new Date(lastSpin));
+        return !isToday(lastSpin);
       },
 
       canExtraSpin: () => {
         const todayStr = getTodayUTCString();
         const state = get();
         const currentExtraSpins = state.lastExtraSpinDate === todayStr ? state.extraSpinsToday : 0;
-        return currentExtraSpins < SPIN_CONFIG.maxExtraSpinsPerDay;
+        return currentExtraSpins < SPIN_CONFIG.extraSpinsPerDay;
       },
 
       // --- RANDOMIZED JACKPOT SPIN WHEEL CONTROLLER ---
@@ -722,7 +770,7 @@ export const useUserStore = create<UserState>()(
         if (isFree && !get().canFreeSpin()) return null;
         if (!isFree && !get().canExtraSpin()) return null;
 
-        const drawnRewardIndex = pickRewardIndex(SPIN_CONFIG.rewards, () => Math.random());
+        const drawnRewardIndex = pickRewardIndex(SPIN_CONFIG.rewards);
         selectedReward = SPIN_CONFIG.rewards[drawnRewardIndex] || null;
 
         if (!selectedReward) return null;
@@ -735,8 +783,8 @@ export const useUserStore = create<UserState>()(
           let trackerExtraSpinDate = state.lastExtraSpinDate;
 
           if (selectedReward!.type === 'coins') updatedCoins += selectedReward!.amount;
-          if (selectedReward!.type === 'gems') updatedGems += selectedReward!.amount;
-          if (selectedReward!.type === 'fragment') updatedFragments += selectedReward!.amount;
+          if (selectedReward!.type === 'gems')  updatedGems += selectedReward!.amount;
+          // note: 'fragment' type removed from SpinRewardType — no-op if encountered
 
           if (!isFree) {
             const currentExtraSpinsCount = state.lastExtraSpinDate === todayStr ? state.extraSpinsToday : 0;
@@ -824,7 +872,7 @@ export const useUserStore = create<UserState>()(
         if (!targetPackDef) return false;
 
         set((state) => ({
-          gems: state.gems + targetPackDef.gems,
+          gems: state.gems + (targetPackDef.gems ?? 0),
           isPremium: packId === 'premium_pass_lifetime' ? true : state.isPremium
         }));
         return true;

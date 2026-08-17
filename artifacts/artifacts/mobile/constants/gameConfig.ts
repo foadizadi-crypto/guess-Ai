@@ -102,7 +102,7 @@ export const GAME_CONFIG = {
 // Key mapping: the API uses short snake_case keys; a few differ from the names
 // above — the mapping lives in services/remoteConfigService.ts.
 
-export function applyRemoteConfig(remote: Record<string, string>): void {
+export function applyRemoteConfig(remote: Record<string, unknown>): void {
   const n = (key: string): number | undefined => {
     const v = remote[key];
     if (v === undefined) return undefined;

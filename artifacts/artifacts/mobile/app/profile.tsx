@@ -8,6 +8,7 @@ import {
   ImageBackground,
   Switch,
   Pressable,
+  DimensionValue,
   ViewStyle,
   Dimensions,
 } from 'react-native';
@@ -17,7 +18,6 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withParallel,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
@@ -112,10 +112,10 @@ export default function ProfileScreen() {
   const getProportionalStyle = (left: string, top: string, width: string, height: string): ViewStyle[] => [
     styles.absoluteRegion,
     {
-      left,
-      top,
-      width,
-      height,
+      left:   left   as DimensionValue,
+      top:    top    as DimensionValue,
+      width:  width  as DimensionValue,
+      height: height as DimensionValue,
       backgroundColor: debugMode ? 'rgba(56, 189, 248, 0.25)' : 'transparent',
       borderWidth: debugMode ? 1 : 0,
       borderColor: '#38bdf8',

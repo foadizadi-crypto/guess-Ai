@@ -2,7 +2,7 @@
 - [Native module platform split](native-module-platform-split.md) — Packages like AdMob/IAP must use .native.ts + .ts Metro split; runtime Platform guards don't prevent bundling on web.
 - [Expo Go crash diagnosis](expo-go-crash-diagnosis.md) — "Failed to download remote update" = Metro bundling error (check workflow logs); blue "Something went wrong" = native module missing from Expo Go.
 - [BlurQuiz component props](blurquiz-component-props.md) — CoinDisplay uses `amount` prop (not `coins`); firestoreService edits must be appended at true file end, never mid-function.
-- [Energy system design](energy-system.md) — Two-tier: active (0-50, time-refilled) + reserve (uncapped, purchased/rewarded). spendEnergy drains active first then reserve. addStamina always → reserve.
+- [Energy system design](energy-system.md) — Two-tier: active (0-50→100 after spec v1), time-refilled + reserve (uncapped, purchased/rewarded). spendEnergy drains active first then reserve. addStamina always → reserve.
 - [Notification service](notification-service.md) — 7 local + 6 remote-stub notification types. Services/NotificationService.ts (web stub) + .native.ts (expo-notifications). Hooked into userStore for stamina/achievements/spin/daily-reward. AppState in _layout.tsx handles inactive-reminder scheduling.
 - [Coin economy](coin-economy.md) — Levels 1-100 give coins every level (300/700/1500). Coin→gem exchange: 30k→5💎 (max 2) and 100k→25💎 (max 1), tracked in coinGemExchanges state.
 - [Asset reference pitfalls](asset-references.md) — require() of a missing asset breaks the build despite runtime guards; sweep all refs at once and expand the `@/` alias first.
@@ -14,3 +14,5 @@
 - [Stuck-on-splash diagnosis](splash-and-boot-gates.md) — a timed splash looks hung in load-time screenshots; verify with an explicit e2e wait before tracing boot code.
 - [Dev servers vs external deps](dev-server-external-deps.md) — an ngrok outage kills `expo start --tunnel` and the whole workflow; fall back only on tunnel-specific errors, and forward signals.
 - [Economy audit v1.0.0](economy-audit-v1.md) — all corrected economy constants (energy/XP/rewards/wings/IAP); use this before touching any economy feature.
+- [TS type patterns for RN images](ts-rn-image-types.md) — use `Record<string, ImageSourcePropType>` not `Record<string, ReturnType<typeof require>>` for image maps; the latter resolves to unknown in strict mode.
+- [ActiveMission field names](active-mission-fields.md) — use `progress`/`reward`/`rewardClaimed` not `current`/`rewardCoins`/`claimed`; `AchievementCheckContext` wraps stats+avatars into one arg for checkAchievementCondition.
