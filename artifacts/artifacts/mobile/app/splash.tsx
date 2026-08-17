@@ -118,16 +118,24 @@ export default function SplashScreen() {
     const timer = setTimeout(async () => {
       if (navigated.current) return;
       navigated.current = true;
-      const [done, username] = await Promise.all([
-        storageService.isOnboardingDone(),
-        storageService.loadUsername(),
-      ]);
-      if (!done) {
+      try {
+        const [done, username] = await Promise.all([
+          storageService.isOnboardingDone(),
+          storageService.loadUsername(),
+        ]);
+        if (!done) {
+          router.replace(ROUTES.ONBOARDING);
+        } else if (!username) {
+          router.replace(ROUTES.LOGIN);
+        } else {
+          router.replace(ROUTES.LOBBY);
+        }
+      } catch (err) {
+        // Never strand the player on the splash screen: if the storage read
+        // fails we cannot tell where they belong, so send them through
+        // onboarding rather than leaving the logo spinning forever.
+        console.warn('[Splash] startup storage read failed', err);
         router.replace(ROUTES.ONBOARDING);
-      } else if (!username) {
-        router.replace(ROUTES.LOGIN);
-      } else {
-        router.replace(ROUTES.LOBBY);
       }
     }, 3000);
 

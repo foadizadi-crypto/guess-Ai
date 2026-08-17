@@ -37,7 +37,7 @@ import { ROUTES } from "@/navigation/routes";
 const USE_NATIVE_DRIVER = Platform.OS !== "web";
 const HITBOX_Z_BASE = 10000;
 
-const ICON_SCALE = 2;
+const ICON_SCALE = 1.2;
 const HITBOX_SCALE = 1;
 
 // =====================================================
@@ -119,7 +119,9 @@ export default function LobbyScreen() {
   const [debugMode, setDebugMode] = useState<boolean>(false);
   const [dailyModal, setDailyModal] = useState<boolean>(false);
   const [soundInstance, setSoundInstance] = useState<Audio.Sound | null>(null);
-  const [showSplash, setShowSplash] = useState<boolean>(false);
+  // Plays the one-shot entry flourish (splash.json) each time the lobby mounts;
+  // onAnimationFinish flips this back to false so it does not linger.
+  const [showSplash, setShowSplash] = useState<boolean>(true);
 
   // ===================================================
   // USER STORE
@@ -207,7 +209,9 @@ export default function LobbyScreen() {
 
       const claimed = isToday(dailyReward?.lastClaimed);
       if (!claimed) {
-        const t = setTimeout(() => setDailyModal(true), 900);
+        // Held back until the one-shot entry animation (splash.json, ~1.2s)
+        // has finished, so the modal does not cover the flourish.
+        const t = setTimeout(() => setDailyModal(true), 2000);
         return () => clearTimeout(t);
       }
 

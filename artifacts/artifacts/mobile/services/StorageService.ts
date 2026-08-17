@@ -1,6 +1,16 @@
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { STORAGE_KEYS, SECURE_STORE_KEYS } from '@/constants';
+
+// expo-secure-store has no web implementation — every call throws
+// "ExpoSecureStore.default.getValueWithKeyAsync is not a function". Without a
+// fallback the username never reads back in the browser preview, so a cold
+// start always lands on the login screen there even though the device is fine.
+// Web keeps the same keys in AsyncStorage (localStorage); it is not a secure
+// store, but the browser build is a development preview, not a shipped target.
+const SECURE_WEB_PREFIX = 'websecure:';
+const useWebFallback = Platform.OS === 'web';
 
 // ─── Service class ────────────────────────────────────────────────────────
 
@@ -18,6 +28,10 @@ class StorageService {
 
   async saveSecure(key: string, value: string): Promise<void> {
     try {
+      if (useWebFallback) {
+        await AsyncStorage.setItem(SECURE_WEB_PREFIX + key, value);
+        return;
+      }
       await SecureStore.setItemAsync(key, value);
     } catch (error) {
       console.warn(`[Storage] SecureStore.set failed — key="${key}"`, error);
@@ -26,6 +40,9 @@ class StorageService {
 
   async loadSecure(key: string): Promise<string | null> {
     try {
+      if (useWebFallback) {
+        return await AsyncStorage.getItem(SECURE_WEB_PREFIX + key);
+      }
       return await SecureStore.getItemAsync(key);
     } catch (error) {
       console.warn(`[Storage] SecureStore.get failed — key="${key}"`, error);
@@ -35,6 +52,10 @@ class StorageService {
 
   async deleteSecure(key: string): Promise<void> {
     try {
+      if (useWebFallback) {
+        await AsyncStorage.removeItem(SECURE_WEB_PREFIX + key);
+        return;
+      }
       await SecureStore.deleteItemAsync(key);
     } catch (error) {
       console.warn(`[Storage] SecureStore.delete failed — key="${key}"`, error);

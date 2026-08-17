@@ -36,7 +36,6 @@ export default function RootLayout() {
 
   // --- 2. Pulling real profile parameters from your uploaded Zustand state shape ---
   const username = useUserStore((s) => s.username);
-  const missionsDate = useUserStore((s) => s.missionsDate);
   const refreshDailyMissions = useUserStore((s) => s.refreshDailyMissions);
 
   // --- CRITICAL AUDIT FIX (P0): Zustand AsyncStorage Hydration Synchronization ---
@@ -58,29 +57,25 @@ export default function RootLayout() {
     }
   }, []);
 
-  // --- FLOW CONTROLLER ROUTER REDIRECTION ENGINE ---
+  // --- Daily missions refresh (NOT routing) ---
+  //
+  // Startup routing belongs to app/splash.tsx, which reads the persisted
+  // onboarding flag and the saved username, plus the onboarding and login
+  // screens themselves. This layout must not redirect as well.
+  //
+  // It used to: it treated `missionsDate !== null` as "onboarding complete"
+  // and forced /onboarding otherwise. But the only thing that sets
+  // missionsDate is refreshDailyMissions(), which sat behind that very
+  // condition — so missionsDate stayed null forever, the lobby was
+  // unreachable, and every launch bounced the player back to onboarding.
   useEffect(() => {
     if (!storeReady) return;
 
-    // Check if username exists to evaluate authentication status
     const isUserLoggedIn = username && username.trim().length > 0;
-
-    // Evaluate onboarding status from user store missionsDate checkpoint or custom logic
-    // Since storageService.isOnboardingDone() updates async, we monitor if missions are initialized
-    const hasCompletedOnboarding = missionsDate !== null;
-
-    if (!hasCompletedOnboarding) {
-      // Force user to land on the initial onboarding tutorial path folder
-      router.replace("/onboarding");
-    } else if (!isUserLoggedIn) {
-      // Force user to cross the login authentication layer gate
-      router.replace("/login");
-    } else {
-      // Safe Path: Auto-load live missions and launch directly into the main lobby
+    if (isUserLoggedIn) {
       refreshDailyMissions();
-      router.replace("/lobby");
     }
-  }, [storeReady, username, missionsDate]);
+  }, [storeReady, username]);
 
   // Render native loading spinner until store state data is fully populated from memory
   if (!storeReady) {

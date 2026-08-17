@@ -23,6 +23,18 @@ description: Third-party RN components that silently ignore absolute positioning
 
 ---
 
+## Proving an animation layer works on web: probe the canvas, don't eyeball it
+
+"Is this animation playing?" cannot be answered by diffing screenshots. Screenshot tooling captures at a deterministic point after load, so two captures show the *same* frame even while the animation runs, and a subtle effect over busy artwork is invisible either way.
+
+Query the DOM instead. Each working Lottie layer renders its own full-viewport `<canvas>`:
+
+- Sample pixels twice ~1s apart via `getContext('2d')` + `getImageData`; count non-zero-alpha samples and sum the RGB. A changing sum proves it is rendering *and* advancing.
+- Canvas count over time proves one-shot behaviour: a `loop={false}` layer with `onAnimationFinish` should take the count from N to N-1 and stay there. Stuck at N means it never self-terminates.
+- A layer that animates but is imperceptible is an *asset* problem (a small composition stretched over a tall viewport, near-zero alpha keyframes), not a wiring problem. Render each asset alone on a plain background — a throwaway route is enough — before touching integration code.
+
+---
+
 ## lottie-react-native needs a web-only peer
 
 Web rendering pulls in `@lottiefiles/dotlottie-react`, which is an optional peer and therefore absent until something requests it. Bundling fails with `Unable to resolve module @lottiefiles/dotlottie-react` from inside `lottie-react-native/lib/module/LottieView/index.web.js`.

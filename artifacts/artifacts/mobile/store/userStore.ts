@@ -32,7 +32,7 @@ import {
 import { getLevelReward } from '@/constants/levelRewards';
 import { GEM_PACKS, type GemPackItem } from '@/constants/shopConfig';
 import { type ConsumableId, CONSUMABLE_PRICES } from '@/constants/shopData';
-import { getDailyMissions, getTodayUTC, type MissionType } from '@/constants/missions';
+import { getDailyMissions, type MissionType } from '@/constants/missions';
 import {
   DAILY_XP_CAP,
   COINS_PERFECT_GAME_BONUS,
@@ -483,16 +483,22 @@ export const useUserStore = create<UserState>()(
         const todayStr = getTodayUTCString();
         if (state.missionsDate === todayStr && state.missions.length > 0) return {};
 
-        const operationalMissions = getDailyMissions(getTodayUTC(), state.isPremium);
+        // getDailyMissions(count, dateStr) — free players get 3 missions/day,
+        // premium 5 (see constants/missions.ts).
+        const missionCount = state.isPremium ? 5 : 3;
+        const operationalMissions = getDailyMissions(missionCount, todayStr);
         const mappedActiveMissions: ActiveMission[] = operationalMissions.map((m) => ({
           id: m.id,
           type: m.type,
+          label: m.label,
           description: m.description,
           target: m.target,
           current: 0,
-          rewardCoins: m.rewardCoins,
-          rewardGems: m.rewardGems,
-          rewardXp: m.rewardXp,
+          // The mission pool only defines a coin reward; gems and XP are not
+          // part of the daily-mission economy.
+          rewardCoins: m.reward,
+          rewardGems: 0,
+          rewardXp: 0,
           completed: false,
           claimed: false,
           param: m.param
