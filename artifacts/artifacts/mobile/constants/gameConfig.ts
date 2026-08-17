@@ -17,14 +17,34 @@ export const GAME_CONFIG = {
   xp_base_formula_exponent:    1.4,
 
   // ── XP Per Answer ───────────────────────────────────────────────────────────
+  // Spec (v1.0.0): Easy×1.0 = 10 | Medium×1.25 = 13 | Hard×1.5 = 15
   xp_correct_easy:           10,
-  xp_correct_medium:         15,
-  xp_correct_hard:           25,
+  xp_correct_medium:         13,
+  xp_correct_hard:           15,
   xp_wrong:                   2,  // always awarded — prevents frustration on fails
 
-  // ── Game Completion Bonuses ─────────────────────────────────────────────────
-  xp_session_complete_bonus:  50,  // awarded for finishing any 20-question session
-  xp_perfect_game_bonus:     100,  // awarded for 20/20 correct — stacks with all XP
+  // ── Session Completion Rewards (per difficulty) ─────────────────────────────
+  // Spec: Easy 50c+30XP | Medium 63c+38XP | Hard 75c+45XP
+  session_complete_coins_easy:    50,
+  session_complete_coins_medium:  63,
+  session_complete_coins_hard:    75,
+  session_complete_xp_easy:       30,
+  session_complete_xp_medium:     38,
+  session_complete_xp_hard:       45,
+
+  // ── Perfect Game Rewards (per difficulty, stacks with session completion) ──
+  // Spec: Easy 100c+50XP | Medium 125c+63XP | Hard 150c+75XP
+  perfect_coins_easy:    100,
+  perfect_coins_medium:  125,
+  perfect_coins_hard:    150,
+  perfect_xp_easy:        50,
+  perfect_xp_medium:      63,
+  perfect_xp_hard:        75,
+
+  // Legacy flat aliases kept for any existing import; use the per-difficulty
+  // values above in all new/updated code.
+  xp_session_complete_bonus:  30,  // Easy base — kept for backward compat
+  xp_perfect_game_bonus:      50,  // Easy base — kept for backward compat
 
   // ── Clarity / Blur Mechanics ────────────────────────────────────────────────
   // clarity_correct_increment: how much blur is removed on a correct answer
@@ -192,6 +212,38 @@ export function computeAnswerXP(
     return Math.floor(raw * c.super_combo_multiplier);
   }
   return raw;
+}
+
+/** Coins awarded for completing a session (20 questions), by difficulty. */
+export function sessionCompleteCoins(difficulty: 'easy' | 'medium' | 'hard'): number {
+  const c = GAME_CONFIG;
+  if (difficulty === 'hard')   return c.session_complete_coins_hard;
+  if (difficulty === 'medium') return c.session_complete_coins_medium;
+  return c.session_complete_coins_easy;
+}
+
+/** XP awarded for completing a session, by difficulty. */
+export function sessionCompleteXP(difficulty: 'easy' | 'medium' | 'hard'): number {
+  const c = GAME_CONFIG;
+  if (difficulty === 'hard')   return c.session_complete_xp_hard;
+  if (difficulty === 'medium') return c.session_complete_xp_medium;
+  return c.session_complete_xp_easy;
+}
+
+/** Coins awarded for a perfect game (20/20 correct), by difficulty. Stacks with session completion. */
+export function perfectGameCoins(difficulty: 'easy' | 'medium' | 'hard'): number {
+  const c = GAME_CONFIG;
+  if (difficulty === 'hard')   return c.perfect_coins_hard;
+  if (difficulty === 'medium') return c.perfect_coins_medium;
+  return c.perfect_coins_easy;
+}
+
+/** XP awarded for a perfect game, by difficulty. Stacks with session completion. */
+export function perfectGameXP(difficulty: 'easy' | 'medium' | 'hard'): number {
+  const c = GAME_CONFIG;
+  if (difficulty === 'hard')   return c.perfect_xp_hard;
+  if (difficulty === 'medium') return c.perfect_xp_medium;
+  return c.perfect_xp_easy;
 }
 
 /** Blur amount to show at the start of a question given difficulty. */

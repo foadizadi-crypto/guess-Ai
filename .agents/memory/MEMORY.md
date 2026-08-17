@@ -13,3 +13,4 @@
 - [Web preview vs device](web-preview-vs-device.md) — a page reload isn't a cold start, and expo-secure-store silently returns nothing on web; both fake out browser verification.
 - [Stuck-on-splash diagnosis](splash-and-boot-gates.md) — a timed splash looks hung in load-time screenshots; verify with an explicit e2e wait before tracing boot code.
 - [Dev servers vs external deps](dev-server-external-deps.md) — an ngrok outage kills `expo start --tunnel` and the whole workflow; fall back only on tunnel-specific errors, and forward signals.
+- [Economy audit v1.0.0](economy-audit-v1.md) — all corrected economy constants (energy/XP/rewards/wings/IAP); use this before touching any economy feature.

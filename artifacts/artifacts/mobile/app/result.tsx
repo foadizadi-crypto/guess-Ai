@@ -17,10 +17,11 @@ import { useAudio } from '@/hooks/useAudio';
 import { ROUTES } from '@/navigation/routes';
 import { useRTL } from '@/hooks/useRTL';
 import {
-  XP_COMPLETION_BONUS,
-  XP_PERFECT_BONUS,
-  COINS_PERFECT_GAME_BONUS,
-} from '@/constants/economy';
+  sessionCompleteCoins,
+  sessionCompleteXP,
+  perfectGameCoins,
+  perfectGameXP,
+} from '@/constants/gameConfig';
 import type { MissionType } from '@/types';
 import { recordGameSession, saveAchievements } from '@/services/firestoreService';
 import { getPlayerId } from '@/services/authService';
@@ -79,19 +80,22 @@ export default function ResultScreen() {
   const isVictory   = !lastGameWasTimedOut && isPerfect;
   const accuracy    = totalQuestions ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
 
-  // ── Economy calculation — spec-driven ─────────────────────────────────────
+  // ── Economy calculation — spec v1.0.0 ────────────────────────────────────
   // Coins: 1 per correct answer (tracked in gameStore.coinsEarned)
-  //        +25 bonus for a perfect game
-  //        ×2 if Double Coins power-up was active
-  const baseCoins  = coinsEarned + (isPerfect ? COINS_PERFECT_GAME_BONUS : 0);
-  const totalCoins = Math.max(0, baseCoins);
+  //        + session completion bonus (per difficulty: Easy 50 | Med 63 | Hard 75)
+  //        + perfect game bonus if 20/20 (per difficulty: Easy 100 | Med 125 | Hard 150)
+  const completionCoins = sessionCompleteCoins(selectedDifficulty);
+  const perfectCoins    = isPerfect ? perfectGameCoins(selectedDifficulty) : 0;
+  const baseCoins       = coinsEarned + completionCoins + perfectCoins;
+  const totalCoins      = Math.max(0, baseCoins);
 
   // XP: per-question base + combo (tracked in gameStore.xpEarned)
-  //     +50 completion bonus (every game)
-  //     +100 perfect bonus (20/20 correct)
-  //     ×2 if Double XP power-up was active
-  const baseXP  = xpEarned + XP_COMPLETION_BONUS + (isPerfect ? XP_PERFECT_BONUS : 0);
-  const totalXP = doubleXPActive ? baseXP * 2 : baseXP;
+  //     + session completion XP (per difficulty: Easy 30 | Med 38 | Hard 45)
+  //     + perfect game XP if 20/20 (per difficulty: Easy 50 | Med 63 | Hard 75)
+  const completionXP = sessionCompleteXP(selectedDifficulty);
+  const perfectXP    = isPerfect ? perfectGameXP(selectedDifficulty) : 0;
+  const baseXP       = xpEarned + completionXP + perfectXP;
+  const totalXP      = doubleXPActive ? baseXP * 2 : baseXP;
 
   // ── Double Reward button visibility (spec §7.2 + §7.3) ──────────────────
   // The counter always gates availability — even ad-free pass holders must reach

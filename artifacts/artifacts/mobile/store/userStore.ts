@@ -43,6 +43,7 @@ import {
   MAX_ENERGY,
   ENERGY_REFILL_INTERVAL_MIN,
   ENERGY_REFILL_GEM_COST,
+  ENERGY_DAILY_REWARD,
   STAMINA_PER_GAME,
   COIN_GEM_EXCHANGES,
   type CoinGemExchangeId,
@@ -117,6 +118,10 @@ interface UserState {
   staminaReserve: number;
   lastEnergyRefillTime: number | null;
 
+  // Wings Cosmetic Inventory
+  ownedWings: string[];
+  equippedWing: string | null;
+
   // Store & Progression Actions Pipelines
   setUsername: (username: string) => void;
   addCoins: (amount: number) => void;
@@ -161,6 +166,8 @@ interface UserState {
   refillEnergyWithGems: (gemCost: number) => boolean;
   buyGemPack: (packId: string) => boolean;
   buyCoinGemExchange: (id: CoinGemExchangeId) => boolean;
+  purchaseWing: (wingId: string, gemCost: number) => boolean;
+  equipWing: (wingId: string | null) => void;
 }
 
 const defaultSettings: UserSettings = {
@@ -223,6 +230,8 @@ export const useUserStore = create<UserState>()(
       energy:               MAX_ENERGY,
       staminaReserve:       0,
       lastEnergyRefillTime: null,
+      ownedWings:   [],
+      equippedWing: null,
       settings: { ...defaultSettings },
       statistics: { ...defaultStatistics },
       dailyXPEarned: 0,
@@ -443,8 +452,11 @@ export const useUserStore = create<UserState>()(
           const nextDayIdx = (currentDayIdx + 1) % DAILY_REWARDS.length;
           const configNextAmount = DAILY_REWARDS[nextDayIdx].coins;
 
+          // Spec v1.0.0: daily reward also grants +10 energy (capped at MAX_ENERGY)
+          const newEnergy = Math.min(MAX_ENERGY, state.energy + ENERGY_DAILY_REWARD);
           return {
             coins: state.coins + amt,
+            energy: newEnergy,
             dailyReward: {
               lastClaimed: new Date().toISOString(),
               lastClaimDate: todayStr,
@@ -467,9 +479,9 @@ export const useUserStore = create<UserState>()(
           if (state.unclaimedLevelRewards.includes(level)) {
             success = true;
             const configurationPack = getLevelReward(level);
+            // Gems are NOT awarded through level rewards (spec: gems via IAP only)
             return {
-              coins: state.coins + (configurationPack.coins || 0),
-              gems: state.gems + (configurationPack.gems || 0),
+              coins: state.coins + (configurationPack?.coins || 0),
               unclaimedLevelRewards: state.unclaimedLevelRewards.filter((l) => l !== level)
             };
           }
@@ -585,6 +597,8 @@ export const useUserStore = create<UserState>()(
         coinGemExchanges: { ...defaultCoinGemExchanges },
         energy: MAX_ENERGY,
         staminaReserve: 0,
+        ownedWings: [],
+        equippedWing: null,
         statistics: { ...defaultStatistics }
       }),
 
@@ -675,7 +689,17 @@ export const useUserStore = create<UserState>()(
         equippedCosmetics: { ...state.equippedCosmetics, frame: id }
       })),
 
-      grantStarterPack: () => set((state) => ({ coins: state.coins + 500, gems: state.gems + 100 })),
+      // Spec: Starter Pack ($2.00) → 5 Combo Shields + 3 Clarity Bombs + Silver Frame
+      // (NOT gems — gem grants via IAP are handled by the gem-pack purchase flow)
+      grantStarterPack: () => set((state) => ({
+        coins: state.coins + 500,
+        consumables: {
+          ...state.consumables,
+          combo_shield: (state.consumables.combo_shield ?? 0) + 5,
+          clarity_bomb: (state.consumables.clarity_bomb ?? 0) + 3,
+        },
+        ownedCosmetics: { ...state.ownedCosmetics, frame_silver: true },
+      })),
 
       canFreeSpin: () => {
         const lastSpin = get().lastSpinDate;
@@ -805,6 +829,22 @@ export const useUserStore = create<UserState>()(
         }));
         return true;
       },
+
+      purchaseWing: (wingId, gemCost) => {
+        let success = false;
+        set((state) => {
+          if (state.gems < gemCost) return {};
+          if (state.ownedWings.includes(wingId)) return {};
+          success = true;
+          return {
+            gems: state.gems - gemCost,
+            ownedWings: [...state.ownedWings, wingId],
+          };
+        });
+        return success;
+      },
+
+      equipWing: (wingId) => set({ equippedWing: wingId }),
 
       buyCoinGemExchange: (id) => {
         const tier = COIN_GEM_EXCHANGES.find((exchange) => exchange.id === id);

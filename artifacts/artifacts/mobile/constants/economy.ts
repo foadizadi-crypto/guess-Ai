@@ -113,29 +113,23 @@ export const PREMIUM_PRICE_MONTHLY      = '$3.99';
 export const PREMIUM_MISSIONS_PER_DAY   = 5; // vs FREE_MISSIONS_PER_DAY for free users
 export const FREE_MISSIONS_PER_DAY      = 3;
 export const PREMIUM_COIN_MULTIPLIER    = 2; // applied to daily login coins
-export const REWARDED_ADS_DAILY_FREE    = 5;
-export const REWARDED_ADS_DAILY_PREMIUM = 10;
+// Spec: max 3 rewarded ads per day for energy (applies to all players)
+export const REWARDED_ADS_DAILY_FREE    = 3;
+export const REWARDED_ADS_DAILY_PREMIUM = 3;
 
-// ─── Level gem milestones ─────────────────────────────────────────────────────
-// Free gem rewards granted on reaching specific levels.
-// Total across all milestones up to level 500: 319 gems.
-export const LEVEL_GEM_REWARDS: Readonly<Record<number, number>> = {
-  10:  1,
-  25:  1,
-  50:  2,
-  100: 5,
-  150: 10,
-  300: 50,
-  500: 250,
-};
+// ─── Level gem milestones — DEPRECATED ───────────────────────────────────────
+// Spec v1.0.0: gems are earned through IAP only. Level rewards do not grant gems.
+// This table is retained for backward-compat reference but is NOT read by any
+// active code path. Do not import or act on these values.
+/** @deprecated Gems via level rewards violate spec v1.0.0. Use IAP only. */
+export const LEVEL_GEM_REWARDS: Readonly<Record<number, number>> = {};
 
-// ─── IAP gem packs ────────────────────────────────────────────────────────────
+// ─── IAP gem packs — spec v1.0.0 ─────────────────────────────────────────────
+// 100 gems @ $1.99 | 500 gems @ $4.99 | 1 200 gems @ $9.99
 export const IAP_GEM_PACKS = [
-  { id: 'gems-50',   sku: 'com.aiblur.quiz.gems_50',   amount:   50, price: '$0.99'  },
-  { id: 'gems-100',  sku: 'com.aiblur.quiz.gems_100',  amount:  100, price: '$1.70'  },
-  { id: 'gems-250',  sku: 'com.aiblur.quiz.gems_250',  amount:  250, price: '$3.80'  },
-  { id: 'gems-500',  sku: 'com.aiblur.quiz.gems_500',  amount:  500, price: '$6.99'  },
-  { id: 'gems-1000', sku: 'com.aiblur.quiz.gems_1000', amount: 1000, price: '$12.50' },
+  { id: 'gems-100',  sku: 'com.aiblur.quiz.gems_100',  amount:  100, price: '$1.99' },
+  { id: 'gems-500',  sku: 'com.aiblur.quiz.gems_500',  amount:  500, price: '$4.99' },
+  { id: 'gems-1200', sku: 'com.aiblur.quiz.gems_1200', amount: 1200, price: '$9.99' },
 ] as const;
 
 export type IAPGemPackId = typeof IAP_GEM_PACKS[number]['id'];
@@ -150,12 +144,13 @@ export const COIN_GEM_EXCHANGES = [
 export type CoinGemExchangeId = typeof COIN_GEM_EXCHANGES[number]['id'];
 
 // ─── Energy / Stamina ─────────────────────────────────────────────────────────
-// Players start at MAX_ENERGY. Each game costs STAMINA_PER_GAME. Refills passively.
-// Active players can play ~12-15 rounds per day (50 base ÷ 10 cost = 5 rounds,
-// plus up to 2 more from rewarded ads (25 stamina / 10 per round)).
-export const MAX_ENERGY                 = 50;  // full stamina bar
-export const STAMINA_PER_GAME          = 10;  // cost per game round
-export const ENERGY_REFILL_INTERVAL_MIN = 10;  // 1 stamina every 10 minutes
-export const STAMINA_AD_REWARD         = 5;   // stamina per rewarded ad watch
-export const STAMINA_ADS_PER_DAY       = 5;   // max rewarded ads for stamina/day
-export const ENERGY_REFILL_GEM_COST    = 30;  // gems to instantly refill to max
+// Spec (v1.0.0):
+//   Max energy: 100 | Cost per game: 5 | Refill: 1 energy / 10 min
+//   Daily reward: +10 energy | Rewarded ad: +5 energy | Max ads/day: 3
+export const MAX_ENERGY                 = 100; // full stamina bar (spec: 100)
+export const STAMINA_PER_GAME          =   5; // cost per game round (spec: 5)
+export const ENERGY_REFILL_INTERVAL_MIN =  10; // 1 stamina every 10 minutes
+export const STAMINA_AD_REWARD         =   5; // stamina per rewarded ad watch (spec: +5)
+export const STAMINA_ADS_PER_DAY       =   3; // max rewarded ads for stamina/day (spec: 3)
+export const ENERGY_DAILY_REWARD       =  10; // energy granted on daily reward claim (spec: +10)
+export const ENERGY_REFILL_GEM_COST    =  30; // gems to instantly refill to max

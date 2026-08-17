@@ -18,12 +18,10 @@ export const IAP_SKUS = {
   COINS_2500: 'com.aiblur.quiz.coins_2500',
   COINS_5000: 'com.aiblur.quiz.coins_5000',
 
-  // Gem packs
-  GEMS_50:    'com.aiblur.quiz.gems_50',
+  // Gem packs — spec v1.0.0: 100 / 500 / 1200 gems
   GEMS_100:   'com.aiblur.quiz.gems_100',
-  GEMS_250:   'com.aiblur.quiz.gems_250',
   GEMS_500:   'com.aiblur.quiz.gems_500',
-  GEMS_1000:  'com.aiblur.quiz.gems_1000',
+  GEMS_1200:  'com.aiblur.quiz.gems_1200',
 
   // Ad-Free Passes
   REMOVE_ADS:          'com.aiblur.quiz.remove_ads',          // legacy lifetime alias
@@ -48,11 +46,9 @@ export const SKU_COINS: Partial<Record<IAPSku, number>> = {
 
 /** Gem amount granted per gem-pack SKU. */
 export const SKU_GEMS: Partial<Record<IAPSku, number>> = {
-  [IAP_SKUS.GEMS_50]:    50,
-  [IAP_SKUS.GEMS_100]:  100,
-  [IAP_SKUS.GEMS_250]:  250,
-  [IAP_SKUS.GEMS_500]:  500,
-  [IAP_SKUS.GEMS_1000]: 1000,
+  [IAP_SKUS.GEMS_100]:   100,
+  [IAP_SKUS.GEMS_500]:   500,
+  [IAP_SKUS.GEMS_1200]: 1200,
 };
 
 export interface IAPProduct {
@@ -70,18 +66,16 @@ const MOCK_PRODUCTS: Record<string, IAPProduct> = {
   [IAP_SKUS.COINS_1200]: { sku: IAP_SKUS.COINS_1200, title: '1 200 Coins',      description: 'Great value',                          price: '$9.99',  currency: 'USD' },
   [IAP_SKUS.COINS_2500]: { sku: IAP_SKUS.COINS_2500, title: '2 500 Coins',      description: 'Power player pack',                    price: '$19.99', currency: 'USD' },
   [IAP_SKUS.COINS_5000]: { sku: IAP_SKUS.COINS_5000, title: '5 000 Coins',      description: 'Best value',                           price: '$39.99', currency: 'USD' },
-  // Gem packs
-  [IAP_SKUS.GEMS_50]:    { sku: IAP_SKUS.GEMS_50,    title: '50 Gems',          description: 'Small gem pack',                       price: '$0.99',  currency: 'USD' },
-  [IAP_SKUS.GEMS_100]:   { sku: IAP_SKUS.GEMS_100,   title: '100 Gems',         description: 'Starter gem pack',                     price: '$1.70',  currency: 'USD' },
-  [IAP_SKUS.GEMS_250]:   { sku: IAP_SKUS.GEMS_250,   title: '250 Gems',         description: 'Popular gem pack',                     price: '$3.80',  currency: 'USD' },
-  [IAP_SKUS.GEMS_500]:   { sku: IAP_SKUS.GEMS_500,   title: '500 Gems',         description: 'Great value gem pack',                 price: '$6.99',  currency: 'USD' },
-  [IAP_SKUS.GEMS_1000]:  { sku: IAP_SKUS.GEMS_1000,  title: '1 000 Gems',       description: 'Best gem value',                       price: '$12.50', currency: 'USD' },
+  // Gem packs — spec v1.0.0
+  [IAP_SKUS.GEMS_100]:   { sku: IAP_SKUS.GEMS_100,   title: '100 Gems',         description: 'Starter gem pack',                     price: '$1.99',  currency: 'USD' },
+  [IAP_SKUS.GEMS_500]:   { sku: IAP_SKUS.GEMS_500,   title: '500 Gems',         description: 'Popular gem pack',                     price: '$4.99',  currency: 'USD' },
+  [IAP_SKUS.GEMS_1200]:  { sku: IAP_SKUS.GEMS_1200,  title: '1 200 Gems',       description: 'Best gem value',                       price: '$9.99',  currency: 'USD' },
   // Ad-Free
   [IAP_SKUS.REMOVE_ADS]:      { sku: IAP_SKUS.REMOVE_ADS,      title: 'Remove Ads (Lifetime)', description: 'Play without interruptions forever', price: '$4.99', currency: 'USD' },
   [IAP_SKUS.ADFREE_7DAY]:     { sku: IAP_SKUS.ADFREE_7DAY,     title: 'Ad-Free 7 Days',        description: 'No ads for a full week',             price: '$0.99', currency: 'USD' },
   [IAP_SKUS.ADFREE_LIFETIME]: { sku: IAP_SKUS.ADFREE_LIFETIME, title: 'Ad-Free Lifetime',      description: 'Never see an ad again',              price: '$4.99', currency: 'USD' },
   // Bundles
-  [IAP_SKUS.STARTER_PACK]:    { sku: IAP_SKUS.STARTER_PACK, title: 'Starter Pack',   description: '500 Coins + 100 Gems + Bronze Frame',  price: '$2.00', currency: 'USD' },
+  [IAP_SKUS.STARTER_PACK]:    { sku: IAP_SKUS.STARTER_PACK, title: 'Starter Pack',   description: '5 Combo Shields + 3 Clarity Bombs + Silver Frame', price: '$2.00', currency: 'USD' },
   [IAP_SKUS.SEASON_PASS]:     { sku: IAP_SKUS.SEASON_PASS,  title: 'Season Pass',    description: 'Exclusive season rewards — coming soon', price: '$5.00', currency: 'USD' },
 };
 
