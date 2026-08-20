@@ -46,9 +46,9 @@ export function FullBodyAvatarStage({
     return <View style={styles.stage} onLayout={onLayout} />;
   }
 
-  // This ground line matches the top surface of the existing pedestal layer.
-  // The stage extends below the avatar hitbox so the feet can meet it exactly.
-  const groundY = stageSize.height * 0.85;
+  // This ground line matches the rendered deck surface of the existing
+  // pedestal layer. The stage extends below the avatar hitbox to meet it.
+  const groundY = stageSize.height * 0.89;
   const characterHeight = stageSize.height * 0.90 * character.scale;
   const characterWidth = characterHeight * character.aspectRatio;
   const characterLeft =
@@ -62,7 +62,6 @@ export function FullBodyAvatarStage({
   const wingHeight = wing ? wingWidth / wing.aspectRatio : 0;
   const wingLeft = wing ? waistX - wing.anchor.x * wingWidth : 0;
   const wingTop = wing ? waistY - wing.anchor.y * wingHeight : 0;
-
   return (
     <View style={styles.stage} onLayout={onLayout} pointerEvents="none">
       {wing && (
