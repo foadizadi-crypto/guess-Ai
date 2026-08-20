@@ -449,7 +449,7 @@ export default function LobbyScreen() {
     },
     {
       id: "spinwheel",
-      left: "76.00%",
+      left: "78.00%",
       top: "68.5.00%",
       width: "25.15%",
       height: "9.89%",
@@ -470,11 +470,11 @@ export default function LobbyScreen() {
     {
       id: "stand_avatar",
       left: "29.69%",
-      top: "56.58%",
+      top: "55.8.58%",
       width: "37.73%",
       height: "6.74%",
       label: "Pedestal",
-      iconScale: 2.5, // ← بزرگ‌تر از بقیه
+      iconScale: 4.7, // ← بزرگ‌تر از بقیه
     },
     {
       id: "play",
@@ -587,15 +587,12 @@ export default function LobbyScreen() {
         );
 
       case "avatar_wing_frame":
-        return (
-          <View style={styles.centerHeroStageWrapperFrame}>
-            <FullBodyAvatarStage
-              avatarId={currentAvatar?.id ?? selectedAvatarId}
-              wingId={equippedWing}
-              level={level}
-            />
-          </View>
-        );
+        // The full-body avatar is rendered as a dedicated, always-on-top
+        // visual layer (see LobbyCharacterAnchor below) rather than here.
+        // This hitbox stays purely a tap target so its area-based zIndex
+        // (needed to keep smaller overlapping hitboxes tappable) never
+        // determines paint order between the avatar and the pedestal.
+        return null;
 
       case "coin":
       case "gem":
@@ -757,6 +754,60 @@ export default function LobbyScreen() {
             </PressableComponent>
           );
         })}
+
+        {/*
+          Lobby Character Anchor — dedicated visual-only layer for the
+          full-body avatar. It shares the exact same box as the
+          "avatar_wing_frame" hitbox above (so the character keeps standing
+          on the pedestal's calibrated contact point), but paints
+          independently of that hitbox's tap-priority zIndex, with
+          pointerEvents="none" so it can never intercept touches.
+
+          Root cause of the "avatar behind pedestal" bug: hitbox zIndex is
+          area-based (smaller box wins, so small tap targets aren't shadowed
+          by big ones) — that's correct for touch handling, but the pedestal
+          ("stand_avatar") has a much smaller hitbox area than the avatar
+          stage ("avatar_wing_frame"), so it was also painting on top of the
+          avatar. Rendering the avatar here, above the pedestal in paint
+          order, fixes the depth issue without touching any hitbox
+          coordinates or the tap-priority scheme other hitboxes rely on.
+        */}
+        {(() => {
+          const heroBox = hitboxes.find((b) => b.id === "avatar_wing_frame");
+          const pedestalBox = hitboxes.find((b) => b.id === "stand_avatar");
+          if (!heroBox) return null;
+
+          const pedestalArea =
+            parseFloat(pedestalBox?.width ?? "0") *
+            parseFloat(pedestalBox?.height ?? "0");
+          const pedestalZIndex = pedestalBox
+            ? Math.max(1, Math.round(HITBOX_Z_BASE - pedestalArea))
+            : 0;
+
+          return (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.hitboxAbsoluteNode,
+                {
+                  left: `${parseFloat(heroBox.left)}%`,
+                  top: `${parseFloat(heroBox.top)}%`,
+                  width: `${parseFloat(heroBox.width)}%`,
+                  height: `${parseFloat(heroBox.height)}%`,
+                  zIndex: pedestalZIndex + 1,
+                },
+              ]}
+            >
+              <View style={styles.centerHeroStageWrapperFrame}>
+                <FullBodyAvatarStage
+                  avatarId={currentAvatar?.id ?? selectedAvatarId}
+                  wingId={equippedWing}
+                  level={level}
+                />
+              </View>
+            </View>
+          );
+        })()}
 
         <DailyRewardModal
           visible={dailyModal}
