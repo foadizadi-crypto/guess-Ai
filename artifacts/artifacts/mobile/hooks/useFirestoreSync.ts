@@ -10,9 +10,6 @@
 
 import { useEffect, useRef } from 'react';
 import { useUserStore } from '@/store/userStore';
-import { initAuth, getPlayerId } from '@/services/authService';
-import { savePlayerProfile } from '@/services/firestoreService';
-import { fetchAndApplyRemoteConfig } from '@/services/remoteConfigService';
 
 /**
  * Local-first development mode.
@@ -36,12 +33,14 @@ export function useFirestoreSync(): void {
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    // Run both in parallel — remote config doesn't need auth
+    // Load backend modules only after sync is explicitly enabled. Keeping
+    // these imports lazy prevents Firebase initialization during local boot.
     Promise.all([
-      initAuth().catch((err) =>
-        console.warn('[FirestoreSync] initAuth failed:', err),
-      ),
-      fetchAndApplyRemoteConfig(),
+      import('@/services/authService')
+        .then(({ initAuth }) => initAuth())
+        .catch((err) => console.warn('[FirestoreSync] initAuth failed:', err)),
+      import('@/services/remoteConfigService')
+        .then(({ fetchAndApplyRemoteConfig }) => fetchAndApplyRemoteConfig()),
     ]);
   }, []);
 
@@ -56,6 +55,10 @@ export function useFirestoreSync(): void {
 
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(async () => {
+      const [{ getPlayerId }, { savePlayerProfile }] = await Promise.all([
+        import('@/services/authService'),
+        import('@/services/firestoreService'),
+      ]);
       const uid = getPlayerId();
       if (!uid) return;
 

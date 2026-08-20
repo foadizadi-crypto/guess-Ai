@@ -7,8 +7,8 @@
  * and handles the correct entry tree flow:
  * Onboarding (Tutorial) -> Login Screen -> Main Lobby Menu.
  */
-import React, { useEffect, useState } from "react";
-import { Stack, useRouter } from "expo-router";
+import React, { useEffect } from "react";
+import { Stack } from "expo-router";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useUserStore } from "@/store/userStore";
@@ -28,34 +28,12 @@ function ErrorFallback({ error }: { error: Error; resetError: () => void }) {
 }
 
 export default function RootLayout() {
-  const router = useRouter();
-  const [storeReady, setStoreReady] = useState<boolean>(false);
-
   // --- 1. Hooking into your live firestore sync & authentication boot layer ---
   useFirestoreSync();
 
   // --- 2. Pulling real profile parameters from your uploaded Zustand state shape ---
   const username = useUserStore((s) => s.username);
   const refreshDailyMissions = useUserStore((s) => s.refreshDailyMissions);
-
-  // --- CRITICAL AUDIT FIX (P0): Zustand AsyncStorage Hydration Synchronization ---
-  useEffect(() => {
-    // Check if the store has already initialized from AsyncStorage cache buffer
-    const hasHydrated = useUserStore.persist?.hasHydrated();
-
-    if (hasHydrated) {
-      setStoreReady(true);
-    } else {
-      const unsubFinishHydrate = useUserStore.persist.onFinishHydration(() => {
-        console.log("[Store Pipeline] AsyncStorage persistence sync complete.");
-        setStoreReady(true);
-      });
-
-      return () => {
-        unsubFinishHydrate();
-      };
-    }
-  }, []);
 
   // --- Daily missions refresh (NOT routing) ---
   //
@@ -69,22 +47,11 @@ export default function RootLayout() {
   // condition — so missionsDate stayed null forever, the lobby was
   // unreachable, and every launch bounced the player back to onboarding.
   useEffect(() => {
-    if (!storeReady) return;
-
     const isUserLoggedIn = username && username.trim().length > 0;
     if (isUserLoggedIn) {
       refreshDailyMissions();
     }
-  }, [storeReady, username]);
-
-  // Render native loading spinner until store state data is fully populated from memory
-  if (!storeReady) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#8B5CF6" />
-      </View>
-    );
-  }
+  }, [username, refreshDailyMissions]);
 
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback}>
@@ -109,12 +76,6 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: "#02000A",
-    justifyContent: "center",
-    alignItems: "center",
-  },
   errorContainer: {
     flex: 1,
     backgroundColor: "#02000A",
