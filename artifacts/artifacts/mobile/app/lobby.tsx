@@ -449,7 +449,7 @@ export default function LobbyScreen() {
     },
     {
       id: "spinwheel",
-      left: "78.00%",
+      left: "77.00%",
       top: "68.5.00%",
       width: "25.15%",
       height: "9.89%",
