@@ -920,7 +920,22 @@ export const useUserStore = create<UserState>()(
     }),
     {
       name: 'user-store',
-      storage: createJSONStorage(() => AsyncStorage)
+      storage: createJSONStorage(() => AsyncStorage),
+      // Expo Go is a development build. Seed one existing free wing there so
+      // the lobby wing placement can be inspected without changing release
+      // progression (the first free wing normally unlocks at level 5).
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<UserState>;
+        if (__DEV__ && !(persisted.ownedWings?.length)) {
+          return {
+            ...currentState,
+            ...persisted,
+            ownedWings: ['wing_basic'],
+            equippedWing: 'wing_basic',
+          };
+        }
+        return { ...currentState, ...persisted };
+      },
     }
   )
 );

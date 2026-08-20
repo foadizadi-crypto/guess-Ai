@@ -153,7 +153,6 @@ function LobbyWingShape({ wingId }: { wingId: string }) {
         height: 200,
       }}
     >
-      {/* Left feather */}
       <View
         style={{
           position: "absolute",
@@ -167,7 +166,6 @@ function LobbyWingShape({ wingId }: { wingId: string }) {
           transform: [{ rotate: "-22deg" }],
         }}
       />
-      {/* Right feather */}
       <View
         style={{
           position: "absolute",
@@ -181,7 +179,6 @@ function LobbyWingShape({ wingId }: { wingId: string }) {
           transform: [{ rotate: "22deg" }],
         }}
       />
-      {/* Inner glow */}
       <View
         style={{
           position: "absolute",
@@ -614,7 +611,6 @@ export default function LobbyScreen() {
       case "avatar_wing_frame":
         return (
           <View style={styles.centerHeroStageWrapperFrame}>
-            {/* Wing visual rendered behind the avatar — artwork placeholder */}
             {equippedWing && (
               <View style={styles.wingLayer} pointerEvents="none">
                 <LobbyWingShape wingId={equippedWing} />
