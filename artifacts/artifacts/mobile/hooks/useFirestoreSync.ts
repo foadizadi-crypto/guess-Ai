@@ -14,6 +14,15 @@ import { initAuth, getPlayerId } from '@/services/authService';
 import { savePlayerProfile } from '@/services/firestoreService';
 import { fetchAndApplyRemoteConfig } from '@/services/remoteConfigService';
 
+/**
+ * Local-first development mode.
+ *
+ * AsyncStorage-backed Zustand state is the source of truth while the API is
+ * being prepared. Flip this to true when Firebase and the API are ready; no
+ * startup network requests or background profile syncs are made while false.
+ */
+const ENABLE_BACKEND_SYNC = false;
+
 export function useFirestoreSync(): void {
   const initializedRef = useRef(false);
 
@@ -23,6 +32,7 @@ export function useFirestoreSync(): void {
 
   // ── Boot: anonymous sign-in + remote config fetch ────────────────────────
   useEffect(() => {
+    if (!ENABLE_BACKEND_SYNC) return;
     if (initializedRef.current) return;
     initializedRef.current = true;
 
@@ -40,6 +50,7 @@ export function useFirestoreSync(): void {
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (!ENABLE_BACKEND_SYNC) return;
     // Don't sync until we have a username (user has completed onboarding)
     if (!username) return;
 
