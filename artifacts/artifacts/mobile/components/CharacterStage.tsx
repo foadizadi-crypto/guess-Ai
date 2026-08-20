@@ -46,8 +46,22 @@ export function CharacterStage({ avatarId, wingId, style }: CharacterStageProps)
   const anchorX = avatarLeft + avatar.anchorX * avatarWidth;
   const anchorY = avatarTop + avatar.anchorY * avatarHeight;
 
-  const wingWidth = wing ? stageSize.width * 0.92 * wing.scale : 0;
-  const wingHeight = wing ? wingWidth / wing.aspectRatio : 0;
+  // Size the wing from stage width first (wings are typically wide relative
+  // to height), then clamp to the stage's own height budget so it can never
+  // clip top/bottom on short or wide viewports — a true "contain" fit against
+  // both axes, still driven entirely by the asset's own aspect ratio/scale.
+  let wingWidth = 0;
+  let wingHeight = 0;
+  if (wing) {
+    const widthBudget = stageSize.width * 0.92 * wing.scale;
+    const heightBudget = stageSize.height * 0.98;
+    wingWidth = widthBudget;
+    wingHeight = wingWidth / wing.aspectRatio;
+    if (wingHeight > heightBudget) {
+      wingHeight = heightBudget;
+      wingWidth = wingHeight * wing.aspectRatio;
+    }
+  }
   const wingLeft = wing ? anchorX - wing.anchorX * wingWidth : 0;
   const wingTop = wing ? anchorY - wing.anchorY * wingHeight : 0;
 
