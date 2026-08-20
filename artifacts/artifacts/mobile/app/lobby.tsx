@@ -62,21 +62,21 @@ interface HitboxItem {
 // =====================================================
 
 const buttonIcons: Record<string, any> = {
-  coin: require("../assets/icon/coin.png"),
-  gem: require("../assets/icon/gem.png"),
-  stamina: require("../assets/icon/stamina.png"),
-  spinwheel: require("../assets/icon/spinwheel.png"),
-  settings: require("../assets/icon/settings.png"),
-  play: require("../assets/icon/play.png"),
-  legendary_pack: require("../assets/icon/legendary_pack.png"),
-  gem_pack: require("../assets/icon/gem_pack.png"),
+  coin: require("../assets/icon/coin.webp"),
+  gem: require("../assets/icon/gem.webp"),
+  stamina: require("../assets/icon/stamina.webp"),
+  spinwheel: require("../assets/icon/spinwheel.webp"),
+  settings: require("../assets/icon/settings.webp"),
+  play: require("../assets/icon/play.webp"),
+  legendary_pack: require("../assets/icon/legendary_pack.webp"),
+  gem_pack: require("../assets/icon/gem_pack.webp"),
   admob: require("../assets/icon/AdMob_BG.png"),
-  leaderboard: require("../assets/icon/leaderboard.png"),
-  dailyreward: require("../assets/icon/daily-reward.jpg"),
-  shop: require("../assets/icon/shop.png"),
-  friends: require("../assets/icon/friends.png"),
-  achievement: require("../assets/icon/achievement.png"),
-  stand_avatar: require("../assets/icon/avatar_pedestal.png"),
+  leaderboard: require("../assets/icon/leaderboard.webp"),
+  dailyreward: require("../assets/icon/daily-reward.webp"),
+  shop: require("../assets/icon/shop.webp"),
+  friends: require("../assets/icon/friends.webp"),
+  achievement: require("../assets/icon/achievement.webp"),
+  stand_avatar: require("../assets/icon/avatar_pedestal.webp"),
 };
 
 // =====================================================
@@ -129,10 +129,10 @@ const SHOW_AMBIENT_FX = false;
 
 // ─── Wing rarity colours (mirrors WingsShopTab) ───────────────────────────────
 const WING_RARITY_COLOR: Record<WingRarity, string> = {
-  free:      '#00E676',
-  common:    '#B0B0B0',
-  rare:      '#6EC6FF',
-  legendary: '#FFD700',
+  free: "#00E676",
+  common: "#B0B0B0",
+  rare: "#6EC6FF",
+  legendary: "#FFD700",
 };
 
 /**
@@ -145,27 +145,53 @@ function LobbyWingShape({ wingId }: { wingId: string }) {
   if (!wing) return null;
   const color = WING_RARITY_COLOR[wing.rarity];
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', width: 200, height: 200 }}>
+    <View
+      style={{
+        alignItems: "center",
+        justifyContent: "center",
+        width: 200,
+        height: 200,
+      }}
+    >
       {/* Left feather */}
-      <View style={{
-        position: 'absolute', left: 10, bottom: 40,
-        width: 68, height: 110, borderRadius: 34,
-        backgroundColor: color, opacity: 0.55,
-        transform: [{ rotate: '-22deg' }],
-      }} />
+      <View
+        style={{
+          position: "absolute",
+          left: 10,
+          bottom: 40,
+          width: 68,
+          height: 110,
+          borderRadius: 34,
+          backgroundColor: color,
+          opacity: 0.55,
+          transform: [{ rotate: "-22deg" }],
+        }}
+      />
       {/* Right feather */}
-      <View style={{
-        position: 'absolute', right: 10, bottom: 40,
-        width: 68, height: 110, borderRadius: 34,
-        backgroundColor: color, opacity: 0.55,
-        transform: [{ rotate: '22deg' }],
-      }} />
+      <View
+        style={{
+          position: "absolute",
+          right: 10,
+          bottom: 40,
+          width: 68,
+          height: 110,
+          borderRadius: 34,
+          backgroundColor: color,
+          opacity: 0.55,
+          transform: [{ rotate: "22deg" }],
+        }}
+      />
       {/* Inner glow */}
-      <View style={{
-        position: 'absolute',
-        width: 30, height: 30, borderRadius: 15,
-        backgroundColor: color, opacity: 0.28,
-      }} />
+      <View
+        style={{
+          position: "absolute",
+          width: 30,
+          height: 30,
+          borderRadius: 15,
+          backgroundColor: color,
+          opacity: 0.28,
+        }}
+      />
     </View>
   );
 }
@@ -409,46 +435,51 @@ export default function LobbyScreen() {
     },
     {
       id: "settings",
-      left: "80.00%",
+      left: "85.00%",
       top: "4.00%",
       width: "16.00%",
       height: "6.50%",
       label: "Settings",
+      iconScale: 0.8,
     },
     {
       id: "stamina",
-      left: "78.00%",
-      top: "11.00%",
+      left: "82.00%",
+      top: "13.00%",
       width: "20.32%",
       height: "4.94%",
       label: `${energy || 0}/${MAX_ENERGY || 20}`,
       hasTextOverlay: true,
+      iconScale: 1.3 ,
     },
     {
       id: "gem",
-      left: "78.00%",
-      top: "16.50%",
+      left: "82.00%",
+      top: "20.50%",
       width: "20.32%",
       height: "4.94%",
       label: gems?.toString() || "0",
       hasTextOverlay: true,
+      iconScale: 1.3 ,
     },
     {
       id: "coin",
-      left: "78.00%",
-      top: "22.00%",
+      left: "83.00%",
+      top: "28.00%",
       width: "19.35%",
       height: "5.39%",
       label: coins?.toLocaleString() || "0",
       hasTextOverlay: true,
+      iconScale: 1.1 ,
     },
     {
       id: "spinwheel",
-      left: "73.00%",
-      top: "67.00%",
+      left: "76.00%",
+      top: "68.5.00%",
       width: "25.15%",
       height: "9.89%",
       label: "Spin",
+      iconScale: 1 ,
     },
     {
       id: "avatar_wing_frame",
@@ -464,61 +495,66 @@ export default function LobbyScreen() {
     {
       id: "stand_avatar",
       left: "29.69%",
-      top: "54.58%",
+      top: "56.58%",
       width: "37.73%",
       height: "6.74%",
       label: "Pedestal",
-      iconScale: 3.5, // ← بزرگ‌تر از بقیه
+      iconScale: 2.5, // ← بزرگ‌تر از بقیه
     },
     {
       id: "play",
       left: "21.95%",
-      top: "64.00%",
+      top: "68.00%",
       width: "54.18%",
       height: "9.89%",
       label: "Play",
+      iconScale: 1.3,
     },
     {
       id: "dailyreward",
-      left: "51.00%",
-      top: "70.00%",
+      left: "1.00%",
+      top: "71.00%",
       width: "19.35%",
       height: "6.74%",
       label: "Reward",
+      iconScale: 1.7,
     },
     {
       id: "legendary_pack",
-      left: "51.00%",
-      top: "78.00%",
+      left: "1.00%",
+      top: "80.00%",
       width: "19.35%",
       height: "6.74%",
       label: "Legendary",
       premium: true,
+      iconScale: 1.3,
     },
     {
       id: "gem_pack",
-      left: "76.00%",
-      top: "77.00%",
+      left: "80.00%",
+      top: "79.00%",
       width: "19.35%",
       height: "7.19%",
       label: "Gem Pack",
       premium: true,
+      iconScale: 1.2,
     },
     {
       id: "admob",
       left: "30.66%",
-      top: "79.40%",
+      top: "78.40%",
       width: "37.73%",
       height: "5.84%",
       label: "AdMob",
     },
     {
       id: "achievement",
-      left: "78.00%",
-      top: "85.00%",
+      left: "82.00%",
+      top: "85.6.00%",
       width: "15.48%",
       height: "12.58%",
       label: "Badges",
+      iconScale: 1.3,
     },
     {
       id: "friends",
@@ -527,22 +563,25 @@ export default function LobbyScreen() {
       width: "15.48%",
       height: "12.58%",
       label: "Friends",
+      iconScale: 1.3,
     },
     {
       id: "shop",
-      left: "30.83%",
-      top: "85.00%",
+      left: "27.83%",
+      top: "85.5.00%",
       width: "15.48%",
       height: "12.58%",
       label: "Shop",
+      iconScale: 1.4,
     },
     {
       id: "leaderboard",
-      left: "5.00%",
-      top: "85.00%",
+      left: "3.00%",
+      top: "85.5.00%",
       width: "15.48%",
       height: "12.58%",
       label: "Leaderboard",
+      iconScale: 1.5,
     },
   ];
 

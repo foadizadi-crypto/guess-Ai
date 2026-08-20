@@ -43,15 +43,15 @@ export function CoinIcon({ size = 20 }: IconProps) {
 // ─── PNG UI icons (assets/icon/) ──────────────────────────────────────────────
 
 const UI_ICONS = {
-  achievement: require("@/assets/icon/achievement.png"),
+  achievement: require("@/assets/icon/achievement.webp"),
   combo: require("@/assets/icon/combo.png"),
   correct: require("@/assets/icon/correct.png"),
-  friends: require("@/assets/icon/friends.png"),
-  leaderboard: require("@/assets/icon/leaderboard.png"),
+  friends: require("@/assets/icon/friends.webp"),
+  leaderboard: require("@/assets/icon/leaderboard.webp"),
   profile: require("@/assets/icon/profile.png"),
   score: require("@/assets/icon/score.png"),
-  settings: require("@/assets/icon/settings.png"),
-  shop: require("@/assets/icon/shop.png"),
+  settings: require("@/assets/icon/settings.webp"),
+  shop: require("@/assets/icon/shop.webp"),
   wrong: require("@/assets/icon/wrong.png"),
 } as const;
 
