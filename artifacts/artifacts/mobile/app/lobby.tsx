@@ -20,6 +20,7 @@ import { Audio } from "expo-av";
 import { AvatarFrame } from "@/components/AvatarFrame";
 import { AnimatedIcon } from "@/components/AnimatedIcon";
 import { DailyRewardModal } from "@/components/DailyRewardModal";
+import { PlayerNameModal, isValidPlayerName } from "@/components/PlayerNameModal";
 import { FullBodyAvatarStage } from "@/components/FullBodyAvatarStage";
 
 import { useUserStore } from "@/store/userStore";
@@ -133,6 +134,9 @@ export default function LobbyScreen() {
 
   const [debugMode, setDebugMode] = useState<boolean>(false);
   const [dailyModal, setDailyModal] = useState<boolean>(false);
+  // Gate for actions that require a saved Player Name (Play, avatar/pedestal tap).
+  const [nameModalVisible, setNameModalVisible] = useState<boolean>(false);
+  const pendingActionRef = useRef<string | null>(null);
   const [soundInstance, setSoundInstance] = useState<Audio.Sound | null>(null);
   // Plays the one-shot entry flourish (splash.json) each time the lobby mounts;
   // onAnimationFinish flips this back to false so it does not linger.
@@ -144,6 +148,7 @@ export default function LobbyScreen() {
 
   const {
     username,
+    setUsername,
     coins,
     gems,
     level,
@@ -279,7 +284,27 @@ export default function LobbyScreen() {
   // ACTION ROUTER
   // ===================================================
 
+  // Actions that require a valid, saved Player Name before they proceed.
+  const NAME_GATED_ACTIONS = ["play", "avatar_wing_frame", "stand_avatar"];
+
   const handleActionTrigger = async (actionName: string) => {
+    if (
+      NAME_GATED_ACTIONS.includes(actionName) &&
+      !isValidPlayerName(useUserStore.getState().username)
+    ) {
+      pendingActionRef.current = actionName;
+      setNameModalVisible(true);
+      return;
+    }
+
+    await performAction(actionName);
+  };
+
+  // The actual navigation/side-effects for a hitbox action, once any Player
+  // Name gating has already been satisfied. Split out from handleActionTrigger
+  // so the post-name-save resume path can call it directly without re-running
+  // (and risking a stale-closure re-trigger of) the gate check above.
+  const performAction = async (actionName: string) => {
     console.log(`[Lobby Icon UI Engine] Action executed: ${actionName}`);
 
     if (["play", "spinwheel", "shop", "dailyreward"].includes(actionName)) {
@@ -352,6 +377,23 @@ export default function LobbyScreen() {
         break;
     }
   };
+
+  // Called when the player submits a valid name from the "HELLO, COMMANDER"
+  // modal. Saves it to the existing user store, then resumes whichever
+  // gated action (Play / avatar tap) originally triggered the prompt —
+  // calling performAction directly so it never re-runs the name gate.
+  const handleNameSubmit = useCallback(
+    (name: string) => {
+      setUsername(name);
+      setNameModalVisible(false);
+      const action = pendingActionRef.current;
+      pendingActionRef.current = null;
+      if (action) {
+        performAction(action);
+      }
+    },
+    [setUsername], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // ===================================================
   // HITBOXES
@@ -729,6 +771,8 @@ export default function LobbyScreen() {
           onClaim={claimDailyReward}
           energyReward={10}
         />
+
+        <PlayerNameModal visible={nameModalVisible} onSubmit={handleNameSubmit} />
 
         <View
           style={[
