@@ -1,11 +1,17 @@
 /**
- * customization.tsx — Character Customization (Part 1)
+ * customization.tsx — Character Customization (Part 1 + Part 2)
  *
  * Lets the player pick their equipped avatar and wing. A live preview at the
  * top of the screen always reflects the current selection immediately.
  *
+ * Both rows show every item in three states — equipped (highlighted),
+ * owned (bright/tappable), locked (dimmed + lock icon, not tappable). Tapping
+ * an owned item equips it immediately; the avatar and wing slots are
+ * independent, so equipping one never touches the other.
+ *
  * All equip state is the existing userStore state (selectedAvatarId,
- * avatars, ownedWings, equippedWing) — nothing new is introduced here.
+ * avatars, ownedWings, equippedWing) — nothing new is introduced here, and
+ * locked items never touch inventory or currency.
  */
 import React, { useMemo } from 'react';
 import {
@@ -43,19 +49,25 @@ export default function CustomizationScreen() {
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 6;
   const bottomPad = Platform.OS === 'web' ? 20 : insets.bottom + 20;
 
-  const ownedWingDefs = useMemo(
-    () => ALL_WINGS.filter((w) => ownedWings.includes(w.id)),
+  // "None" is always owned/unlocked — it is not an inventory item.
+  const wingRow = useMemo(
+    () => [
+      { id: null as string | null, name: 'None', owned: true },
+      ...ALL_WINGS.map((w) => ({ id: w.id as string | null, name: w.name, owned: ownedWings.includes(w.id) })),
+    ],
     [ownedWings],
   );
 
-  const handleSelectAvatar = (avatarId: string) => {
-    if (avatarId === selectedAvatarId) return;
+  const handleSelectAvatar = (avatarId: string, unlocked: boolean) => {
+    // Locked items can never be equipped, and equipping never touches
+    // inventory or currency — this is a pure state swap on an owned item.
+    if (!unlocked || avatarId === selectedAvatarId) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     selectAvatar(avatarId);
   };
 
-  const handleSelectWing = (wingId: string | null) => {
-    if (wingId === equippedWing) return;
+  const handleSelectWing = (wingId: string | null, owned: boolean) => {
+    if (!owned || wingId === equippedWing) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     equipWing(wingId);
   };
@@ -90,11 +102,12 @@ export default function CustomizationScreen() {
             return (
               <TouchableOpacity
                 key={avatar.id}
-                activeOpacity={0.8}
+                activeOpacity={locked ? 1 : 0.8}
                 disabled={locked}
-                onPress={() => handleSelectAvatar(avatar.id)}
+                onPress={() => handleSelectAvatar(avatar.id, avatar.unlocked)}
                 style={[
                   styles.card,
+                  !locked && !equipped && styles.cardOwned,
                   equipped && styles.cardEquipped,
                   locked && styles.cardLocked,
                 ]}
@@ -117,30 +130,37 @@ export default function CustomizationScreen() {
         {/* ── Wings ──────────────────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Wings</Text>
         <View style={styles.grid}>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => handleSelectWing(null)}
-            style={[styles.card, equippedWing === null && styles.cardEquipped]}
-          >
-            <Ionicons name="close-circle-outline" size={22} color={GameColors.textSecondary} />
-            <Text style={styles.cardName}>None</Text>
-            {equippedWing === null && (
-              <View style={styles.equippedTag}>
-                <Text style={styles.equippedTagText}>Equipped</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          {ownedWingDefs.map((wing) => {
+          {wingRow.map((wing) => {
             const equipped = wing.id === equippedWing;
+            const locked = !wing.owned;
             return (
               <TouchableOpacity
-                key={wing.id}
-                activeOpacity={0.8}
-                onPress={() => handleSelectWing(wing.id)}
-                style={[styles.card, equipped && styles.cardEquipped]}
+                key={wing.id ?? 'none'}
+                activeOpacity={locked ? 1 : 0.8}
+                disabled={locked}
+                onPress={() => handleSelectWing(wing.id, wing.owned)}
+                style={[
+                  styles.card,
+                  !locked && !equipped && styles.cardOwned,
+                  equipped && styles.cardEquipped,
+                  locked && styles.cardLocked,
+                ]}
               >
-                <Text style={styles.cardName} numberOfLines={1}>{wing.name}</Text>
+                {locked ? (
+                  <Ionicons name="lock-closed" size={22} color={GameColors.textSecondary} />
+                ) : (
+                  <>
+                    {wing.id === null && (
+                      <Ionicons
+                        name="close-circle-outline"
+                        size={18}
+                        color={GameColors.textSecondary}
+                        style={{ marginBottom: 2 }}
+                      />
+                    )}
+                    <Text style={styles.cardName} numberOfLines={1}>{wing.name}</Text>
+                  </>
+                )}
                 {equipped && (
                   <View style={styles.equippedTag}>
                     <Text style={styles.equippedTagText}>Equipped</Text>
@@ -149,12 +169,6 @@ export default function CustomizationScreen() {
               </TouchableOpacity>
             );
           })}
-
-          {ownedWingDefs.length === 0 && (
-            <Text style={styles.emptyHint}>
-              No wings owned yet — find them in the Shop.
-            </Text>
-          )}
         </View>
       </ScrollView>
     </AnimatedBackground>
@@ -233,13 +247,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 6,
   },
+  cardOwned: {
+    borderColor: 'rgba(255,255,255,0.28)',
+  },
   cardEquipped: {
     borderColor: GameColors.accentGold,
     borderWidth: 2,
     backgroundColor: 'rgba(255,215,0,0.08)',
   },
   cardLocked: {
-    opacity: 0.5,
+    opacity: 0.45,
   },
   cardName: {
     ...Typography.small,
@@ -258,10 +275,5 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '800',
     color: GameColors.backgroundPrimary,
-  },
-  emptyHint: {
-    ...Typography.small,
-    color: GameColors.textSecondary,
-    marginTop: 4,
   },
 });
