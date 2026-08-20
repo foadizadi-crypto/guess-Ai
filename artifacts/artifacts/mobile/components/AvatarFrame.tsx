@@ -24,7 +24,7 @@ interface AvatarFrameProps {
 const AVATAR_IMAGES: Record<string, ImageSourcePropType> = {
   // by imageKey
   abigail: require('@/assets/avatar/Abigail.webp'),
-  chloe:   require('@/assets/avatar/chlöe.webp'),
+  chloe:   require('@/assets/avatar/chloe.webp'),
   daveigh: require('@/assets/avatar/Daveigh.webp'),
   haley:   require('@/assets/avatar/Haley.webp'),
   heather: require('@/assets/avatar/Heather.webp'),
@@ -35,7 +35,7 @@ const AVATAR_IMAGES: Record<string, ImageSourcePropType> = {
   sissy:   require('@/assets/avatar/Sissy.webp'),
   // by avatar id (selectedAvatarId)
   avatar_1:  require('@/assets/avatar/Abigail.webp'),
-  avatar_2:  require('@/assets/avatar/chlöe.webp'),
+  avatar_2:  require('@/assets/avatar/chloe.webp'),
   avatar_3:  require('@/assets/avatar/Daveigh.webp'),
   avatar_4:  require('@/assets/avatar/Haley.webp'),
   avatar_5:  require('@/assets/avatar/Heather.webp'),

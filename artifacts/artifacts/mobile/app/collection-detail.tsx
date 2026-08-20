@@ -31,7 +31,7 @@ const BADGE_IMAGES: Record<string, ImageSourcePropType> = {
 // ─── Avatar PNG images (for avatar collection cards) ──────────────────────────
 const AVATAR_IMAGES: Record<string, ImageSourcePropType> = {
   avatar_1:  require('@/assets/avatar/Abigail.webp'),
-  avatar_2:  require('@/assets/avatar/chlöe.webp'),
+  avatar_2:  require('@/assets/avatar/chloe.webp'),
   avatar_3:  require('@/assets/avatar/Daveigh.webp'),
   avatar_4:  require('@/assets/avatar/Haley.webp'),
   avatar_5:  require('@/assets/avatar/Heather.webp'),

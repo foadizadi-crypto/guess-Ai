@@ -13,6 +13,7 @@ export const ROUTES = {
   SHOP: '/shop',
   LEADERBOARD: '/leaderboard',
   PROFILE: '/profile',
+  CUSTOMIZATION: '/customization',
   DAILY_REWARD: '/daily-reward',
   SETTINGS: '/settings',
   ACHIEVEMENTS: '/achievements',

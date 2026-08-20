@@ -297,9 +297,11 @@ export default function LobbyScreen() {
 
     switch (actionName) {
       case "profile_lvl_playername":
+        router.push(ROUTES.PROFILE);
+        break;
       case "avatar_wing_frame":
       case "stand_avatar":
-        router.push(ROUTES.PROFILE);
+        router.push(ROUTES.CUSTOMIZATION);
         break;
       case "shop":
         router.push(ROUTES.SHOP);

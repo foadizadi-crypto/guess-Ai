@@ -33,6 +33,7 @@ Two variants that show up together with a deletion sweep:
 
 - **A reference to a file that never existed.** Code updated to a new format (e.g. `lobby_BG.webp`) while only the old `lobby_BG.png` is on disk. Converting the restored original (`ffmpeg -i in.png -c:v libwebp -quality 90 out.webp`) honours the newer intent and matches the rest of the pipeline; repointing the reference at the old file is the alternative.
 - **Casing drift in newly added assets.** Hand-added files (`Particles.json` vs a `particles.json` reference) fail only on case-sensitive filesystems.
+- **Non-ASCII character drift, not just casing.** A `require('.../chlöe.webp')` next to an on-disk `chloe.webp` (no diacritic at all) is not an NFC/NFD normalization issue — it is two different strings. `ls` + `grep`/`od -c` the exact bytes on both sides before assuming a Unicode-normalization fix will help.
 
 **Why:** an app "failing to run" was four independent breakages stacked — a dead tunnel, 14 deleted PNGs, a casing mismatch, and a reference to a never-created `.webp`. Each one masked the next, because Metro only ever reports the first unresolved module.
 
