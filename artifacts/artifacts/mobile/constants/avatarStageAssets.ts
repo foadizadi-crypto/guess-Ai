@@ -28,7 +28,7 @@ export const CHARACTER_STAGE_ASSETS: Record<string, CharacterStageAsset> = {
   avatar_4:  { source: require("@/assets/characters/4.webp"),  aspectRatio: 1080 / 1920, scale: 1.08, footAnchor: { x: 0.50, y: 0.951 }, waistAnchor: { x: 0.50, y: 0.53 } },
   avatar_5:  { source: require("@/assets/characters/5.webp"),  aspectRatio: 1080 / 1620, scale: 1.00, footAnchor: { x: 0.50, y: 0.928 }, waistAnchor: { x: 0.50, y: 0.54 } },
   avatar_6:  { source: require("@/assets/characters/6.webp"),  aspectRatio: 1080 / 1620, scale: 1.04, footAnchor: { x: 0.50, y: 0.897 }, waistAnchor: { x: 0.50, y: 0.50 } },
-  avatar_7:  { source: require("@/assets/characters/7.webp"),  aspectRatio: 1080 / 1620, scale: 1.00, footAnchor: { x: 0.50, y: 0.928 }, waistAnchor: { x: 0.50, y: 0.54 } },
+  avatar_7:  { source: require("@/assets/characters/7.webp"),  aspectRatio: 1080 / 1660, scale: 1.00, footAnchor: { x: 0.50, y: 0.974 }, waistAnchor: { x: 0.50, y: 0.39 } },
   avatar_8:  { source: require("@/assets/characters/8.webp"),  aspectRatio: 1080 / 1920, scale: 1.08, footAnchor: { x: 0.50, y: 0.954 }, waistAnchor: { x: 0.50, y: 0.54 } },
   avatar_9:  { source: require("@/assets/characters/9.webp"),  aspectRatio: 1080 / 1920, scale: 1.05, footAnchor: { x: 0.50, y: 0.944 }, waistAnchor: { x: 0.50, y: 0.50 } },
   avatar_10: { source: require("@/assets/characters/10.png"), aspectRatio: 1080 / 1389, scale: 0.96, footAnchor: { x: 0.50, y: 0.984 }, waistAnchor: { x: 0.50, y: 0.52 } },
