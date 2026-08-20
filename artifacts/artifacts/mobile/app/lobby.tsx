@@ -20,6 +20,7 @@ import { Audio } from "expo-av";
 import { AvatarFrame } from "@/components/AvatarFrame";
 import { AnimatedIcon } from "@/components/AnimatedIcon";
 import { DailyRewardModal } from "@/components/DailyRewardModal";
+import { FullBodyAvatarStage } from "@/components/FullBodyAvatarStage";
 
 import { useUserStore } from "@/store/userStore";
 import { useAudio } from "@/hooks/useAudio";
@@ -31,7 +32,6 @@ import {
   STAMINA_AD_REWARD,
   STAMINA_ADS_PER_DAY,
 } from "@/constants/economy";
-import { ALL_WINGS, type WingRarity } from "@/constants/wings";
 import { DAILY_REWARDS } from "@/constants";
 import { ROUTES } from "@/navigation/routes";
 
@@ -126,72 +126,6 @@ const getIconAnimation = (id: string): "float" | "pulse" | "spin" | "none" => {
  * The one-shot entry burst (splash.json) is unaffected and still plays.
  */
 const SHOW_AMBIENT_FX = false;
-
-// ─── Wing rarity colours (mirrors WingsShopTab) ───────────────────────────────
-const WING_RARITY_COLOR: Record<WingRarity, string> = {
-  free: "#00E676",
-  common: "#B0B0B0",
-  rare: "#6EC6FF",
-  legendary: "#FFD700",
-};
-
-/**
- * LobbyWingShape — stylised wing rendered behind the avatar when the player
- * has a wing equipped.  No artwork yet; swap in real assets when available.
- * Must NOT affect layout — it is rendered inside an absolute-positioned View.
- */
-function LobbyWingShape({ wingId }: { wingId: string }) {
-  const wing = ALL_WINGS.find((w) => w.id === wingId);
-  if (!wing) return null;
-  const color = WING_RARITY_COLOR[wing.rarity];
-  return (
-    <View
-      style={{
-        alignItems: "center",
-        justifyContent: "center",
-        width: 200,
-        height: 200,
-      }}
-    >
-      <View
-        style={{
-          position: "absolute",
-          left: 10,
-          bottom: 40,
-          width: 68,
-          height: 110,
-          borderRadius: 34,
-          backgroundColor: color,
-          opacity: 0.55,
-          transform: [{ rotate: "-22deg" }],
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          right: 10,
-          bottom: 40,
-          width: 68,
-          height: 110,
-          borderRadius: 34,
-          backgroundColor: color,
-          opacity: 0.55,
-          transform: [{ rotate: "22deg" }],
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          width: 30,
-          height: 30,
-          borderRadius: 15,
-          backgroundColor: color,
-          opacity: 0.28,
-        }}
-      />
-    </View>
-  );
-}
 
 export default function LobbyScreen() {
   const router = useRouter();
@@ -611,16 +545,9 @@ export default function LobbyScreen() {
       case "avatar_wing_frame":
         return (
           <View style={styles.centerHeroStageWrapperFrame}>
-            {equippedWing && (
-              <View style={styles.wingLayer} pointerEvents="none">
-                <LobbyWingShape wingId={equippedWing} />
-              </View>
-            )}
-            <AvatarFrame
-              imageKey={currentAvatar?.imageKey ?? "abigail"}
-              frameId={equippedCosmetics?.frame}
-              size={130}
-              showLevel
+            <FullBodyAvatarStage
+              avatarId={currentAvatar?.id ?? selectedAvatarId}
+              wingId={equippedWing}
               level={level}
             />
           </View>
@@ -1012,13 +939,7 @@ const styles = StyleSheet.create({
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
-  },
-  wingLayer: {
-    position: "absolute",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 200,
-    height: 200,
+    overflow: "visible",
   },
   debugLabelMeshCellContainer: {
     position: "absolute",

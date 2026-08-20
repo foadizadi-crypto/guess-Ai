@@ -50,6 +50,7 @@ import {
 } from '@/constants/economy';
 import { notificationService } from '@/services/NotificationService';
 import { calculateLevel, isToday, getTodayUTCString } from '@/utils';
+import { WING_STAGE_ASSETS } from '@/constants/avatarStageAssets';
 
 const DEFAULT_NETWORK_MODE: 'auto' | 'online' | 'offline' =
   process.env.EXPO_PUBLIC_USE_ONLINE_AI === 'true' ? 'online' : 'auto';
@@ -926,11 +927,16 @@ export const useUserStore = create<UserState>()(
       // progression (the first free wing normally unlocks at level 5).
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<UserState>;
-        if (__DEV__ && !(persisted.ownedWings?.length)) {
+        const hasSupportedWingEquipped =
+          !!persisted.equippedWing &&
+          !!WING_STAGE_ASSETS[persisted.equippedWing];
+        if (__DEV__ && !hasSupportedWingEquipped) {
           return {
             ...currentState,
             ...persisted,
-            ownedWings: ['wing_basic'],
+            ownedWings: Array.from(
+              new Set([...(persisted.ownedWings ?? []), 'wing_basic']),
+            ),
             equippedWing: 'wing_basic',
           };
         }
