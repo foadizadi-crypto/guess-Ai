@@ -30,6 +30,10 @@ set -u
 # still tries to use it and aborts the whole process with an ApiV2Error —
 # even in plain direct mode. Unset it so `expo start` always runs anonymously.
 unset EXPO_TOKEN
+# CI=1 makes the Expo CLI skip the interactive "log in / proceed anonymously"
+# prompt (added in recent Expo Go versions) that otherwise hangs forever with
+# no TTY attached to the workflow.
+export CI=1
 
 PORT="${PORT:-18115}"
 EXTERNAL_PORT="${EXPO_EXTERNAL_PORT:-3000}"

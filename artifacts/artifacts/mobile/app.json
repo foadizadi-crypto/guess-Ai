@@ -20,9 +20,15 @@
         "NSCameraUsageDescription": "Camera is not used by this app.",
         "NSPhotoLibraryUsageDescription": "Photo library is not used by this app.",
         "SKAdNetworkItems": [
-          { "SKAdNetworkIdentifier": "cstr6suwn9.skadnetwork" },
-          { "SKAdNetworkIdentifier": "4fzdc2evr5.skadnetwork" },
-          { "SKAdNetworkIdentifier": "2fnua5tdw4.skadnetwork" }
+          {
+            "SKAdNetworkIdentifier": "cstr6suwn9.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "4fzdc2evr5.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "2fnua5tdw4.skadnetwork"
+          }
         ]
       }
     },
@@ -63,11 +69,25 @@
             "4fzdc2evr5.skadnetwork"
           ]
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.2.20"
+          }
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "20821321-dbf7-4d22-bd0a-513f0b5a8073"
+      }
+    },
+    "owner": "devdev59"
   }
 }
