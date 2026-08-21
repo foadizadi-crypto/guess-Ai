@@ -57103,6 +57103,18 @@ function startOfWeekMs() {
   const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + diffToMonday));
   return monday.getTime();
 }
+async function getWeeklySortedTotals() {
+  const db = getFirestore();
+  const weekStart = startOfWeekMs();
+  const snap = await db.collection("game_sessions").where("startTime", ">=", weekStart).get();
+  const totals = /* @__PURE__ */ new Map();
+  snap.forEach((doc) => {
+    const d = doc.data();
+    if (!d.playerId) return;
+    totals.set(d.playerId, (totals.get(d.playerId) ?? 0) + (d.xpEarned ?? 0));
+  });
+  return [...totals.entries()].sort(([, a], [, b]) => b - a);
+}
 router5.get("/leaderboard", async (req, res) => {
   const type = req.query["type"] ?? "global";
   const limit3 = Math.min(Number(req.query["limit"] ?? 50), 100);
@@ -57110,19 +57122,13 @@ router5.get("/leaderboard", async (req, res) => {
     const db = getFirestore();
     let entries = [];
     if (type === "weekly") {
-      const weekStart = startOfWeekMs();
-      const snap = await db.collection("game_sessions").where("startTime", ">=", weekStart).get();
-      const totals = /* @__PURE__ */ new Map();
-      snap.forEach((doc) => {
-        const d = doc.data();
-        if (!d.playerId) return;
-        totals.set(d.playerId, (totals.get(d.playerId) ?? 0) + (d.xpEarned ?? 0));
-      });
-      if (totals.size === 0) {
+      const sortedTotals = await getWeeklySortedTotals();
+      if (sortedTotals.length === 0) {
         res.json([]);
         return;
       }
-      const playerIds = [...totals.keys()];
+      const sorted = sortedTotals.slice(0, limit3);
+      const playerIds = sorted.map(([userId]) => userId);
       const batches = [];
       for (let i = 0; i < playerIds.length; i += 30) {
         batches.push(playerIds.slice(i, i + 30));
@@ -57139,7 +57145,6 @@ router5.get("/leaderboard", async (req, res) => {
           });
         });
       }
-      const sorted = [...totals.entries()].sort(([, a], [, b]) => b - a).slice(0, limit3);
       entries = sorted.map(([userId, xp], i) => ({
         rank: i + 1,
         userId,
@@ -57166,6 +57171,38 @@ router5.get("/leaderboard", async (req, res) => {
   } catch (err) {
     logger.warn({ err }, "Firestore unavailable \u2014 returning empty leaderboard");
     res.json([]);
+  }
+});
+router5.get("/leaderboard/rank", async (req, res) => {
+  const type = req.query["type"] ?? "global";
+  const userId = req.query["userId"];
+  if (!userId) {
+    res.status(400).json({ error: "userId is required" });
+    return;
+  }
+  try {
+    const db = getFirestore();
+    if (type === "weekly") {
+      const sortedTotals = await getWeeklySortedTotals();
+      const index = sortedTotals.findIndex(([id]) => id === userId);
+      if (index === -1) {
+        res.json({ rank: null, xp: 0 });
+        return;
+      }
+      res.json({ rank: index + 1, xp: sortedTotals[index][1] });
+      return;
+    }
+    const playerDoc = await db.collection("players").doc(userId).get();
+    if (!playerDoc.exists) {
+      res.json({ rank: null, xp: 0 });
+      return;
+    }
+    const xp = playerDoc.data().xp ?? 0;
+    const higherCount = await db.collection("players").where("xp", ">", xp).count().get();
+    res.json({ rank: higherCount.data().count + 1, xp });
+  } catch (err) {
+    logger.warn({ err }, "Firestore unavailable \u2014 returning unranked");
+    res.json({ rank: null, xp: 0 });
   }
 });
 var leaderboard_default = router5;
