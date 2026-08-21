@@ -16,3 +16,4 @@
 - [Economy audit v1.0.0](economy-audit-v1.md) — all corrected economy constants (energy/XP/rewards/wings/IAP); use this before touching any economy feature.
 - [TS type patterns for RN images](ts-rn-image-types.md) — use `Record<string, ImageSourcePropType>` not `Record<string, ReturnType<typeof require>>` for image maps; the latter resolves to unknown in strict mode.
 - [ActiveMission field names](active-mission-fields.md) — use `progress`/`reward`/`rewardClaimed` not `current`/`rewardCoins`/`claimed`; `AchievementCheckContext` wraps stats+avatars into one arg for checkAchievementCondition.
+- [EAS Android Kotlin metadata](eas-android-kotlin-metadata.md) — Google Mobile Ads may require a Gradle metadata compatibility flag on Expo SDK 54 builds.
