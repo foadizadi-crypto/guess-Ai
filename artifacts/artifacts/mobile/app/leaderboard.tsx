@@ -9,6 +9,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withDelay,
+  Easing,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedBackground } from '@/components/AnimatedBackground';
@@ -20,6 +28,49 @@ import { useUserStore } from '@/store/userStore';
 import { getPlayerId } from '@/services/authService';
 import { formatScore } from '@/utils';
 import type { LeaderboardEntry } from '@/types';
+
+// ─── Glow pulse wrapper ─────────────────────────────────────────────────────
+// Purely visual: animates a soft glow ring behind top-3 rows and the current
+// player's row. Does not intercept touches or alter layout/data flow.
+const GlowPulse: React.FC<{ color: string; delay?: number; children: React.ReactNode }> = ({
+  color,
+  delay = 0,
+  children,
+}) => {
+  const glow = useSharedValue(0.35);
+
+  useEffect(() => {
+    glow.value = withDelay(
+      delay,
+      withRepeat(
+        withTiming(0.9, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
+        -1,
+        true,
+      ),
+    );
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glow.value,
+    shadowOpacity: glow.value,
+  }));
+
+  return (
+    <Animated.View
+      pointerEvents="box-none"
+      style={[
+        styles.glowWrap,
+        glowStyle,
+        {
+          shadowColor: color,
+          borderColor: color,
+        },
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -105,8 +156,17 @@ export default function LeaderboardScreen() {
     const isTop = item.rank <= 3;
     const isMe  = item.userId === getPlayerId();
 
-    return (
-      <View style={[styles.row, isTop && styles.topRow, isMe && styles.myRow]}>
+    const row = (
+      <View
+        style={[
+          styles.row,
+          isTop && styles.topRow,
+          item.rank === 1 && styles.rankGold,
+          item.rank === 2 && styles.rankSilver,
+          item.rank === 3 && styles.rankBronze,
+          isMe && styles.myRow,
+        ]}
+      >
         <View style={styles.rank}>
           {isTop
             ? <Ionicons name="trophy" size={20} color={color} />
@@ -122,6 +182,18 @@ export default function LeaderboardScreen() {
         <Text style={[styles.score, { color }]}>{formatScore(item.score)}</Text>
       </View>
     );
+
+    // Top-3 ranks and the current player's row get an animated glow pulse.
+    // Everything else about the row (data, layout, touch targets) is untouched.
+    if (isTop || isMe) {
+      const glowColor = isTop ? color : GameColors.accentGold;
+      return (
+        <GlowPulse color={glowColor} delay={item.rank * 150}>
+          {row}
+        </GlowPulse>
+      );
+    }
+    return row;
   };
 
   // ── Empty / error states ───────────────────────────────────────────────────
@@ -153,7 +225,10 @@ export default function LeaderboardScreen() {
   };
 
   return (
-    <AnimatedBackground>
+    <AnimatedBackground
+      backgroundImage={require('../assets/background/leaderboard_BG.webp')}
+      overlayOpacity={0.3}
+    >
       <View style={[styles.container, { paddingTop: topPad, paddingBottom: bottomPad }]}>
 
         {/* Header */}
@@ -253,7 +328,7 @@ const styles = StyleSheet.create({
   tabText:         { ...Typography.bodyMedium, color: GameColors.textSecondary, fontSize: 13 },
   activeTabText:   { color: GameColors.backgroundPrimary, fontFamily: 'Inter_700Bold' },
 
-  currentCard:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: GameColors.border, marginBottom: 14 },
+  currentCard:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderRadius: 18, backgroundColor: 'rgba(30, 10, 50, 0.55)', borderWidth: 1, borderColor: GameColors.cardBorder, marginBottom: 14, shadowColor: GameColors.accentGold, shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
   currentIdentity: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   currentName:     { ...Typography.bodyMedium, color: GameColors.textWhite, fontFamily: 'Inter_700Bold' },
   currentMeta:     { ...Typography.small, color: GameColors.textSecondary, marginTop: 2 },
@@ -261,15 +336,22 @@ const styles = StyleSheet.create({
 
   listHeading:     { ...Typography.small, color: GameColors.textSecondary, letterSpacing: 1.5, marginBottom: 10 },
 
-  row:             { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, marginBottom: 8, backgroundColor: 'rgba(255,255,255,0.04)' },
-  topRow:          { backgroundColor: 'rgba(255,215,0,0.07)', borderWidth: 1, borderColor: 'rgba(255,215,0,0.18)' },
-  myRow:           { borderWidth: 1, borderColor: GameColors.accentGold + '55' },
+  row:             { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, marginBottom: 8, backgroundColor: 'rgba(20, 6, 38, 0.6)' },
+  topRow:          { backgroundColor: 'rgba(255,215,0,0.09)', borderWidth: 1, borderColor: 'rgba(255,215,0,0.22)' },
+  myRow:           { borderWidth: 1.5, borderColor: GameColors.accentGold },
+  rankGold:        { borderColor: '#FFD700', backgroundColor: 'rgba(255,215,0,0.12)' },
+  rankSilver:      { borderColor: '#C0C0C0', backgroundColor: 'rgba(192,192,192,0.10)' },
+  rankBronze:      { borderColor: '#CD7F32', backgroundColor: 'rgba(205,127,50,0.10)' },
   rank:            { width: 28, alignItems: 'center' },
   rankText:        { fontSize: 15, fontFamily: 'Inter_700Bold' },
   identity:        { flex: 1 },
   name:            { ...Typography.bodyMedium, color: GameColors.textWhite, fontSize: 14 },
   levelText:       { ...Typography.small, color: GameColors.textSecondary, fontSize: 12 },
   score:           { fontSize: 15, fontFamily: 'Inter_700Bold' },
+
+  // Glow wrapper around top-3 / current-player rows. `marginBottom` moved
+  // here from `row` since the glow wrapper is now the outer, spacing element.
+  glowWrap:        { borderRadius: 16, borderWidth: 1.5, marginBottom: 8, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 5 },
 
   center:          { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingTop: 40 },
   emptyList:       { flex: 1 },

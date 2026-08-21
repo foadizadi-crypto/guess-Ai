@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, View, Dimensions } from 'react-native';
+import { StyleSheet, View, Dimensions, ImageSourcePropType } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -84,14 +85,40 @@ const AnimatedOrb: React.FC<{ orb: OrbConfig }> = ({ orb }) => {
 interface AnimatedBackgroundProps {
   children?: React.ReactNode;
   style?: object;
+  /**
+   * Optional full-screen background image (e.g. a themed screen backdrop).
+   * When provided, it replaces the flat `backgroundPrimary` fill while the
+   * floating orb particles keep animating on top of it, so screens can opt
+   * into a custom backdrop without losing the shared ambient effect.
+   */
+  backgroundImage?: ImageSourcePropType;
+  /** Dark scrim opacity (0-1) drawn over `backgroundImage` for text contrast. Default 0.35. */
+  overlayOpacity?: number;
 }
 
 export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
   children,
   style,
+  backgroundImage,
+  overlayOpacity = 0.35,
 }) => (
   <View style={[styles.container, style]}>
-    <View style={styles.fill} />
+    {backgroundImage ? (
+      <>
+        <ExpoImage
+          source={backgroundImage}
+          style={styles.fill}
+          contentFit="cover"
+          transition={300}
+          cachePolicy="memory-disk"
+        />
+        <View
+          style={[styles.fill, { backgroundColor: `rgba(13, 2, 33, ${overlayOpacity})` }]}
+        />
+      </>
+    ) : (
+      <View style={styles.fill} />
+    )}
     {ORBS.map((orb, i) => (
       <AnimatedOrb key={i} orb={orb} />
     ))}
