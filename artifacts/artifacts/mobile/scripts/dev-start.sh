@@ -25,6 +25,12 @@
 #
 set -u
 
+# The dev server never needs Expo account auth (no EAS build/update calls
+# happen here). If EXPO_TOKEN is set but invalid/misconfigured, the Expo CLI
+# still tries to use it and aborts the whole process with an ApiV2Error —
+# even in plain direct mode. Unset it so `expo start` always runs anonymously.
+unset EXPO_TOKEN
+
 PORT="${PORT:-18115}"
 EXTERNAL_PORT="${EXPO_EXTERNAL_PORT:-3000}"
 
