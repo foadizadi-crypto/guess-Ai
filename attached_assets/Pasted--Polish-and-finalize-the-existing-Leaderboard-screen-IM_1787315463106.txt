@@ -1,0 +1,101 @@
+
+
+Polish and finalize the existing Leaderboard screen.
+
+IMPORTANT:
+The existing Leaderboard background artwork is approved. Do NOT replace, regenerate, crop, or modify it.
+
+LAYOUT:
+
+The entire Leaderboard must fit on ONE mobile screen.
+Do NOT make the page scrollable.
+
+Structure from top to bottom:
+
+1. Top-left: Back button
+   - Tapping it immediately returns to Lobby.
+
+2. Top/center: "LEADERBOARD" title.
+
+3. Top 3:
+   - Display Ranks #1, #2, #3 horizontally.
+   - Make them visually more prominent than the other players.
+   - Use Gold/Silver/Bronze medal treatment.
+
+4. Top 10 list:
+   Display exactly 10 players vertically:
+   #1
+   #2
+   #3
+   #4
+   #5
+   #6
+   #7
+   #8
+   #9
+   #10
+
+Each row should show:
+- Rank
+- Small player Avatar
+- Player Name
+- Wins
+- Losses
+- Draws
+- Medal only for #1, #2, #3
+
+5. Current Player Rank:
+   After Rank #10, add a clearly separated compact section showing ONLY the current player's real-time rank, for example:
+
+   ─────────
+      #182
+   ─────────
+
+   Do not duplicate the player's full information here.
+
+6. No additional tabs, filters, pagination, or scrolling.
+
+VISUAL DESIGN:
+
+The current buttons and player rows are too simple.
+
+Upgrade the UI to a premium AAA mobile-game style matching the existing Lobby and Leaderboard artwork.
+
+Use code-based UI styling only. Do NOT create new image assets.
+
+Use:
+- Dark Purple translucent surfaces
+- Subtle Glass effect
+- Violet/Purple glow
+- Elegant borders
+- Soft depth/shadows
+- Premium typography
+- Strong visual hierarchy
+- Special treatment for Top 3
+- Clear highlight for the current player's rank
+
+Keep the UI elegant and readable. Do not make the boxes overly bright, thick, or heavy because the background artwork is already highly detailed and shiny.
+
+RESPONSIVENESS:
+
+- Must fit on one screen across common mobile sizes.
+- Do not use ScrollView for the main Leaderboard.
+- Dynamically size/space rows if necessary.
+- Text must never overlap or clip.
+- Keep the Back button easily tappable.
+
+DO NOT CHANGE:
+- Leaderboard data logic
+- Ranking logic
+- Existing player state
+- Navigation
+- Background artwork
+- Shop
+- Profile
+- Economy
+- Inventory
+- Other screens
+
+Only improve the Leaderboard layout and visual presentation.
+
+After implementation, verify the complete Leaderboard fits on one screen at common mobile viewport sizes and that all 10 players, current rank, Back button, and Top 3 are visible simultaneously.
