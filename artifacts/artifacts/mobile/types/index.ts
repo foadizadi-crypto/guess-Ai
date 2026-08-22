@@ -52,7 +52,7 @@ export interface GameSession {
 
 export interface Question {
   id: string;
-  imageUrl: string;
+  imageUrl: string | null;
   answer: string;
   options: string[];
   correctIndex: number;

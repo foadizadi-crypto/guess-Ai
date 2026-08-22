@@ -16,3 +16,17 @@ type = "unspecified"
 title = "BlurQuiz Android APK"
 description = "Install this preview APK directly on an Android phone to test the BlurQuiz game."
 logical_id = "22ac72e7-cd5a-4bae-bcda-d859981350d9"
+
+[[outputs]]
+id = "SIyDO_Dj3dPG0F0ZS0Fae"
+uri = "file://artifacts/artifacts/mobile/assets/background/customization_BG.png"
+type = "image"
+title = "Customization page background"
+description = "Dark purple fantasy backdrop generated for the BlurQuiz customization screen."
+logical_id = "ae912376-fdd0-48d3-a3bf-8791f441fa5d"
+content_hash = "sha256:e1b357a6cd6dfb4fb9ae56326b64287e8f78ddd6fe822409dd0bdb321b78a163"
+size = 1351600
+mtime_ms = 1787366488364
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:1dc67624-ed0c-4811-99df-ae7724ad5cda/ae912376-fdd0-48d3-a3bf-8791f441fa5d/c5adc733-e6b3-448c-95e2-4adf55480ec3"
+storage_version_token = "1787366540591168"
+content_type = "image/png"

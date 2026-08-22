@@ -4,7 +4,7 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "EXPO_USE_TUNNEL=${EXPO_USE_TUNNEL:-1} EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_REPL_ID=$REPL_ID EXPO_PUBLIC_API_URL=https://$REPLIT_DEV_DOMAIN:8080 bash scripts/dev-start.sh",
+    "dev": "EXPO_USE_TUNNEL=${EXPO_USE_TUNNEL:-1} EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_REPL_ID=$REPL_ID EXPO_PUBLIC_API_URL=https://$REPLIT_DEV_DOMAIN bash scripts/dev-start.sh",
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",

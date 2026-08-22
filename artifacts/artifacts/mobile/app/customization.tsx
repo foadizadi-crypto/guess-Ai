@@ -73,7 +73,10 @@ export default function CustomizationScreen() {
   };
 
   return (
-    <AnimatedBackground>
+    <AnimatedBackground
+      backgroundImage={require('../assets/background/customization_BG.png')}
+      overlayOpacity={0.42}
+    >
       <View style={[styles.header, { paddingTop: topPad }]}>
         <BackButton fallbackRoute={ROUTES.LOBBY} />
         <Text style={styles.headerTitle}>Customize</Text>

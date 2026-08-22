@@ -182,7 +182,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: SH * 0.38,
     backgroundColor: 'transparent',
-    background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.85))',
   } as never,
   header: {
     position: 'absolute',

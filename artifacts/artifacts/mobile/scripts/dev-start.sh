@@ -25,15 +25,15 @@
 #
 set -u
 
-# The dev server never needs Expo account auth (no EAS build/update calls
-# happen here). If EXPO_TOKEN is set but invalid/misconfigured, the Expo CLI
-# still tries to use it and aborts the whole process with an ApiV2Error —
-# even in plain direct mode. Unset it so `expo start` always runs anonymously.
-unset EXPO_TOKEN
-# CI=1 makes the Expo CLI skip the interactive "log in / proceed anonymously"
-# prompt (added in recent Expo Go versions) that otherwise hangs forever with
-# no TTY attached to the workflow.
-export CI=1
+# Expo's tunnel flow may require account authentication. Replit injects
+# EXPO_TOKEN when one is configured; keep it available so the CLI can
+# authenticate instead of prompting in the non-interactive workflow.
+# Without a token, direct mode still works anonymously.
+if [ -n "${EXPO_TOKEN:-}" ]; then
+  export CI=1
+else
+  export CI=0
+fi
 
 PORT="${PORT:-18115}"
 EXTERNAL_PORT="${EXPO_EXTERNAL_PORT:-3000}"

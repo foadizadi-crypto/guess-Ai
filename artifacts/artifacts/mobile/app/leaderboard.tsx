@@ -102,6 +102,25 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 // Real players' XP changes as anyone plays; poll periodically so the board
 // (and the player's own rank) stays current without needing a manual reload.
 const AUTO_REFRESH_MS = 20_000;
+const REQUEST_TIMEOUT_MS = 8_000;
+
+/** Prevent a network or Firestore request from leaving the screen loading forever. */
+async function fetchWithTimeout(
+  url: string,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 function avatarKey(avatarId: string): string {
   return `avatar_${avatarId.replace('avatar_', '')}`;
@@ -126,20 +145,25 @@ export default function LeaderboardScreen() {
     setError(null);
 
     try {
-      const [listRes, rankRes] = await Promise.all([
-        fetch(`${API_URL}/api/leaderboard?type=global&limit=10`),
+      // The rank endpoint is supplementary: a slow rank calculation must not
+      // prevent the top-10 leaderboard from appearing.
+      const [listResult, rankResult] = await Promise.allSettled([
+        fetchWithTimeout(`${API_URL}/api/leaderboard?type=global&limit=10`),
         uid
-          ? fetch(`${API_URL}/api/leaderboard/rank?type=global&userId=${encodeURIComponent(uid)}`)
-          : Promise.resolve(null),
+          ? fetchWithTimeout(`${API_URL}/api/leaderboard/rank?type=global&userId=${encodeURIComponent(uid)}`)
+          : Promise.resolve(null as Response | null),
       ]);
 
+      if (listResult.status === 'rejected') throw listResult.reason;
+      const listRes = listResult.value;
       if (!listRes.ok) throw new Error(`Server returned ${listRes.status}`);
       const list = (await listRes.json()) as ApiEntry[];
       setTop10(list);
 
       // Prefer the dedicated rank endpoint (accurate even outside Top 10);
       // fall back to the Top 10 list itself if that request failed.
-      if (rankRes && rankRes.ok) {
+      const rankRes = rankResult.status === 'fulfilled' ? rankResult.value : null;
+      if (rankRes?.ok) {
         const rankData = (await rankRes.json()) as RankEntry;
         setMyRank(rankData.rank);
       } else {

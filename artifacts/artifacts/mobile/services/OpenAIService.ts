@@ -17,10 +17,22 @@ export interface GenerateQuestionsResult {
 // ─── Cache helpers ─────────────────────────────────────────────────────────────
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+/** Refresh the cache when less than 12 h of TTL remains (i.e. it's > 12 h old). */
+const CACHE_REFRESH_THRESHOLD_MS = 12 * 60 * 60 * 1000;
+
+/** AsyncStorage key that holds the list of recently played category+difficulty pairs. */
+const RECENT_PLAYS_KEY = 'question_cache_recent_plays';
+/** Maximum number of recent play entries to track. */
+const MAX_RECENT_PLAYS = 10;
 
 interface CacheEntry {
   questions: Question[];
   savedAt: number; // epoch ms
+}
+
+interface RecentPlay {
+  category: Category;
+  difficulty: Difficulty;
 }
 
 function cacheKey(category: Category, difficulty: Difficulty): string {
@@ -56,9 +68,44 @@ async function writeCache(
   }
 }
 
+/**
+ * Read the list of recently played category+difficulty pairs from AsyncStorage.
+ * Returns an empty array on any error.
+ */
+async function readRecentPlays(): Promise<RecentPlay[]> {
+  try {
+    const raw = await AsyncStorage.getItem(RECENT_PLAYS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as RecentPlay[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Persist a recently played pair.  Moves the entry to the front of the list
+ * (most-recently-played first) and caps the list at MAX_RECENT_PLAYS.
+ */
+async function persistRecentPlay(category: Category, difficulty: Difficulty): Promise<void> {
+  try {
+    const plays = await readRecentPlays();
+    // Remove any existing entry for this combination so it rises to the front.
+    const filtered = plays.filter(
+      (p) => !(p.category === category && p.difficulty === difficulty),
+    );
+    const updated: RecentPlay[] = [{ category, difficulty }, ...filtered].slice(
+      0,
+      MAX_RECENT_PLAYS,
+    );
+    await AsyncStorage.setItem(RECENT_PLAYS_KEY, JSON.stringify(updated));
+  } catch {
+    // Best-effort
+  }
+}
+
 // ─── API base URL ─────────────────────────────────────────────────────────────
-// On Replit: EXPO_PUBLIC_API_URL is injected by the dev script as
-//   https://$REPLIT_DEV_DOMAIN:8080
+// On Replit: EXPO_PUBLIC_API_URL is injected by the dev script as the public
+// HTTPS domain (the API server is routed through the domain, not :8080).
 // For local development outside Replit: falls back to localhost:8080.
 
 const API_BASE: string =
@@ -135,8 +182,9 @@ class OpenAIService {
         id: q.id ?? generateId(),
       }));
 
-      // Persist to cache for offline use
+      // Persist to cache for offline use and record this as a recent play
       void writeCache(category, difficulty, questions);
+      void persistRecentPlay(category, difficulty);
 
       return { questions, fromCache: false };
     } catch (networkErr) {
@@ -147,6 +195,49 @@ class OpenAIService {
       }
       // No cache available — re-throw so the UI can show an error
       throw networkErr;
+    }
+  }
+
+  /**
+   * Silently refresh cached questions for recently played category+difficulty
+   * pairs whose cache is older than CACHE_REFRESH_THRESHOLD_MS (12 h).
+   *
+   * Designed to be called fire-and-forget on app foreground — it never throws
+   * and never blocks the UI.  If the network is unavailable the fetch simply
+   * fails silently and the existing (possibly expired) cache remains intact.
+   */
+  async warmCache(): Promise<void> {
+    try {
+      const plays = await readRecentPlays();
+      if (plays.length === 0) return;
+
+      for (const { category, difficulty } of plays) {
+        try {
+          // Check how old the current cache entry is without running the full
+          // readCache() path (which returns null for expired entries).
+          const raw = await AsyncStorage.getItem(cacheKey(category, difficulty));
+          const age = raw
+            ? Date.now() - (JSON.parse(raw) as CacheEntry).savedAt
+            : Infinity;
+
+          // Skip if the cache is still fresh enough.
+          if (age < CACHE_REFRESH_THRESHOLD_MS) continue;
+
+          if (__DEV__) {
+            console.log(
+              `[CacheWarm] refreshing ${category}/${difficulty} (age ${Math.round(age / 3_600_000)}h)`,
+            );
+          }
+
+          // Re-fetch questions — on success writeCache is called inside
+          // generateQuestions, so the cache gets updated automatically.
+          await this.generateQuestions(category, difficulty);
+        } catch {
+          // Per-entry failure is silent; move on to the next entry.
+        }
+      }
+    } catch {
+      // Top-level failure is also silent.
     }
   }
 }
