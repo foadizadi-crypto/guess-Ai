@@ -29,7 +29,10 @@ export default function AchievementsScreen() {
   const unlockedCount = achievements.filter((a) => a.unlocked).length;
 
   return (
-    <AnimatedBackground>
+    <AnimatedBackground
+      backgroundImage={require('../assets/background/achievements_BG.png')}
+      overlayOpacity={0.48}
+    >
       <ScrollView
         contentContainerStyle={[styles.container, { paddingTop: topPad, paddingBottom: botPad }]}
         showsVerticalScrollIndicator={false}
