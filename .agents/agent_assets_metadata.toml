@@ -7,6 +7,7 @@ uri = "file://screenshots/expo-qr.png"
 type = "image"
 title = "Fresh QR Code — scan with Expo Go"
 description = "Open Expo Go on your phone and scan to load BlurQuiz."
+logical_id = "6d58e0c6-9fbe-43c1-8d46-80879032327a"
 
 [[outputs]]
 id = "x6ylmowkhwKhiAOCxDhpB"
@@ -14,3 +15,4 @@ uri = "file://BlurQuiz-preview.apk"
 type = "unspecified"
 title = "BlurQuiz Android APK"
 description = "Install this preview APK directly on an Android phone to test the BlurQuiz game."
+logical_id = "22ac72e7-cd5a-4bae-bcda-d859981350d9"
