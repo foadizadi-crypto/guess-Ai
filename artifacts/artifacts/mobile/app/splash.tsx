@@ -17,6 +17,9 @@ import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { storageService } from '@/services/StorageService';
 import { ROUTES } from '@/navigation/routes';
+import { waitForAuthReady, completeRedirectSignIn } from '@/services/authService';
+import { fetchRegisteredNickname } from '@/services/nicknameService';
+import { useUserStore } from '@/store/userStore';
 
 // ─── Single loading dot ────────────────────────────────────────────────────
 
@@ -119,22 +122,38 @@ export default function SplashScreen() {
       if (navigated.current) return;
       navigated.current = true;
       try {
-        const [done, username] = await Promise.all([
+        // Complete a pending web redirect sign-in (if the player just came
+        // back from Google) before deciding where to route.
+        await completeRedirectSignIn();
+
+        const [done, user] = await Promise.all([
           storageService.isOnboardingDone(),
-          storageService.loadUsername(),
+          waitForAuthReady(),
         ]);
+
         if (!done) {
           router.replace(ROUTES.ONBOARDING);
-        } else if (!username) {
-          router.replace(ROUTES.LOGIN);
-        } else {
-          router.replace(ROUTES.LOBBY);
+          return;
         }
+        if (!user) {
+          // No Google session — Google Sign-In is mandatory, there is no
+          // guest path.
+          router.replace(ROUTES.LOGIN);
+          return;
+        }
+
+        // Signed in: restore this account's registered nickname (if any)
+        // so a returning player never sees the nickname modal again.
+        if (!useUserStore.getState().username) {
+          const nickname = await fetchRegisteredNickname(user.uid);
+          if (nickname) useUserStore.getState().setUsername(nickname);
+        }
+        router.replace(ROUTES.LOBBY);
       } catch (err) {
-        // Never strand the player on the splash screen: if the storage read
-        // fails we cannot tell where they belong, so send them through
-        // onboarding rather than leaving the logo spinning forever.
-        console.warn('[Splash] startup storage read failed', err);
+        // Never strand the player on the splash screen: if the startup
+        // check fails we cannot tell where they belong, so send them
+        // through onboarding rather than leaving the logo spinning forever.
+        console.warn('[Splash] startup check failed', err);
         router.replace(ROUTES.ONBOARDING);
       }
     }, 3000);

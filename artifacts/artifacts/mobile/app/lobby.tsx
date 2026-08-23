@@ -21,6 +21,8 @@ import { AvatarFrame } from "@/components/AvatarFrame";
 import { AnimatedIcon } from "@/components/AnimatedIcon";
 import { DailyRewardModal } from "@/components/DailyRewardModal";
 import { PlayerNameModal, isValidPlayerName } from "@/components/PlayerNameModal";
+import { registerNickname } from "@/services/nicknameService";
+import { getPlayerId } from "@/services/authService";
 import { FullBodyAvatarStage } from "@/components/FullBodyAvatarStage";
 
 import { useUserStore } from "@/store/userStore";
@@ -378,19 +380,38 @@ export default function LobbyScreen() {
     }
   };
 
-  // Called when the player submits a valid name from the "HELLO, COMMANDER"
-  // modal. Saves it to the existing user store, then resumes whichever
-  // gated action (Play / avatar tap) originally triggered the prompt —
-  // calling performAction directly so it never re-runs the name gate.
+  // Called when the player submits a name from the "HELLO, COMMANDER" modal.
+  // Registers it atomically with the backend (server-enforced, globally
+  // unique) before ever saving it locally or unlocking gameplay — if the
+  // name is already taken, the modal stays open and shows the error inline.
+  // Only on confirmed success do we save locally and resume whichever
+  // gated action (Play / avatar tap) originally triggered the prompt.
   const handleNameSubmit = useCallback(
-    (name: string) => {
-      setUsername(name);
+    async (name: string): Promise<{ ok: boolean; message?: string }> => {
+      const playerId = getPlayerId();
+      if (!playerId) {
+        return { ok: false, message: "You're not signed in. Please restart the app." };
+      }
+
+      const result = await registerNickname(playerId, name);
+      if (!result.ok) {
+        const message =
+          result.reason === "taken"
+            ? "Already taken"
+            : result.reason === "invalid"
+              ? "That nickname isn't valid."
+              : "Could not reach the server. Please try again.";
+        return { ok: false, message };
+      }
+
+      setUsername(result.nickname);
       setNameModalVisible(false);
       const action = pendingActionRef.current;
       pendingActionRef.current = null;
       if (action) {
         performAction(action);
       }
+      return { ok: true };
     },
     [setUsername], // eslint-disable-line react-hooks/exhaustive-deps
   );

@@ -22,12 +22,12 @@ import { Platform } from 'react-native';
 
 // ─── Firebase project config (from google-services.json / Firebase console) ─
 const firebaseConfig = {
-  apiKey:            'AIzaSyBVt8KqSIKaA9KckVU_JJMbuGuCOzzi6is',
-  authDomain:        'blurquiz.firebaseapp.com',
-  projectId:         'blurquiz',
-  storageBucket:     'blurquiz.firebasestorage.app',
-  messagingSenderId: '856856840962',
-  appId:             '1:856856840962:android:9dd686ea2d6aa7a9c6101b',
+  apiKey:            'AIzaSyDZdpmXwDlv8Ber4mwkMzJ-8Z5TlKspQZY',
+  authDomain:        'blurquiz-554ea.firebaseapp.com',
+  projectId:         'blurquiz-554ea',
+  storageBucket:     'blurquiz-554ea.firebasestorage.app',
+  messagingSenderId: '415580358646',
+  appId:             '1:415580358646:android:c8fb4ff2423755cfc4a9d7',
 };
 
 // Guard against hot-reload double-initialization

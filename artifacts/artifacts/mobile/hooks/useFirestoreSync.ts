@@ -1,47 +1,29 @@
 /**
- * useFirestoreSync — Task 5.
- *
- * Initializes Firebase anonymous auth on app startup and syncs
- * the current player profile to Firestore whenever the key economy
- * fields change (coins, XP, level).
+ * useFirestoreSync — mirrors the local Zustand economy state to Firestore
+ * under `players/{uid}`, where `uid` is the canonical playerId (the
+ * Firebase Auth UID from Google Sign-In). Backend sync is only meaningful
+ * once a player is signed in, so every effect here is a no-op until
+ * `getPlayerId()` resolves to a real UID.
  *
  * Add <FirestoreSyncProvider /> near the root of the app (see _layout.tsx).
  */
 
 import { useEffect, useRef } from 'react';
 import { useUserStore } from '@/store/userStore';
-
-/**
- * Local-first development mode.
- *
- * AsyncStorage-backed Zustand state is the source of truth while the API is
- * being prepared. Flip this to true when Firebase and the API are ready; no
- * startup network requests or background profile syncs are made while false.
- */
-const ENABLE_BACKEND_SYNC = false;
+import { getPlayerId, onPlayerIdChange } from '@/services/authService';
 
 export function useFirestoreSync(): void {
-  const initializedRef = useRef(false);
-
   // Subscribe to the economy fields we want to mirror
   const { username, coins, gems, xp, level, isPremium, selectedAvatarId, statistics } =
     useUserStore();
 
-  // ── Boot: anonymous sign-in + remote config fetch ────────────────────────
+  // ── Track sign-in / sign-out so a fresh sign-in immediately syncs ───────
+  const uidRef = useRef<string | null>(getPlayerId());
   useEffect(() => {
-    if (!ENABLE_BACKEND_SYNC) return;
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-
-    // Load backend modules only after sync is explicitly enabled. Keeping
-    // these imports lazy prevents Firebase initialization during local boot.
-    Promise.all([
-      import('@/services/authService')
-        .then(({ initAuth }) => initAuth())
-        .catch((err) => console.warn('[FirestoreSync] initAuth failed:', err)),
-      import('@/services/remoteConfigService')
-        .then(({ fetchAndApplyRemoteConfig }) => fetchAndApplyRemoteConfig()),
-    ]);
+    const unsub = onPlayerIdChange((uid) => {
+      uidRef.current = uid;
+    });
+    return unsub;
   }, []);
 
   // ── Sync on economy state change ─────────────────────────────────────────
@@ -49,19 +31,14 @@ export function useFirestoreSync(): void {
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!ENABLE_BACKEND_SYNC) return;
-    // Don't sync until we have a username (user has completed onboarding)
+    // Don't sync until the player is signed in and has a registered nickname.
     if (!username) return;
+    const uid = getPlayerId();
+    if (!uid) return;
 
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(async () => {
-      const [{ getPlayerId }, { savePlayerProfile }] = await Promise.all([
-        import('@/services/authService'),
-        import('@/services/firestoreService'),
-      ]);
-      const uid = getPlayerId();
-      if (!uid) return;
-
+      const { savePlayerProfile } = await import('@/services/firestoreService');
       await savePlayerProfile(uid, {
         username,
         coins,

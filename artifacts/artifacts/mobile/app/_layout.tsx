@@ -10,11 +10,11 @@ import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { notificationService } from '@/services/NotificationService';
 import { openAIService } from '@/services/OpenAIService';
 import { savePushToken } from '@/services/firestoreService';
-import { initAuth } from '@/services/authService';
+import { waitForAuthReady } from '@/services/authService';
 
 const queryClient = new QueryClient();
 
-/** Runs Firestore anonymous-auth init + player profile sync in the background. */
+/** Runs Firestore player-profile sync in the background once signed in. */
 function FirestoreSyncProvider() {
   useFirestoreSync();
   return null;
@@ -22,16 +22,20 @@ function FirestoreSyncProvider() {
 
 /**
  * Fetch the Expo push token (if permission is granted) and persist it to
- * Firestore.  Awaits `initAuth()` first so the UID is always available —
- * `initAuth()` is idempotent and resolves immediately after the first call.
+ * Firestore. Google Sign-In is mandatory but happens on the login screen,
+ * not at app boot, so a UID may not exist yet here (e.g. first launch,
+ * before the player has signed in) — in that case this is a no-op and the
+ * retry on the next AppState resume (or the next app launch, once signed
+ * in) picks it up instead of silently pretending to succeed with no UID.
  */
 async function persistPushToken(): Promise<void> {
   try {
     const token = await notificationService.getExpoPushToken();
     if (!token) return;
     if (__DEV__) console.log('[Push token]', token);
-    const uid = await initAuth();
-    await savePushToken(uid, token);
+    const user = await waitForAuthReady();
+    if (!user) return;
+    await savePushToken(user.uid, token);
   } catch (err) {
     console.warn('[Push token] failed to persist:', err);
   }
@@ -51,8 +55,8 @@ function NotificationProvider() {
       await notificationService.scheduleDailyReward();
       await notificationService.scheduleWeeklyReward();
 
-      // Permission is now confirmed — fetch and persist the push token.
-      // initAuth() is awaited inside so UID is guaranteed even on first launch.
+      // Permission is now confirmed — fetch and persist the push token
+      // (persistPushToken() itself no-ops until the player is signed in).
       await persistPushToken();
     });
 

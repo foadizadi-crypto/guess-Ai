@@ -9,6 +9,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { GameColors } from '@/theme/colors';
@@ -23,29 +24,46 @@ export function isValidPlayerName(name: string): boolean {
 
 interface PlayerNameModalProps {
   visible: boolean;
-  onSubmit: (name: string) => void;
+  /**
+   * Called with the trimmed name once the player submits. Must resolve to
+   * `{ ok: true }` once the server confirms the nickname was registered, or
+   * `{ ok: false, message }` to keep the modal open and show an inline
+   * error (e.g. "Already taken"). The modal has no dismiss affordance —
+   * gameplay stays locked until this resolves with `ok: true`.
+   */
+  onSubmit: (name: string) => Promise<{ ok: boolean; message?: string }>;
 }
 
 /**
- * Blocking "commander" name-entry modal. Shown whenever the player attempts
- * to Play or open their avatar without a saved, valid username. Has no
- * dismiss/close affordance by design — it only disappears once a valid name
- * is submitted and saved to the existing user store.
+ * Blocking "commander" name-entry modal. Shown whenever a signed-in player
+ * without a registered nickname attempts to Play or open their avatar.
+ * Has no dismiss/close affordance by design — it only disappears once the
+ * backend confirms the nickname was registered.
  */
 export const PlayerNameModal: React.FC<PlayerNameModalProps> = ({
   visible,
   onSubmit,
 }) => {
   const [draft, setDraft] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const trimmed = draft.trim();
-  const canContinue = isValidPlayerName(draft);
+  const canContinue = isValidPlayerName(draft) && !submitting;
 
-  const handleContinue = useCallback(() => {
+  const handleContinue = useCallback(async () => {
     if (!canContinue) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onSubmit(trimmed);
-    setDraft('');
+    setSubmitting(true);
+    setError(null);
+    const result = await onSubmit(trimmed);
+    setSubmitting(false);
+    if (result.ok) {
+      setDraft('');
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setError(result.message ?? 'Something went wrong. Please try again.');
+    }
   }, [canContinue, trimmed, onSubmit]);
 
   return (
@@ -54,7 +72,7 @@ export const PlayerNameModal: React.FC<PlayerNameModalProps> = ({
       visible={visible}
       animationType="fade"
       onRequestClose={() => {
-        /* No-op: the modal cannot be dismissed without a valid name. */
+        /* No-op: the modal cannot be dismissed without a valid, registered name. */
       }}
     >
       <KeyboardAvoidingView
@@ -64,21 +82,31 @@ export const PlayerNameModal: React.FC<PlayerNameModalProps> = ({
         <Pressable style={StyleSheet.absoluteFill} />
         <View style={styles.card}>
           <Text style={styles.title}>HELLO, COMMANDER</Text>
-          <Text style={styles.sub}>What&apos;s your name?</Text>
+          <Text style={styles.sub}>What&apos;s your nickname?</Text>
 
           <TextInput
             style={styles.input}
             value={draft}
-            onChangeText={setDraft}
-            placeholder="Name"
+            onChangeText={(v) => {
+              setDraft(v);
+              if (error) setError(null);
+            }}
+            placeholder="Nickname"
             placeholderTextColor={GameColors.textSecondary}
             maxLength={MAX_NAME_LENGTH}
-            autoCapitalize="words"
+            autoCapitalize="none"
             autoCorrect={false}
+            editable={!submitting}
             returnKeyType="done"
             onSubmitEditing={handleContinue}
             testID="player-name-input"
           />
+
+          {error && (
+            <Text style={styles.errorText} testID="player-name-error">
+              {error}
+            </Text>
+          )}
 
           <TouchableOpacity
             style={[styles.continueBtn, !canContinue && styles.continueBtnDisabled]}
@@ -87,7 +115,11 @@ export const PlayerNameModal: React.FC<PlayerNameModalProps> = ({
             activeOpacity={0.85}
             testID="player-name-continue"
           >
-            <Text style={styles.continueText}>CONTINUE</Text>
+            {submitting ? (
+              <ActivityIndicator color={GameColors.backgroundPrimary} />
+            ) : (
+              <Text style={styles.continueText}>CONTINUE</Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -140,7 +172,13 @@ const styles = StyleSheet.create({
     color: GameColors.textWhite,
     fontFamily: 'Inter_500Medium',
     fontSize: 16,
-    marginBottom: 16,
+    marginBottom: 8,
+  },
+  errorText: {
+    ...Typography.small,
+    color: GameColors.accentRed ?? '#ff5c5c',
+    alignSelf: 'flex-start',
+    marginBottom: 8,
   },
   continueBtn: {
     width: '100%',
@@ -148,6 +186,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
+    marginTop: 8,
   },
   continueBtnDisabled: {
     backgroundColor: 'rgba(255,255,255,0.1)',

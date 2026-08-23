@@ -1,43 +1,151 @@
 /**
- * Firebase Anonymous Auth — gives every device a stable player UID
- * without requiring sign-up.  The UID is used as the Firestore document
- * key for player profiles and game sessions.
+ * Google Sign-In — the only sign-in method. There is no anonymous/guest
+ * fallback: every player resolves to exactly one canonical `playerId`,
+ * the Firebase Auth UID produced by a Google credential.
  *
- * Call initAuth() once at app startup (see hooks/useFirestoreSync.ts).
- * Call getPlayerId() anywhere to retrieve the current UID.
+ * Web: uses Firebase's built-in `signInWithPopup` (falls back to
+ * `signInWithRedirect` when the popup is blocked, e.g. inside an iframe
+ * preview) — this needs no extra client-id wiring beyond the Google
+ * provider being enabled in the Firebase console.
+ *
+ * Native (iOS/Android): exchanges a Google ID token (obtained via
+ * expo-auth-session, see services/googleAuthNative.ts) for a Firebase
+ * credential with `signInWithCredential`. This requires a real Google
+ * OAuth client (Android needs its SHA-1 fingerprint registered, iOS needs
+ * its bundle id registered) configured in Google Cloud Console — until
+ * that is finished, native sign-in surfaces a clear, non-crashing error
+ * instead of pretending to succeed.
+ *
+ * Call getPlayerId() anywhere to retrieve the current signed-in UID.
  */
 
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import {
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithCredential,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  signOut as firebaseSignOut,
+  type User,
+} from 'firebase/auth';
+import { Platform } from 'react-native';
 import { auth } from './firebase';
 
 let _playerId: string | null = null;
+let _authReady: Promise<User | null> | null = null;
 
-/** Initialize anonymous auth and resolve with the stable UID. */
-export async function initAuth(): Promise<string> {
-  // Already signed in (e.g. hot-reload)
-  if (_playerId) return _playerId;
-
-  const currentUser = auth.currentUser;
-  if (currentUser) {
-    _playerId = currentUser.uid;
-    return _playerId;
-  }
-
-  // Sign in anonymously (creates a new account on first launch; persists via AsyncStorage)
-  const { user } = await signInAnonymously(auth);
-  _playerId = user.uid;
-  return _playerId;
+/**
+ * Resolves once Firebase has restored (or confirmed the absence of) a
+ * persisted session. Callers that need to know "is anyone signed in?" at
+ * startup (e.g. splash routing) must await this instead of reading
+ * `auth.currentUser` synchronously, since persistence restoration is async.
+ */
+export function waitForAuthReady(): Promise<User | null> {
+  if (_authReady) return _authReady;
+  _authReady = new Promise((resolve) => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      _playerId = user?.uid ?? null;
+      unsub();
+      resolve(user);
+    });
+  });
+  return _authReady;
 }
 
-/** Returns the current player UID, or null if initAuth has not been called yet. */
+/** Returns the current player UID, or null if nobody is signed in. */
 export function getPlayerId(): string | null {
   return _playerId ?? auth.currentUser?.uid ?? null;
 }
 
-/** Subscribe to auth state (useful for debugging / future account linking). */
+/** Subscribe to auth state changes (sign-in / sign-out). */
 export function onPlayerIdChange(cb: (uid: string | null) => void): () => void {
   return onAuthStateChanged(auth, (user) => {
     _playerId = user?.uid ?? null;
     cb(_playerId);
   });
+}
+
+export class GoogleSignInError extends Error {
+  constructor(
+    message: string,
+    public readonly code: 'popup_blocked' | 'cancelled' | 'native_not_configured' | 'unknown',
+  ) {
+    super(message);
+    this.name = 'GoogleSignInError';
+  }
+}
+
+/**
+ * Web: Google Sign-In via Firebase's hosted OAuth flow. Tries a popup first
+ * (best UX); if the popup is blocked — common inside the Replit preview
+ * iframe — falls back to a full-page redirect.
+ */
+async function signInWithGoogleWeb(): Promise<string> {
+  const provider = new GoogleAuthProvider();
+  try {
+    const { user } = await signInWithPopup(auth, provider);
+    _playerId = user.uid;
+    return user.uid;
+  } catch (err) {
+    const code = (err as { code?: string })?.code ?? '';
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+      throw new GoogleSignInError('Sign-in was cancelled.', 'cancelled');
+    }
+    // Popup blocked / not supported (e.g. sandboxed iframe) — redirect instead.
+    await signInWithRedirect(auth, provider);
+    // signInWithRedirect navigates away; this line only runs in edge cases.
+    throw new GoogleSignInError('Redirecting to Google…', 'popup_blocked');
+  }
+}
+
+/**
+ * Completes a redirect-based sign-in on return from Google (web only).
+ * Call once on app startup; resolves to the UID if a redirect just
+ * completed, or null if there was none pending.
+ */
+export async function completeRedirectSignIn(): Promise<string | null> {
+  if (Platform.OS !== 'web') return null;
+  try {
+    const result = await getRedirectResult(auth);
+    if (result?.user) {
+      _playerId = result.user.uid;
+      return result.user.uid;
+    }
+  } catch (err) {
+    console.warn('[Auth] getRedirectResult failed:', err);
+  }
+  return null;
+}
+
+/**
+ * Native: exchange a Google ID token for a Firebase credential.
+ * The ID token itself is obtained via expo-auth-session
+ * (see services/googleAuthNative.ts) since that requires React hooks.
+ */
+export async function signInWithGoogleIdToken(idToken: string): Promise<string> {
+  const credential = GoogleAuthProvider.credential(idToken);
+  const { user } = await signInWithCredential(auth, credential);
+  _playerId = user.uid;
+  return user.uid;
+}
+
+/**
+ * Entry point used by the login screen on web. Native platforms drive the
+ * flow through the `useGoogleSignIn` hook (services/googleAuthNative.ts)
+ * because obtaining the ID token requires a React hook (useAuthRequest).
+ */
+export async function signInWithGoogle(): Promise<string> {
+  if (Platform.OS === 'web') {
+    return signInWithGoogleWeb();
+  }
+  throw new GoogleSignInError(
+    'Use the useGoogleSignIn() hook on native platforms.',
+    'native_not_configured',
+  );
+}
+
+export async function signOut(): Promise<void> {
+  await firebaseSignOut(auth);
+  _playerId = null;
 }

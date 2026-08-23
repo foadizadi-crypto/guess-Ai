@@ -31,6 +31,16 @@ service cloud.firestore {
       }
     }
 
+    // ─── 1b. NICKNAMES COLLECTION ─────────────────────────────────────────────
+    // Path: nicknames/{normalizedNickname}
+    // Server-only: uniqueness is enforced by an atomic transaction in the
+    // API server (using the Admin SDK, which bypasses these rules). Clients
+    // must never read or write this collection directly, or two devices
+    // could race past the uniqueness check.
+    match /nicknames/{normalizedNickname} {
+      allow read, write: if false;
+    }
+
     // ─── 2. GAME SESSIONS COLLECTION ─────────────────────────────────────────
     // Path: game_sessions/{sessionId}
     match /game_sessions/{sessionId} {

@@ -22,29 +22,28 @@ import * as Haptics from 'expo-haptics';
 import { AnimatedGradientBackground } from '@/components/AnimatedGradientBackground';
 import { GoldParticles } from '@/components/GoldParticles';
 import { GlassCard } from '@/components/GlassCard';
-import { GradientButton } from '@/components/GradientButton';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
-import { storageService } from '@/services/StorageService';
 import { ROUTES } from '@/navigation/routes';
+import { signInWithGoogle, GoogleSignInError } from '@/services/authService';
+import { useGoogleSignIn, isNativeGoogleSignInConfigured } from '@/services/googleAuthNative';
+import { fetchRegisteredNickname } from '@/services/nicknameService';
 
-// ─── Helper ───────────────────────────────────────────────────────────────
-
-const generateGuestUsername = (): string => {
-  const suffix = Math.floor(1000 + Math.random() * 9000);
-  return `Player${suffix}`;
-};
-
-// ─── Screen ───────────────────────────────────────────────────────────────
-
+/**
+ * Mandatory Google Sign-In — the only way into the game. There is no
+ * "Play as Guest" path: every player must resolve to a Firebase Auth UID
+ * before reaching the lobby, since that UID is the canonical playerId
+ * every backend feature (nickname, leaderboard, sessions, push tokens…)
+ * keys off of.
+ */
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const setUsername = useUserStore((s) => s.setUsername);
 
-  const [loading, setLoading] = useState(true);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const { configured: nativeConfigured, response, promptAsync } = useGoogleSignIn();
 
   // Entrance animations
   const cardY = useSharedValue(60);
@@ -62,56 +61,107 @@ export default function LoginScreen() {
     opacity: logoOpacity.value,
   }));
 
-  // ── Auto-skip if username already saved ─────────────────────────────────
   useEffect(() => {
-    const check = async () => {
-      const saved = await storageService.loadUsername();
-      if (saved) {
-        setUsername(saved);
-        router.replace(ROUTES.LOBBY);
+    logoOpacity.value = withTiming(1, { duration: 400 });
+    logoScale.value = withSpring(1, { damping: 12, stiffness: 100 });
+    cardOpacity.value = withDelay(250, withTiming(1, { duration: 500 }));
+    cardY.value = withDelay(
+      250,
+      withTiming(0, { duration: 500, easing: Easing.out(Easing.cubic) }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Once we have a Firebase UID, restore any nickname already registered
+   * for this account (returning player / second device) before entering
+   * the lobby — so they never see the nickname modal twice. */
+  const finishSignIn = useCallback(
+    async (uid: string) => {
+      const existing = await fetchRegisteredNickname(uid);
+      if (existing) setUsername(existing);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace(ROUTES.LOBBY);
+    },
+    [setUsername, router],
+  );
+
+  // ── Native: handle the AuthSession response once Google redirects back ──
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    if (!response) return;
+
+    if (response.type === 'success') {
+      const idToken = response.params?.id_token;
+      if (!idToken) {
+        setGoogleLoading(false);
+        Alert.alert('Sign-In Failed', 'Google did not return a valid credential.');
         return;
       }
-      setLoading(false);
-      // Run entrance animations
-      logoOpacity.value = withTiming(1, { duration: 400 });
-      logoScale.value = withSpring(1, { damping: 12, stiffness: 100 });
-      cardOpacity.value = withDelay(250, withTiming(1, { duration: 500 }));
-      cardY.value = withDelay(
-        250,
-        withTiming(0, { duration: 500, easing: Easing.out(Easing.cubic) }),
-      );
-    };
-    check();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Play as Guest ────────────────────────────────────────────────────────
-  const handleGuest = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const guest = generateGuestUsername();
-    setUsername(guest);
-    await storageService.saveUsername(guest);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.replace(ROUTES.LOBBY);
-  }, [setUsername, router]);
-
-  // ── Google Sign In (placeholder) ─────────────────────────────────────────
-  const handleGoogle = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setGoogleLoading(true);
-    setTimeout(() => {
+      (async () => {
+        try {
+          const { signInWithGoogleIdToken } = await import('@/services/authService');
+          const uid = await signInWithGoogleIdToken(idToken);
+          await finishSignIn(uid);
+        } catch (err) {
+          console.warn('[Login] native Google sign-in failed:', err);
+          Alert.alert('Sign-In Failed', 'Could not sign in with Google. Please try again.');
+        } finally {
+          setGoogleLoading(false);
+        }
+      })();
+    } else if (response.type === 'error') {
       setGoogleLoading(false);
+      Alert.alert('Sign-In Failed', 'Could not sign in with Google. Please try again.');
+    } else if (response.type === 'dismiss' || response.type === 'cancel') {
+      setGoogleLoading(false);
+    }
+  }, [response, finishSignIn]);
+
+  const handleGoogle = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    if (Platform.OS === 'web') {
+      setGoogleLoading(true);
+      try {
+        const uid = await signInWithGoogle();
+        await finishSignIn(uid);
+      } catch (err) {
+        if (err instanceof GoogleSignInError && err.code === 'popup_blocked') {
+          // A redirect is already underway — the page will reload.
+          return;
+        }
+        if (err instanceof GoogleSignInError && err.code === 'cancelled') {
+          // Silent — the player just closed the popup.
+        } else {
+          console.warn('[Login] Google sign-in failed:', err);
+          Alert.alert('Sign-In Failed', 'Could not sign in with Google. Please try again.');
+        }
+      } finally {
+        setGoogleLoading(false);
+      }
+      return;
+    }
+
+    if (!nativeConfigured) {
       Alert.alert(
-        'Coming Soon',
-        'Google Sign-In will be available in a future update!',
-        [{ text: 'OK', style: 'default' }],
+        'Google Sign-In Not Ready',
+        "This build's Google OAuth client hasn't been finished yet in Google Cloud Console. Web sign-in is fully working in the meantime.",
       );
-    }, 600);
-  }, []);
+      return;
+    }
+
+    setGoogleLoading(true);
+    try {
+      await promptAsync();
+    } catch (err) {
+      console.warn('[Login] promptAsync failed:', err);
+      setGoogleLoading(false);
+      Alert.alert('Sign-In Failed', 'Could not open Google Sign-In. Please try again.');
+    }
+  }, [finishSignIn, nativeConfigured, promptAsync]);
 
   const topPad = Platform.OS === 'web' ? 60 : insets.top;
   const botPad = Platform.OS === 'web' ? 40 : insets.bottom;
-
-  if (loading) return null;
 
   return (
     <AnimatedGradientBackground>
@@ -135,22 +185,7 @@ export default function LoginScreen() {
             {/* Welcome text */}
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>Welcome!</Text>
-              <Text style={styles.cardSub}>Choose how you'd like to play</Text>
-            </View>
-
-            {/* ── Play as Guest ────────────────────────────────────────────── */}
-            <GradientButton
-              title="Play as Guest"
-              onPress={handleGuest}
-              style={styles.guestBtn}
-              testID="guest-button"
-            />
-
-            {/* Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
+              <Text style={styles.cardSub}>Sign in to start playing</Text>
             </View>
 
             {/* ── Google Sign In ────────────────────────────────────────────── */}
@@ -169,13 +204,8 @@ export default function LoginScreen() {
                 />
               </View>
               <Text style={styles.googleText}>
-                {googleLoading ? 'Please wait…' : 'Continue with Google'}
+                {googleLoading ? 'Signing in…' : 'Continue with Google'}
               </Text>
-              {!googleLoading && (
-                <View style={styles.comingSoonBadge}>
-                  <Text style={styles.comingSoonText}>Soon</Text>
-                </View>
-              )}
             </TouchableOpacity>
 
             {/* Fine print */}
@@ -254,23 +284,6 @@ const styles = StyleSheet.create({
   },
   cardSub: { ...Typography.caption, color: GameColors.textSecondary },
 
-  // ── Guest button ─────────────────────────────────────────────────────────
-  guestBtn: { width: '100%' },
-
-  // ── Divider ──────────────────────────────────────────────────────────────
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginVertical: 16,
-  },
-  dividerLine: { flex: 1, height: 1, backgroundColor: GameColors.border },
-  dividerText: {
-    ...Typography.small,
-    color: GameColors.textSecondary,
-    fontFamily: 'Inter_500Medium',
-  },
-
   // ── Google button ────────────────────────────────────────────────────────
   googleBtn: {
     flexDirection: 'row',
@@ -298,20 +311,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontWeight: '600',
     flex: 1,
-  },
-  comingSoonBadge: {
-    backgroundColor: 'rgba(255,215,0,0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: GameColors.coinBorder,
-  },
-  comingSoonText: {
-    ...Typography.small,
-    color: GameColors.accentGold,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 10,
   },
 
   // ── Fine print ────────────────────────────────────────────────────────────

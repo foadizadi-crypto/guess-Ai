@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "856856840962",
-    "project_id": "blurquiz",
-    "storage_bucket": "blurquiz.firebasestorage.app"
+    "project_number": "415580358646",
+    "project_id": "blurquiz-554ea",
+    "storage_bucket": "blurquiz-554ea.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:856856840962:android:9dd686ea2d6aa7a9c6101b",
+        "mobilesdk_app_id": "1:415580358646:android:c8fb4ff2423755cfc4a9d7",
         "android_client_info": {
           "package_name": "com.aiblur.quiz"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBVt8KqSIKaA9KckVU_JJMbuGuCOzzi6is"
+          "current_key": "AIzaSyDZdpmXwDlv8Ber4mwkMzJ-8Z5TlKspQZY"
         }
       ],
       "services": {

@@ -18,7 +18,7 @@ import { useRTL } from '@/hooks/useRTL';
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { textAlign } = useRTL();
-  const { settings, updateSettings } = useUserStore();
+  const { settings, updateSettings, username } = useUserStore();
   const { isMusicEnabled, isSoundEnabled, volume, isMuted, toggleMusic, toggleSound, setVolume, toggleMute } = useAudioStore();
   const { adsRemoved, removeAds } = useAdStore();
   const [removeAdsLoading, setRemoveAdsLoading] = useState(false);
@@ -45,6 +45,21 @@ export default function SettingsScreen() {
           <Text style={[styles.title, { textAlign }]}>Settings</Text>
           <View style={styles.placeholder} />
         </View>
+
+        {/* Account */}
+        <Text style={[styles.sectionLabel, { textAlign }]}>Account</Text>
+        <GlassCard style={styles.card} padding={0}>
+          <View style={styles.settingRow}>
+            <Ionicons name="person-outline" size={20} color={GameColors.textSecondary} />
+            <Text style={styles.rowLabel}>Nickname</Text>
+            <View style={styles.nicknameValueWrap}>
+              <Text style={styles.nicknameValue} numberOfLines={1}>
+                {username || '—'}
+              </Text>
+              <Ionicons name="lock-closed" size={13} color={GameColors.textSecondary} />
+            </View>
+          </View>
+        </GlassCard>
 
         {/* Audio */}
         <Text style={[styles.sectionLabel, { textAlign }]}>Audio</Text>
@@ -255,6 +270,8 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   rowLabel: { ...Typography.caption, color: GameColors.textWhite, flex: 1 },
+  nicknameValueWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: 160 },
+  nicknameValue: { ...Typography.caption, color: GameColors.textSecondary, flexShrink: 1 },
   sep: { height: 1, backgroundColor: GameColors.border, marginHorizontal: 16 },
   sliderRow: {
     flexDirection: 'row',
