@@ -56697,14 +56697,17 @@ function createOpenAiImageProvider() {
       try {
         const client = new OpenAI({ apiKey, timeout: 3e4 });
         const response = await client.images.generate({
-          model: "dall-e-2",
+          model: "gpt-image-1",
           prompt: `${prompt}. Photorealistic, vivid colors, centered subject, clean background, no text.`,
           n: 1,
-          size: "512x512"
+          size: "1024x1024",
+          quality: "low"
         });
+        const b64 = response.data?.[0]?.b64_json;
         const url = response.data?.[0]?.url;
-        if (!url) throw new Error("OpenAI returned no image URL");
-        return url;
+        if (url) return url;
+        if (b64) return `data:image/png;base64,${b64}`;
+        throw new Error("OpenAI returned no image data");
       } catch (err) {
         throw classifyError("openai-image", err);
       }
