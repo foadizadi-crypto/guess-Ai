@@ -40,12 +40,21 @@ export function isNativeGoogleSignInConfigured(): boolean {
 export function useGoogleSignIn() {
   const configured = isNativeGoogleSignInConfigured();
 
+  // The hook is unconditionally mounted (React hook rules), including on
+  // web where this flow is never used — Firebase popup/redirect handles
+  // web sign-in directly. Without a client id the hook throws immediately
+  // on construction, so always give it *some* string; `promptAsync` is
+  // simply never called unless `configured` is true.
+  const fallbackClientId = ANDROID_CLIENT_ID ?? IOS_CLIENT_ID ?? 'not-configured';
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     androidClientId: ANDROID_CLIENT_ID,
     iosClientId: IOS_CLIENT_ID,
-    // Not used by our flow (web goes through Firebase popup/redirect
-    // directly), but the hook requires some client id to build a request.
-    clientId: ANDROID_CLIENT_ID ?? IOS_CLIENT_ID,
+    // The provider validates a platform-specific client id even when this
+    // hook's result is never used (e.g. on web, where Firebase
+    // popup/redirect handles sign-in directly) — supply a fallback for
+    // every platform key so mounting the hook never throws.
+    clientId: fallbackClientId,
+    webClientId: fallbackClientId,
   });
 
   const redirectUri = useMemo(() => AuthSession.makeRedirectUri(), []);

@@ -15491,7 +15491,7 @@ var require_type_is = __commonJS({
     module.exports = typeofrequest;
     module.exports.is = typeis;
     module.exports.hasBody = hasbody;
-    module.exports.normalize = normalize;
+    module.exports.normalize = normalize2;
     module.exports.match = mimeMatch;
     function typeis(value, types_) {
       if (value && typeof value === "object") {
@@ -15514,7 +15514,7 @@ var require_type_is = __commonJS({
       }
       var type;
       for (i = 0; i < types.length; i++) {
-        if (mimeMatch(normalize(type = types[i]), val)) {
+        if (mimeMatch(normalize2(type = types[i]), val)) {
           return type[0] === "+" || type.indexOf("*") !== -1 ? val : type;
         }
       }
@@ -15529,7 +15529,7 @@ var require_type_is = __commonJS({
       var value = req.headers["content-type"];
       return typeis(value, types);
     }
-    function normalize(type) {
+    function normalize2(type) {
       if (typeof type !== "string") {
         return false;
       }
@@ -20836,27 +20836,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router7;
+    module.exports = Router8;
     module.exports.Route = Route;
-    function Router7(options) {
-      if (!(this instanceof Router7)) {
-        return new Router7(options);
+    function Router8(options) {
+      if (!(this instanceof Router8)) {
+        return new Router8(options);
       }
       const opts = options || {};
-      function router7(req, res, next) {
-        router7.handle(req, res, next);
+      function router8(req, res, next) {
+        router8.handle(req, res, next);
       }
-      Object.setPrototypeOf(router7, this);
-      router7.caseSensitive = opts.caseSensitive;
-      router7.mergeParams = opts.mergeParams;
-      router7.params = {};
-      router7.strict = opts.strict;
-      router7.stack = [];
-      return router7;
+      Object.setPrototypeOf(router8, this);
+      router8.caseSensitive = opts.caseSensitive;
+      router8.mergeParams = opts.mergeParams;
+      router8.params = {};
+      router8.strict = opts.strict;
+      router8.stack = [];
+      return router8;
     }
-    Router7.prototype = function() {
+    Router8.prototype = function() {
     };
-    Router7.prototype.param = function param(name, fn) {
+    Router8.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20876,7 +20876,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router7.prototype.handle = function handle(req, res, callback) {
+    Router8.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -21003,7 +21003,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router7.prototype.use = function use(handler) {
+    Router8.prototype.use = function use(handler) {
       let offset = 0;
       let path6 = "/";
       if (typeof handler !== "function") {
@@ -21036,7 +21036,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router7.prototype.route = function route(path6) {
+    Router8.prototype.route = function route(path6) {
       const route2 = new Route(path6);
       const layer = new Layer(path6, {
         sensitive: this.caseSensitive,
@@ -21051,7 +21051,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router7.prototype[method] = function(path6) {
+      Router8.prototype[method] = function(path6) {
         const route = this.route(path6);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21234,13 +21234,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve4 = __require("node:path").resolve;
     var once = require_once();
-    var Router7 = require_router();
+    var Router8 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router7 = null;
+      var router8 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21249,13 +21249,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router7 === null) {
-            router7 = new Router7({
+          if (router8 === null) {
+            router8 = new Router8({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router7;
+          return router8;
         }
       });
     };
@@ -21326,15 +21326,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router7 = this.router;
+      var router8 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router7.use(path6, fn2);
+          return router8.use(path6, fn2);
         }
         debug(".use app under %s", path6);
         fn2.mountpath = path6;
         fn2.parent = this;
-        router7.use(path6, function mounted_app(req, res, next) {
+        router8.use(path6, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -22802,7 +22802,7 @@ var require_send = __commonJS({
     var util2 = __require("util");
     var extname = path6.extname;
     var join4 = path6.join;
-    var normalize = path6.normalize;
+    var normalize2 = path6.normalize;
     var resolve4 = path6.resolve;
     var sep4 = path6.sep;
     var BYTES_RANGE_REGEXP = /^ *bytes=/;
@@ -22965,7 +22965,7 @@ var require_send = __commonJS({
       var parts;
       if (root !== null) {
         if (path7) {
-          path7 = normalize("." + sep4 + path7);
+          path7 = normalize2("." + sep4 + path7);
         }
         if (UP_PATH_REGEXP.test(path7)) {
           debug('malicious path "%s"', path7);
@@ -22973,14 +22973,14 @@ var require_send = __commonJS({
           return res;
         }
         parts = path7.split(sep4);
-        path7 = normalize(join4(root, path7));
+        path7 = normalize2(join4(root, path7));
       } else {
         if (UP_PATH_REGEXP.test(path7)) {
           debug('malicious path "%s"', path7);
           this.error(403);
           return res;
         }
-        parts = normalize(path7).split(sep4);
+        parts = normalize2(path7).split(sep4);
         path7 = resolve4(path7);
       }
       if (containsDotFile(parts)) {
@@ -23919,7 +23919,7 @@ var require_express = __commonJS({
     var EventEmitter = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router7 = require_router();
+    var Router8 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23941,8 +23941,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router7.Route;
-    exports.Router = Router7;
+    exports.Route = Router8.Route;
+    exports.Router = Router8;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -28427,11 +28427,11 @@ var require_pino = __commonJS({
       depthLimit: 5,
       edgeLimit: 100
     };
-    var normalize = createArgsNormalizer(defaultOptions);
+    var normalize2 = createArgsNormalizer(defaultOptions);
     var serializers = Object.assign(/* @__PURE__ */ Object.create(null), stdSerializers);
     function pino2(...args) {
       const instance = {};
-      const { opts, stream } = normalize(instance, caller(), ...args);
+      const { opts, stream } = normalize2(instance, caller(), ...args);
       if (opts.level && typeof opts.level === "string" && DEFAULT_LEVELS[opts.level.toLowerCase()] !== void 0) opts.level = opts.level.toLowerCase();
       const {
         redact,
@@ -41350,12 +41350,12 @@ var init_sdk = __esm({
 });
 
 // src/app.ts
-var import_express7 = __toESM(require_express2(), 1);
+var import_express8 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 
 // src/routes/index.ts
-var import_express6 = __toESM(require_express2(), 1);
+var import_express7 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -57222,17 +57222,115 @@ router5.get("/leaderboard/rank", async (req, res) => {
 });
 var leaderboard_default = router5;
 
-// src/routes/index.ts
+// src/routes/nickname.ts
+var import_express6 = __toESM(require_express2(), 1);
 var router6 = (0, import_express6.Router)();
-router6.use(health_default);
-router6.use(ai_default);
-router6.use(config_default);
-router6.use(sessions_default);
-router6.use(leaderboard_default);
-var routes_default = router6;
+var MIN_LENGTH = 1;
+var MAX_LENGTH = 20;
+function normalize(nickname) {
+  return nickname.trim().toLowerCase();
+}
+function isValidNickname(nickname) {
+  if (typeof nickname !== "string") return false;
+  const trimmed = nickname.trim();
+  return trimmed.length >= MIN_LENGTH && trimmed.length <= MAX_LENGTH;
+}
+router6.post("/nickname/register", async (req, res) => {
+  const body = req.body;
+  const { playerId, nickname } = body;
+  if (typeof playerId !== "string" || !playerId) {
+    res.status(400).json({ error: "playerId is required" });
+    return;
+  }
+  if (!isValidNickname(nickname)) {
+    res.status(400).json({ error: "invalid_nickname", message: `Nickname must be ${MIN_LENGTH}-${MAX_LENGTH} characters.` });
+    return;
+  }
+  const trimmedNickname = nickname.trim();
+  const normalized = normalize(trimmedNickname);
+  const db = getFirestore();
+  const nicknameRef = db.collection("nicknames").doc(normalized);
+  const playerRef = db.collection("players").doc(playerId);
+  try {
+    const result = await db.runTransaction(async (tx) => {
+      const playerSnap = await tx.get(playerRef);
+      const existingNormalized = playerSnap.data()?.nicknameNormalized;
+      const nicknameSnap = await tx.get(nicknameRef);
+      if (nicknameSnap.exists) {
+        const owner = nicknameSnap.data().playerId;
+        if (owner === playerId) {
+          return { ok: true, nickname: trimmedNickname };
+        }
+        return { ok: false, reason: "taken" };
+      }
+      if (existingNormalized && existingNormalized !== normalized) {
+        return { ok: false, reason: "already_registered" };
+      }
+      tx.set(nicknameRef, {
+        playerId,
+        nickname: trimmedNickname,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      tx.set(
+        playerRef,
+        {
+          nickname: trimmedNickname,
+          nicknameNormalized: normalized,
+          username: trimmedNickname,
+          // back-compat field read by leaderboard etc.
+          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+        },
+        { merge: true }
+      );
+      return { ok: true, nickname: trimmedNickname };
+    });
+    if (!result.ok) {
+      if (result.reason === "taken") {
+        res.status(409).json({ error: "taken", message: "Already taken" });
+        return;
+      }
+      res.status(409).json({
+        error: "already_registered",
+        message: "This account already has a different nickname registered."
+      });
+      return;
+    }
+    res.json({ ok: true, nickname: result.nickname });
+  } catch (err) {
+    logger.error({ err }, "Nickname registration transaction failed");
+    res.status(503).json({ error: "unavailable", message: "Could not reach the server. Please try again." });
+  }
+});
+router6.get("/nickname/:playerId", async (req, res) => {
+  const playerId = req.params.playerId;
+  if (!playerId || typeof playerId !== "string") {
+    res.status(400).json({ error: "playerId is required" });
+    return;
+  }
+  try {
+    const db = getFirestore();
+    const snap = await db.collection("players").doc(playerId).get();
+    const nickname = snap.data()?.nickname ?? null;
+    res.json({ nickname });
+  } catch (err) {
+    logger.warn({ err }, "Nickname lookup failed");
+    res.status(503).json({ error: "unavailable", nickname: null });
+  }
+});
+var nickname_default = router6;
+
+// src/routes/index.ts
+var router7 = (0, import_express7.Router)();
+router7.use(health_default);
+router7.use(ai_default);
+router7.use(config_default);
+router7.use(sessions_default);
+router7.use(leaderboard_default);
+router7.use(nickname_default);
+var routes_default = router7;
 
 // src/app.ts
-var app = (0, import_express7.default)();
+var app = (0, import_express8.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -57253,8 +57351,8 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use(import_express7.default.json());
-app.use(import_express7.default.urlencoded({ extended: true }));
+app.use(import_express8.default.json());
+app.use(import_express8.default.urlencoded({ extended: true }));
 app.get("/", (_req, res) => {
   res.json({ status: "ok", message: "BlurQuiz API Server is running \u{1F3AE}" });
 });

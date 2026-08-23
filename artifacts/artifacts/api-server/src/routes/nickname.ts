@@ -116,8 +116,8 @@ router.post("/nickname/register", async (req: Request, res: Response) => {
 
 // ─── GET /api/nickname/:playerId ────────────────────────────────────────────
 router.get("/nickname/:playerId", async (req: Request, res: Response) => {
-  const { playerId } = req.params;
-  if (!playerId) {
+  const playerId = req.params.playerId;
+  if (!playerId || typeof playerId !== "string") {
     res.status(400).json({ error: "playerId is required" });
     return;
   }
