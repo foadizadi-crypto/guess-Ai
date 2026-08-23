@@ -1,0 +1,228 @@
+
+
+Finalize the BlurQuiz Player Identity and Nickname system.
+
+IMPORTANT:
+The game has NOT been released yet, so there are no production player accounts or legacy player data to preserve. You may correct or restructure the current implementation if necessary.
+
+Do NOT create multiple player ID systems.
+BlurQuiz must have ONE canonical internal playerId for each player.
+
+1. AUDIT THE CURRENT PLAYER ID SYSTEM
+
+First inspect the existing project and determine:
+
+- Where playerId is currently created.
+- How and where it is stored.
+- Whether it persists after app restart.
+- Whether the same playerId is reused when the player returns.
+- Which existing features currently use playerId or another player identifier.
+
+If the current implementation is incomplete or inconsistent, fix it.
+
+2. GOOGLE IDENTITY
+
+Use Google Sign-In as the player's account identity.
+
+Do NOT use the Gmail/email address as playerId.
+
+The architecture must be:
+
+Google Account
+→ Google identity
+→ Backend
+→ ONE canonical internal playerId
+→ Player Data
+
+The same Google account must always resolve to the same playerId.
+
+The playerId must be independent from the nickname.
+
+The backend is the source of truth.
+
+3. EXISTING PLAY BUTTON FLOW
+
+Keep the existing PLAY button and its current UI/touch behavior.
+
+Do NOT replace or redesign the PLAY button.
+
+When the player taps PLAY:
+
+IF the player already has a registered nickname:
+→ continue directly into the game.
+
+IF the player does NOT have a registered nickname:
+→ open a small nickname modal/popup:
+
+"What's your nickname?"
+
+The game must remain locked until a valid nickname is successfully registered.
+
+4. NICKNAME REGISTRATION
+
+The current version allows the player to choose a nickname ONE TIME only.
+
+The nickname must be globally unique.
+
+Examples:
+
+foad → available ✅
+foad → already taken ❌
+FOAD → already taken ❌
+FoAd → already taken ❌
+fOaD → already taken ❌
+
+The uniqueness check must be case-insensitive.
+
+Different names are allowed:
+
+foad → existing
+foad1 → allowed
+1foad → allowed
+fooad → allowed
+ffoad → allowed
+foadddddd → allowed
+
+Only exact normalized nickname matching should be considered a duplicate.
+
+IMPORTANT:
+Do not add random numbers, tags, suffixes, or automatic nickname modification.
+
+If the nickname is already taken, show:
+
+"Already taken"
+
+The nickname must NOT be locked or saved until the backend confirms that it is available and successfully registers it.
+
+5. AFTER SUCCESSFUL REGISTRATION
+
+After the backend confirms the nickname is available:
+
+- Save the nickname.
+- Associate it with the canonical playerId.
+- Ensure the playerId exists and is stored.
+- Unlock the game.
+- Continue the existing PLAY flow.
+
+The lobby/sidebar player display must show:
+
+Player: foad
+
+[Settings must show:
+
+Nickname: foad 🔒
+Implement this feature: Add a row in the settings menu for this option. When the player enters their nickname in the pre-game pop-up, it should be displayed here but locked (read-only).
+Settings:
+Nickname: [name] 🔒]
+
+The nickname must become read-only/locked after successful registration.
+
+Do NOT implement nickname changing yet.
+
+If a Change Nickname option already exists, keep it disabled/locked.
+
+6. RETURNING PLAYER
+
+If the player already has:
+
+- Google identity
+- playerId
+- registered nickname
+
+then tapping PLAY must NOT show the nickname modal again.
+
+The existing nickname and player data must be loaded automatically.
+
+7. CROSS-DEVICE BEHAVIOR
+
+Test this scenario:
+
+Device A:
+- Sign in with Google Account A.
+- Tap PLAY.
+- Register nickname "foad".
+- Verify playerId is created.
+- Verify nickname is saved.
+- Verify gameplay can unlock.
+
+Device B:
+- Sign in with the SAME Google Account A.
+- Verify the backend resolves the SAME playerId.
+- Verify "foad" is restored.
+- Verify the nickname modal does NOT appear again.
+
+8. ONE PLAYER ID FOR THE ENTIRE GAME
+
+This is critical.
+
+Every existing player-owned feature must use the SAME canonical playerId.
+
+Audit and connect all applicable systems, including:
+
+- Profile
+- Player/Nickname
+- Friends
+- Achievements
+- Leaderboard
+- Game Progress
+- Level
+- Coins
+- Gems
+- Stamina
+- Avatars
+- Wings
+- Frames
+- Rewards
+- Daily Rewards
+- Question History
+- Any other player-owned data already present in the project.
+
+If any feature currently uses a different identifier, correct it so it references the canonical playerId.
+
+Do NOT create separate IDs for Friends, Achievements, Leaderboard, etc.
+
+ONE player → ONE playerId → ALL player-owned data.
+
+9. DATABASE / BACKEND SAFETY
+
+The nickname uniqueness rule must be enforced server-side/database-side.
+
+Do NOT rely only on frontend validation.
+
+Two simultaneous requests for the same nickname must never result in two players receiving the same nickname.
+
+Use the database's appropriate unique constraint/index or an equivalent atomic server-side mechanism.
+
+10. DO NOT IMPLEMENT YET
+
+Do NOT implement:
+
+- Question no-repeat system
+- AI content pool
+- Background AI generation
+- Paid nickname changes
+- Payment system
+- Random nickname tags
+
+Those will be separate tasks later.
+
+11. FINAL VERIFICATION
+
+Before finishing, test and report:
+
+1. New Google player.
+2. First PLAY → nickname modal.
+3. Available nickname → successful registration.
+4. Duplicate nickname → "Already taken".
+5. Case-insensitive duplicate detection.
+6. Nickname locks only after successful backend registration.
+7. Game unlocks only after successful registration.
+8. Returning player does not see nickname modal again.
+9. App restart preserves playerId and nickname.
+10. Same Google account on another device resolves to the same playerId.
+11. Settings shows "Nickname: [name] 🔒".
+12. Lobby/sidebar shows "Player: [name]".
+13. All existing player-owned systems use the same canonical playerId.
+
+Do not change unrelated gameplay or UI.
+Reuse the existing architecture wherever possible.
