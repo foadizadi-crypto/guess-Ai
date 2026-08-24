@@ -24,6 +24,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 const ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
 const IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 
 export function isNativeGoogleSignInConfigured(): boolean {
   if (Platform.OS === 'android') return !!ANDROID_CLIENT_ID;
@@ -45,7 +46,7 @@ export function useGoogleSignIn() {
   // web sign-in directly. Without a client id the hook throws immediately
   // on construction, so always give it *some* string; `promptAsync` is
   // simply never called unless `configured` is true.
-  const fallbackClientId = ANDROID_CLIENT_ID ?? IOS_CLIENT_ID ?? 'not-configured';
+  const fallbackClientId = ANDROID_CLIENT_ID ?? IOS_CLIENT_ID ?? WEB_CLIENT_ID ?? 'not-configured';
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     androidClientId: ANDROID_CLIENT_ID,
     iosClientId: IOS_CLIENT_ID,
@@ -54,7 +55,7 @@ export function useGoogleSignIn() {
     // popup/redirect handles sign-in directly) — supply a fallback for
     // every platform key so mounting the hook never throws.
     clientId: fallbackClientId,
-    webClientId: fallbackClientId,
+    webClientId: WEB_CLIENT_ID ?? fallbackClientId,
   });
 
   const redirectUri = useMemo(() => AuthSession.makeRedirectUri(), []);
