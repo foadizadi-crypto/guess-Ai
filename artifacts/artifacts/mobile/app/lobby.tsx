@@ -14,8 +14,7 @@ import { Image as ExpoImage } from "expo-image";
 import LottieView from "lottie-react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
-import { Audio } from "expo-av";
+import { hapticsService } from '@/services/HapticsService';
 
 import { AvatarFrame } from "@/components/AvatarFrame";
 import { AnimatedIcon } from "@/components/AnimatedIcon";
@@ -139,7 +138,6 @@ export default function LobbyScreen() {
   // Gate for actions that require a saved Player Name (Play, avatar/pedestal tap).
   const [nameModalVisible, setNameModalVisible] = useState<boolean>(false);
   const pendingActionRef = useRef<string | null>(null);
-  const [soundInstance, setSoundInstance] = useState<Audio.Sound | null>(null);
   // Plays the one-shot entry flourish (splash.json) each time the lobby mounts;
   // onAnimationFinish flips this back to false so it does not linger.
   const [showSplash, setShowSplash] = useState<boolean>(true);
@@ -170,7 +168,17 @@ export default function LobbyScreen() {
   const releaseStaminaAd = useAdStore((s) => s.releaseStaminaAd);
   const adInFlight = useRef<boolean>(false);
 
-  const { playMusic, stopMusic } = useAudio();
+  const { playMusic, stopMusic, playEffect } = useAudio();
+  const isNicknameVerifiedFor = useUserStore((s) => s.isNicknameVerifiedFor);
+
+  // A signed-in player must register a name before they can continue. Show
+  // the existing blocking modal on lobby entry, not only after a gated tap.
+  useEffect(() => {
+    const uid = getPlayerId();
+    if (uid && !isNicknameVerifiedFor(uid)) {
+      setNameModalVisible(true);
+    }
+  }, [isNicknameVerifiedFor, username]);
 
   const currentAvatar = avatars?.find(
     (avatar) => avatar.id === selectedAvatarId,
@@ -212,9 +220,7 @@ export default function LobbyScreen() {
     }
 
     addStamina(STAMINA_AD_REWARD);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
-      () => {},
-    );
+    hapticsService.notification(1);
     Alert.alert(
       "Stamina added",
       `+${STAMINA_AD_REWARD} stamina added to your reserve.`,
@@ -257,31 +263,6 @@ export default function LobbyScreen() {
   // TAP SOUND + SPLASH
   // ===================================================
 
-  async function playTapSound() {
-    try {
-      const { sound } = await Audio.Sound.createAsync(
-        require("@/assets/audio/button_click.wav"),
-        { shouldPlay: true },
-      );
-      setSoundInstance(sound);
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync();
-        }
-      });
-    } catch (error) {
-      console.log("[Audio Engine] Sound asset missing or click error:", error);
-    }
-  }
-
-  useEffect(() => {
-    return soundInstance
-      ? () => {
-          soundInstance.unloadAsync();
-        }
-      : undefined;
-  }, [soundInstance]);
-
   // ===================================================
   // ACTION ROUTER
   // ===================================================
@@ -315,12 +296,12 @@ export default function LobbyScreen() {
     }
 
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await hapticsService.impact(1);
     } catch (e) {
       console.log("Haptics engine unavailable");
     }
 
-    await playTapSound();
+    playEffect("button_click");
 
     switch (actionName) {
       case "profile_lvl_playername":
@@ -397,7 +378,7 @@ export default function LobbyScreen() {
       if (!result.ok) {
         const message =
           result.reason === "taken"
-            ? "Already taken"
+            ? "This name is already taken. Please choose another name."
             : result.reason === "invalid"
               ? "That nickname isn't valid."
               : result.reason === "unauthenticated"

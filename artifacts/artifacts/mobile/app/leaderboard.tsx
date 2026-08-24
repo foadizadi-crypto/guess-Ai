@@ -26,6 +26,7 @@ import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
 import { getApiUrl, safeApiTarget } from '@/services/apiConfig';
 import { getPlayerId } from '@/services/authService';
+import { getIdToken } from '@/services/authService';
 import { formatScore } from '@/utils';
 
 // This screen shows the REAL global leaderboard: Top 10 players ranked by
@@ -108,12 +109,14 @@ const REQUEST_TIMEOUT_MS = 8_000;
 async function fetchWithTimeout(
   url: string,
   timeoutMs = REQUEST_TIMEOUT_MS,
+  init: RequestInit = {},
 ): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     return await fetch(url, {
+      ...init,
       signal: controller.signal,
       cache: 'no-store',
     });
@@ -150,7 +153,14 @@ export default function LeaderboardScreen() {
       const [listResult, rankResult] = await Promise.allSettled([
         fetchWithTimeout(getApiUrl('/api/leaderboard?type=global&limit=10')),
         uid
-          ? fetchWithTimeout(getApiUrl(`/api/leaderboard/rank?type=global&userId=${encodeURIComponent(uid)}`))
+           ? getIdToken().then((token) => {
+               if (!token) throw new Error('not signed in');
+               return fetchWithTimeout(
+                 getApiUrl('/api/leaderboard/rank?type=global'),
+                 REQUEST_TIMEOUT_MS,
+                 { headers: { Authorization: `Bearer ${token}` } },
+               );
+             })
           : Promise.resolve(null as Response | null),
       ]);
 

@@ -109,19 +109,29 @@ async function persistPushToken(): Promise<void> {
 /** Initialises push-notification permissions, channels, and recurring reminders. */
 function NotificationProvider() {
   const appState = useRef<AppStateStatus>(AppState.currentState);
+  const notificationsEnabled = useUserStore((s) => s.settings.notifications);
+  const notificationsEnabledRef = useRef(notificationsEnabled);
+  notificationsEnabledRef.current = notificationsEnabled;
 
   useEffect(() => {
-    // One-time setup: Android channels + foreground handler
+    let cancelled = false;
+    // Setup is idempotent. The saved preference controls permission-dependent
+    // scheduling, and this effect also runs when Settings changes it.
     notificationService.setup().then(async () => {
-      const granted = await notificationService.requestPermission();
-      if (!granted) return;
+      if (cancelled) return;
+      if (!notificationsEnabled) {
+        await notificationService.cancelAllScheduledNotifications();
+        return;
+      }
 
-      // Schedule recurring reminders once on first mount
+      const granted = await notificationService.requestPermission();
+      if (!granted || cancelled) {
+        await notificationService.cancelAllScheduledNotifications();
+        return;
+      }
+
       await notificationService.scheduleDailyReward();
       await notificationService.scheduleWeeklyReward();
-
-      // Permission is now confirmed — fetch and persist the push token
-      // (persistPushToken() itself no-ops until the player is signed in).
       await persistPushToken();
     });
 
@@ -133,11 +143,15 @@ function NotificationProvider() {
       appState.current = nextState;
 
       if (prev === 'active' && nextState === 'background') {
-        notificationService.scheduleInactiveReminder();
+        if (notificationsEnabledRef.current) {
+          notificationService.scheduleInactiveReminder();
+        }
       } else if (prev !== 'active' && nextState === 'active') {
-        notificationService.cancelInactiveReminder();
+        if (notificationsEnabledRef.current) {
+          notificationService.cancelInactiveReminder();
+        }
         // Retry token save in case permission was just enabled in OS Settings.
-        persistPushToken();
+        if (notificationsEnabledRef.current) persistPushToken();
         // Silently refresh stale question caches in the background so players
         // rarely hit the offline error screen after days away.
         openAIService.warmCache();
@@ -150,7 +164,7 @@ function NotificationProvider() {
     });
 
     return () => { sub.remove(); removeResponseListener(); };
-  }, []);
+  }, [notificationsEnabled]);
 
   return null;
 }

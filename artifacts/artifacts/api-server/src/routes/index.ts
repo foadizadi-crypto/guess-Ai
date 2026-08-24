@@ -5,6 +5,7 @@ import configRouter from "./config";
 import sessionsRouter from "./sessions";
 import leaderboardRouter from "./leaderboard";
 import nicknameRouter from "./nickname";
+import accountRouter from "./account";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(configRouter);
 router.use(sessionsRouter);
 router.use(leaderboardRouter);
 router.use(nicknameRouter);
+router.use(accountRouter);
 
 export default router;

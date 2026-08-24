@@ -19,8 +19,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { Audio } from 'expo-av';
+import { hapticsService } from '@/services/HapticsService';
 import { useRouter } from 'expo-router';
 import { AvatarFrame } from '@/components/AvatarFrame';
 import { CoinDisplay } from '@/components/CoinDisplay';
@@ -29,6 +28,7 @@ import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
 import { calculateXPProgress, formatScore, xpInCurrentLevel, xpForCurrentLevel } from '@/utils';
+import { useAudio } from '@/hooks/useAudio';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
@@ -41,7 +41,6 @@ export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [debugMode, setDebugMode] = useState<boolean>(false);
-  const [soundInstance, setSoundInstance] = useState<Audio.Sound | null>(null);
   
   // --- 1. Pulling live player records directly from your real store context ---
   const { 
@@ -75,36 +74,12 @@ export default function ProfileScreen() {
     ['flame-outline', 'Best Streak', `${statistics?.longestStreak || 0}`],
   ] as const;
 
-  // --- 2. Stable Native UI Tap Feedback Sound Player ---
-  async function playTapSound() {
-    try {
-      const { sound } = await Audio.Sound.createAsync(
-        require('@/assets/audio/button_click.wav'),
-        { shouldPlay: true }
-      );
-      setSoundInstance(sound);
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync();
-        }
-      });
-    } catch (error) {
-      console.log('[Profile Audio Engine] Sound asset missing or click error:', error);
-    }
-  }
+  const { playEffect } = useAudio();
 
-  useEffect(() => {
-    return soundInstance ? () => { soundInstance.unloadAsync(); } : undefined;
-  }, [soundInstance]);
-
-  // --- 3. Unified Touch Interaction Feedback Pipeline ---
+  // --- 2. Unified Touch Interaction Feedback Pipeline ---
   const handleBackNavigation = async () => {
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch (e) {
-      console.log('Haptics engine unavailable on active device layer');
-    }
-    await playTapSound();
+    await hapticsService.impact(1);
+    playEffect('button_click');
     router.back();
   };
 

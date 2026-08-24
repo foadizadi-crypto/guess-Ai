@@ -97,7 +97,10 @@ router.post("/nickname/register", requireAuth, async (req: Request, res: Respons
 
     if (!result.ok) {
       if (result.reason === "taken") {
-        res.status(409).json({ error: "taken", message: "Already taken" });
+         res.status(409).json({
+           error: "taken",
+           message: "This name is already taken. Please choose another name.",
+         });
         return;
       }
       // already_registered

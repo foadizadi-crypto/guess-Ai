@@ -26,10 +26,9 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { hapticsService } from '@/services/HapticsService';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
-import { Audio } from "expo-av";
 
 import { AnimatedBackground } from "@/components/AnimatedBackground";
 import { WingsShopTab } from "@/components/WingsShopTab";
@@ -128,7 +127,6 @@ export default function ShopScreen() {
   const [cosmFilter, setCosmFilter] = useState<CosmFilter>("All");
   const [floating, setFloating] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
-  const [soundInstance, setSoundInstance] = useState<Audio.Sound | null>(null);
 
   // ── Zustand User Store Hooks Bindings ─────────────────────────────────────
   const coins = useUserStore((s) => s.coins);
@@ -153,31 +151,11 @@ export default function ShopScreen() {
   const { isAdFreePassActive, removeAds } = useAdStore();
   const adFreeActive = isAdFreePassActive();
 
-  // --- Audio Feedback Engine Interface and Local GC Management ---
-  async function playClickSound() {
-    try {
-      const { sound } = await Audio.Sound.createAsync(
-        require("@/assets/audio/button_click.wav"),
-      );
-      setSoundInstance(sound);
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync().catch(() => {});
-        }
-      });
-      await sound.playAsync();
-    } catch (err) {
-      console.log("[Audio System] Shop click feedback error:", err);
-    }
-  }
-
-  useEffect(() => {
-    return () => {
-      if (soundInstance) {
-        soundInstance.unloadAsync().catch(() => {});
-      }
-    };
-  }, [soundInstance]);
+  // Sound effects are routed through the shared AudioService so the global
+  // Settings preference applies to shop interactions too.
+  const playClickSound = useCallback(() => {
+    playEffect("button_click");
+  }, [playEffect]);
 
   // Animated interface coin pulse configurations
   const coinPulse = useSharedValue<number>(1);
@@ -196,9 +174,7 @@ export default function ShopScreen() {
 
   const ok = useCallback(
     (msg: string) => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
-        () => {},
-      );
+      hapticsService.notification(1);
       playEffect("purchase");
       toast(msg);
     },
@@ -206,22 +182,20 @@ export default function ShopScreen() {
   );
 
   const fail = useCallback((title: string, body: string) => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
-      () => {},
-    );
+    hapticsService.notification(0);
     Alert.alert(title, body);
   }, []);
 
   // ── TAB CHANGE MANAGER PIPELINE ───────────────────────────────────────────
   const handleTabSelection = (index: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    hapticsService.impact(0);
     playClickSound();
     setTab(index);
     setCosmFilter("All");
   };
 
   const handleFilterSelection = (filter: CosmFilter) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    hapticsService.impact(0);
     playClickSound();
     setCosmFilter(filter);
   };
@@ -324,7 +298,7 @@ export default function ShopScreen() {
     async (sku: string, price: string, gemAmount: number) => {
       if (loading) return;
       setLoading(sku);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      hapticsService.impact(1);
       playClickSound();
       try {
         // --- CRITICAL AUDIT FIX: Traps success and cancellation blocks cleanly ---
@@ -367,7 +341,7 @@ export default function ShopScreen() {
       if (!av) return;
       if (av.unlocked || id === selectedAvatarId) {
         selectAvatar(id);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        hapticsService.impact(0);
         toast("Equipped!");
         return;
       }
@@ -401,7 +375,7 @@ export default function ShopScreen() {
       const owned = gemCosmetics[id]?.owned ?? false;
       if (owned) {
         equipGemCosmetic(id);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        hapticsService.impact(0);
         toast(equipped ? "Unequipped" : "Equipped!");
         return;
       }

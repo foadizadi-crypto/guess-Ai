@@ -27,7 +27,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Svg, Path, Circle, G, Text as SvgText } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedBackground } from '@/components/AnimatedBackground';
 import { BackButton } from '@/components/BackButton';
@@ -208,7 +208,7 @@ export default function SpinScreen() {
     if (!reward) return;  // guard failed (no coins / daily limit etc.)
 
     setSpinning(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    hapticsService.impact(2);
 
     // Which segment index did we land on?
     const segIndex = SPIN_CONFIG.rewards.findIndex((r) => r.id === reward.id);
@@ -242,7 +242,7 @@ export default function SpinScreen() {
     setResult(reward);
     setShowModal(true);
     setSpinning(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    hapticsService.notification(1);
     // Normalise rotation to avoid accumulation drift
     rotation.value = rotation.value % 360;
   };

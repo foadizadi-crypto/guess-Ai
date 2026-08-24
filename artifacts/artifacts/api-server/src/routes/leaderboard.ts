@@ -13,6 +13,7 @@
 import { Router, type Request, type Response } from "express";
 import { getFirestore } from "../lib/firebaseAdmin";
 import { logger } from "../lib/logger";
+import { requireAuth } from "../lib/verifyAuth";
 
 const router = Router();
 
@@ -137,14 +138,9 @@ router.get("/leaderboard", async (req: Request, res: Response) => {
 // Real rank for one player, computed against the FULL player base — not just
 // the top-N slice returned by /api/leaderboard. Lets the app show "You're
 // #182" even when the player is nowhere near the top 10.
-router.get("/leaderboard/rank", async (req: Request, res: Response) => {
+router.get("/leaderboard/rank", requireAuth, async (req: Request, res: Response) => {
   const type   = (req.query["type"]   as string | undefined) ?? "global";
-  const userId = req.query["userId"] as string | undefined;
-
-  if (!userId) {
-    res.status(400).json({ error: "userId is required" });
-    return;
-  }
+  const userId = req.uid!;
 
   try {
     const db = getFirestore();

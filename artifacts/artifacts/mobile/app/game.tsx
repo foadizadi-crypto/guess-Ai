@@ -28,7 +28,7 @@ import Animated, {
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { AnimatedBackground } from '@/components/AnimatedBackground';
 import { AnimatedIcon } from '@/components/AnimatedIcon';
 import { BackButton } from '@/components/BackButton';
@@ -248,9 +248,7 @@ export default function GameScreen() {
         withTiming(0, { duration: 500 }),
       );
 
-      Haptics.notificationAsync(
-        correct ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error,
-      );
+      hapticsService.notification(correct ? 1 : 0);
       playEffect(correct ? 'correct' : 'wrong');
       if (!correct) {
         shakeX.value = withSequence(
@@ -303,7 +301,7 @@ export default function GameScreen() {
     (powerUpId: PowerUpId) => {
       if (feedback || paused || endedRef.current || !currentQuestion || powerUps[powerUpId] < 1) return;
       if (!usePowerUp(powerUpId)) return;
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      hapticsService.notification(1);
       playEffect('button_click');
       if (powerUpId === 'hint') {
         setHintUsed(true);

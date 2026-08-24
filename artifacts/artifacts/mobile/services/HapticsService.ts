@@ -6,13 +6,13 @@ import { useUserStore } from '@/store/userStore';
  * immediately, so changing Settings takes effect without restarting the app.
  */
 export const hapticsService = {
-  impact: async (style: Haptics.ImpactFeedbackStyle): Promise<void> => {
+  impact: async (style: number): Promise<void> => {
     if (!useUserStore.getState().settings.vibration) return;
-    try { await Haptics.impactAsync(style); } catch { /* unsupported device */ }
+    try { await Haptics.impactAsync(style as unknown as Haptics.ImpactFeedbackStyle); } catch { /* unsupported device */ }
   },
-  notification: async (type: Haptics.NotificationFeedbackType): Promise<void> => {
+  notification: async (type: number): Promise<void> => {
     if (!useUserStore.getState().settings.vibration) return;
-    try { await Haptics.notificationAsync(type); } catch { /* unsupported device */ }
+    try { await Haptics.notificationAsync(type as unknown as Haptics.NotificationFeedbackType); } catch { /* unsupported device */ }
   },
   selection: async (): Promise<void> => {
     if (!useUserStore.getState().settings.vibration) return;

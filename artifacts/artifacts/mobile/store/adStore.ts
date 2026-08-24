@@ -88,6 +88,8 @@ interface AdState {
 
   /** Convenience: grant a lifetime ad-free pass (backward-compat with IAPService). */
   removeAds: () => void;
+  /** Clear locally cached ad entitlement/progress after application-data deletion. */
+  resetForAccountDeletion: () => void;
 
   // ── Stamina ad tracking ────────────────────────────────────────────────────
   /** Number of rewarded-ad stamina grants used today. Resets at UTC midnight. */
@@ -157,6 +159,14 @@ export const useAdStore = create<AdState>()(
       },
 
       removeAds: () => set({ adsRemoved: true, adFreePassExpiry: null }),
+      resetForAccountDeletion: () => set({
+        adsRemoved: false,
+        adFreePassExpiry: null,
+        sessionCounter: 0,
+        lastDailyAdTimestamp: null,
+        staminaAdsToday: 0,
+        lastStaminaAdDate: null,
+      }),
 
       // ── Stamina ad tracking ──────────────────────────────────────────────
       canWatchStaminaAd: () => {

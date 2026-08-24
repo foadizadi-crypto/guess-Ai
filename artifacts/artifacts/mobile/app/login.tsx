@@ -18,7 +18,7 @@ import Animated, {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { AnimatedGradientBackground } from '@/components/AnimatedGradientBackground';
 import { GoldParticles } from '@/components/GoldParticles';
 import { GlassCard } from '@/components/GlassCard';
@@ -80,7 +80,7 @@ export default function LoginScreen() {
       const existing = await fetchRegisteredNickname();
       const uid = getPlayerId();
       if (existing && uid) setVerifiedNickname(uid, existing);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      hapticsService.notification(1);
       router.replace(ROUTES.LOBBY);
     },
     [setVerifiedNickname, router],
@@ -119,7 +119,7 @@ export default function LoginScreen() {
   }, [response, finishSignIn]);
 
   const handleGoogle = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    hapticsService.impact(0);
 
     if (Platform.OS === 'web') {
       setGoogleLoading(true);

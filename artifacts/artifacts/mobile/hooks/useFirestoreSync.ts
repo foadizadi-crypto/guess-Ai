@@ -8,9 +8,10 @@
  * Add <FirestoreSyncProvider /> near the root of the app (see _layout.tsx).
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUserStore } from '@/store/userStore';
 import { getPlayerId, onPlayerIdChange } from '@/services/authService';
+import { loadPlayerProfile } from '@/services/firestoreService';
 
 export function useFirestoreSync(): void {
   // Subscribe to the economy fields we want to mirror
@@ -19,12 +20,26 @@ export function useFirestoreSync(): void {
 
   // ── Track sign-in / sign-out so a fresh sign-in immediately syncs ───────
   const uidRef = useRef<string | null>(getPlayerId());
+  const [uid, setUid] = useState<string | null>(getPlayerId());
+  const hydrateFromBackend = useUserStore((s) => s.hydrateFromBackend);
   useEffect(() => {
     const unsub = onPlayerIdChange((uid) => {
       uidRef.current = uid;
+      setUid(uid);
     });
     return unsub;
   }, []);
+
+  // Load the one existing players/{uid} record after auth restoration/sign-in.
+  // This never creates a second record and is scoped to the active UID.
+  useEffect(() => {
+    if (!uid) return;
+    let active = true;
+    loadPlayerProfile(uid).then((profile) => {
+      if (active && profile) hydrateFromBackend(uid, profile);
+    });
+    return () => { active = false; };
+  }, [uid, hydrateFromBackend]);
 
   // ── Sync on economy state change ─────────────────────────────────────────
   // We debounce with a ref so rapid consecutive changes don't flood Firestore.

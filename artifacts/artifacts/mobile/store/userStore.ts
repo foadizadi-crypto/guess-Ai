@@ -135,6 +135,18 @@ interface UserState {
   setVerifiedNickname: (uid: string, nickname: string) => void;
   /** True only if `username` was verified for exactly this uid. */
   isNicknameVerifiedFor: (uid: string | null) => boolean;
+  /** Apply the existing backend profile to this signed-in UID's local state. */
+  hydrateFromBackend: (uid: string, profile: {
+    username?: string;
+    coins?: number;
+    gems?: number;
+    xp?: number;
+    level?: number;
+    isPremium?: boolean;
+    selectedAvatarId?: string;
+    totalGamesPlayed?: number;
+    totalWins?: number;
+  }) => void;
   addCoins: (amount: number) => void;
   spendCoins: (amount: number) => boolean;
   addGems: (amount: number) => void;
@@ -261,6 +273,23 @@ export const useUserStore = create<UserState>()(
         const state = get();
         return !!uid && state.nicknameUid === uid && !!state.username;
       },
+      hydrateFromBackend: (uid, profile) => set((state) => ({
+        username: profile.username?.trim() || state.username,
+        nicknameUid: profile.username?.trim() ? uid : state.nicknameUid,
+        coins: typeof profile.coins === 'number' ? profile.coins : state.coins,
+        gems: typeof profile.gems === 'number' ? profile.gems : state.gems,
+        xp: typeof profile.xp === 'number' ? profile.xp : state.xp,
+        level: typeof profile.level === 'number' ? profile.level : state.level,
+        isPremium: typeof profile.isPremium === 'boolean' ? profile.isPremium : state.isPremium,
+        selectedAvatarId: profile.selectedAvatarId || state.selectedAvatarId,
+        statistics: {
+          ...state.statistics,
+          totalGamesPlayed: typeof profile.totalGamesPlayed === 'number'
+            ? profile.totalGamesPlayed : state.statistics.totalGamesPlayed,
+          totalWins: typeof profile.totalWins === 'number'
+            ? profile.totalWins : state.statistics.totalWins,
+        },
+      })),
       addCoins: (amount) => set((state) => ({ coins: state.coins + amount })),
       
       spendCoins: (amount) => {
@@ -635,6 +664,7 @@ export const useUserStore = create<UserState>()(
       
       resetUser: () => set({
         username: '',
+        nicknameUid: null,
         coins: 500,
         gems: 0,
         xp: 0,

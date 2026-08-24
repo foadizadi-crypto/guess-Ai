@@ -4,7 +4,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSpring, with
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { AnimatedBackground } from '@/components/AnimatedBackground';
 import { GradientButton } from '@/components/GradientButton';
 import { SecondaryButton } from '@/components/SecondaryButton';
@@ -173,9 +173,7 @@ export default function ResultScreen() {
       }
     }
 
-    Haptics.notificationAsync(
-      isVictory ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning,
-    );
+    hapticsService.notification(isVictory ? 1 : 2);
     trophyScale.value = withSpring(1, { damping: 12, stiffness: 80 });
     contentOpacity.value = withDelay(250, withTiming(1, { duration: 450 }));
     contentY.value = withDelay(250, withTiming(0, { duration: 450 }));
@@ -198,7 +196,7 @@ export default function ResultScreen() {
       resetSessionCounter();
       setDoubledByAd(true);
       playEffect('coin');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      hapticsService.notification(1);
       return;
     }
 
@@ -211,7 +209,7 @@ export default function ResultScreen() {
         resetSessionCounter(); // reset counter after successful watch
         setDoubledByAd(true);
         playEffect('coin');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        hapticsService.notification(1);
       }
       // On decline the counter is NOT reset — it carries over (spec §7.2)
     } finally {
