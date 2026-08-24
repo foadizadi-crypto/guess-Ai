@@ -1,6 +1,6 @@
 /**
  * artifacts/artifacts/mobile/store/userStore.ts
- * Global State Management Store for BlurQuiz Game Engine.
+ * Global State Management Store for GUESSAi Game Engine.
  * Fully expanded production-grade implementation containing all complex game logic,
  * level-up equations, achievement tracking matrices, daily mission loops, 
  * atomic double-spending security updates, and multi-state network controls.

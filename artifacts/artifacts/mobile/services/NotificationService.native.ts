@@ -57,6 +57,8 @@ if (N) {
 
 // ── Fixed identifiers (allow cancellation by ID) ──────────────────────────────
 const IDS = {
+  // Keep these channel IDs stable so existing installs retain their
+  // notification settings; only the user-facing app name is standardized.
   STAMINA_FULL:  'blurquiz-stamina-full',
   SPIN_READY:    'blurquiz-spin-ready',
   DAILY_REWARD:  'blurquiz-daily-reward',
@@ -136,7 +138,7 @@ async function scheduleStaminaFull(minutesUntilFull: number): Promise<void> {
     IDS.STAMINA_FULL,
     {
       title: '⚡ Stamina fully restored!',
-      body: 'Your energy is at 50/50 — come back and play BlurQuiz!',
+      body: 'Your energy is at 50/50 — come back and play GUESSAi!',
       data: { screen: 'lobby' },
       ...(Platform.OS === 'android' ? { android: { channelId: 'gameplay' } } : {}),
     },

@@ -1,7 +1,7 @@
 // ─── Economy constants — single source of truth ─────────────────────────────
 // All economy values live here. Never hardcode these in UI files.
 // Change values here only; never in component files.
-// Reference: BlurQuiz Game Economy & Progression Design Document v1.0
+// Reference: GUESSAi Game Economy & Progression Design Document v1.0
 //
 // ⚠️  Core tunables now live in gameConfig.ts (GAME_CONFIG).
 //     This file re-exports them as named constants so existing imports keep working.

@@ -1,4 +1,4 @@
-// ─── BlurQuiz — Central Game Configuration ───────────────────────────────────
+// ─── GUESSAi — Central Game Configuration ────────────────────────────────────
 // SINGLE SOURCE OF TRUTH for every tunable number in the game.
 // To rebalance the economy, difficulty, or progression change values HERE ONLY.
 // Core logic files must import from this file; never hardcode these numbers.

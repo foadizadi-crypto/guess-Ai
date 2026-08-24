@@ -176,7 +176,7 @@ export default function LoginScreen() {
             <Text style={styles.logoW}>B</Text>
             <Text style={styles.logoG}>Q</Text>
           </View>
-          <Text style={styles.appName}>BlurQuiz</Text>
+          <Text style={styles.appName}>GUESSAi</Text>
           <Text style={styles.tagline}>GUESS WHAT YOU SEE</Text>
         </Animated.View>
 

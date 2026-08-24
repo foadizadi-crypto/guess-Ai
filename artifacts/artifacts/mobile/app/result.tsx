@@ -240,7 +240,7 @@ export default function ResultScreen() {
   const playAgain = () => { resetGame(); router.replace(ROUTES.LEVEL_SELECT); };
   const shareResult = async () => {
     await Share.share({
-      message: `I scored ${score} points in BlurQuiz with ${accuracy}% accuracy! 🎮`,
+      message: `I scored ${score} points in GUESSAi with ${accuracy}% accuracy! 🎮`,
     });
   };
 

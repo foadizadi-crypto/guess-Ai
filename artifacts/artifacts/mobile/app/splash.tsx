@@ -200,7 +200,7 @@ export default function SplashScreen() {
           </Animated.View>
 
           <Animated.View style={taglineStyle}>
-            <Text style={styles.appName}>BlurQuiz</Text>
+            <Text style={styles.appName}>GUESSAi</Text>
             <Text style={styles.tagline}>GUESS WHAT YOU SEE</Text>
           </Animated.View>
         </View>

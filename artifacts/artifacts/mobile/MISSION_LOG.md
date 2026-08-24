@@ -1,4 +1,4 @@
-# BlurQuiz — Mission Log
+# GUESSAi — Mission Log
 
 Track completed missions here. Resume from the next incomplete mission if the session is interrupted.
 
@@ -6,7 +6,7 @@ Track completed missions here. Resume from the next incomplete mission if the se
 
 ## Mission 1 — Overall Objective ✅
 **Status:** Complete (context only, no code changes)
-**Summary:** BlurQuiz is a 500-level mobile quiz game where players guess blurred images. No Pay-to-Win mechanics. All rewards are cosmetic, social, or progression-based. Every tunable number lives in a single config file.
+**Summary:** GUESSAi is a 500-level mobile quiz game where players guess blurred images. No Pay-to-Win mechanics. All rewards are cosmetic, social, or progression-based. Every tunable number lives in a single config file.
 
 ---
 

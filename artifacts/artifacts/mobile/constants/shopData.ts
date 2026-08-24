@@ -1,4 +1,4 @@
-// ─── BlurQuiz Shop Inventory — data-driven ───────────────────────────────────
+// ─── GUESSAi Shop Inventory — data-driven ────────────────────────────────────
 // Spec: Final Implementation Prompt §6 (Shop System)
 // All items are defined here. Shop UI must read from these arrays — never
 // hardcode items inside UI component files.
@@ -139,7 +139,7 @@ export const REAL_MONEY_OFFERS: RealMoneyOffer[] = [
   {
     id: 'starter_pack',
     name: 'Starter Pack',
-    description: 'The best deal to kick off your BlurQuiz journey.',
+    description: 'The best deal to kick off your GUESSAi journey.',
     price: '$2.00',
     contents: ['5× Combo Shield', '3× Clarity Bomb', '1× Exclusive Silver Frame'],
     oneTime: true,

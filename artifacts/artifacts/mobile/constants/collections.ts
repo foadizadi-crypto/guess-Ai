@@ -178,7 +178,7 @@ export const FRAMES: CosmeticItem[] = [
 // ─── THEME COLLECTION (7) ─────────────────────────────────────────────────────
 
 export const THEMES: CosmeticItem[] = [
-  { id: 'theme_classic',  name: 'Classic',  type: 'theme', rarity: 'common',    icon: 'sunny-outline',          price: 0,   currency: 'free',  unlockType: 'level',  unlockLevel: 1, description: 'The original BlurQuiz look' },
+  { id: 'theme_classic',  name: 'Classic',  type: 'theme', rarity: 'common',    icon: 'sunny-outline',          price: 0,   currency: 'free',  unlockType: 'level',  unlockLevel: 1, description: 'The original GUESSAi look' },
   { id: 'theme_dark',     name: 'Dark',     type: 'theme', rarity: 'common',    icon: 'moon-outline',           price: 40,  currency: 'gems',  unlockType: 'shop',                  description: 'Deep dark mode with rich contrast' },
   { id: 'theme_cyber',    name: 'Cyber',    type: 'theme', rarity: 'rare',      icon: 'terminal-outline',       price: 70,  currency: 'gems',  unlockType: 'shop',                  description: 'Neon grids and matrix-style aesthetics' },
   { id: 'theme_neon',     name: 'Neon',     type: 'theme', rarity: 'rare',      icon: 'color-wand-outline',     price: 80,  currency: 'gems',  unlockType: 'shop',                  description: 'Vivid neon palette — impossible to miss' },
@@ -205,7 +205,7 @@ export const BADGES: CosmeticItem[] = [
   { id: 'badge_silver',   name: 'Silver Badge',   type: 'badge', rarity: 'common',    icon: 'ribbon-outline', price: 30,  currency: 'gems',  unlockType: 'shop',                         description: 'A polished silver emblem of dedication' },
   { id: 'badge_gold',     name: 'Gold Badge',     type: 'badge', rarity: 'rare',      icon: 'ribbon',         price: 70,  currency: 'gems',  unlockType: 'shop',                         description: 'Gold status — you\'ve proven yourself' },
   { id: 'badge_platinum', name: 'Platinum Badge', type: 'badge', rarity: 'epic',      icon: 'ribbon',         price: 130, currency: 'gems',  unlockType: 'achievement', description: 'Complete all 10 achievements to unlock' },
-  { id: 'badge_diamond',  name: 'Diamond Badge',  type: 'badge', rarity: 'legendary', icon: 'ribbon',         price: 0,   currency: 'free',  unlockType: 'special',                      description: 'The ultimate badge — for true BlurQuiz legends' },
+  { id: 'badge_diamond',  name: 'Diamond Badge',  type: 'badge', rarity: 'legendary', icon: 'ribbon',         price: 0,   currency: 'free',  unlockType: 'special',                      description: 'The ultimate badge — for true GUESSAi legends' },
 ];
 
 // ─── TITLE COLLECTION (10) ────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
-# BlurQuiz
+# GUESSAi
 
-BlurQuiz is an Expo mobile game where players identify images through increasing levels of blur.
+GUESSAi is an Expo mobile game where players identify images through increasing levels of blur.
 
 ## Run & Operate
 
@@ -74,7 +74,7 @@ The API server uses a provider router in `artifacts/artifacts/api-server/src/ser
 
 ## Product
 
-The current imported project contains the BlurQuiz foundation and Phase 2 core gameplay flows, including onboarding, lobby, difficulty and category selection, game, results, profile, settings, shop, and leaderboard screens.
+The current imported project contains the GUESSAi foundation and Phase 2 core gameplay flows, including onboarding, lobby, difficulty and category selection, game, results, profile, settings, shop, and leaderboard screens.
 
 ## Game Economy Bible
 
