@@ -13,12 +13,13 @@ import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
 import { useAudioStore } from '@/store/audioStore';
 import { useAdStore } from '@/store/adStore';
-import { iapService, IAP_SKUS } from '@/services/IAPService';
+import { iapService } from '@/services/IAPService';
 import { useRTL } from '@/hooks/useRTL';
 import { auth } from '@/services/firebase';
 import { deleteApplicationAccount } from '@/services/accountService';
 import { signOut } from '@/services/authService';
 import { useGameStore } from '@/store/gameStore';
+import { ROUTES } from '@/navigation/routes';
 import { router } from 'expo-router';
 
 type AppLinks = { privacyPolicyUrl?: string; termsOfServiceUrl?: string; supportEmail?: string };
@@ -29,8 +30,7 @@ export default function SettingsScreen() {
   const { textAlign } = useRTL();
   const { settings, updateSettings, username } = useUserStore();
   const { isSoundEnabled, toggleSound } = useAudioStore();
-  const { adsRemoved, removeAds } = useAdStore();
-  const [removeAdsLoading, setRemoveAdsLoading] = useState(false);
+  const { removeAds } = useAdStore();
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [googleEmail, setGoogleEmail] = useState<string | null>(auth.currentUser?.email ?? null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -215,47 +215,6 @@ export default function SettingsScreen() {
 
         {/* Purchases */}
         <Text style={[styles.sectionLabel, { textAlign }]}>Purchases</Text>
-        {!adsRemoved && (
-          <>
-            <TouchableOpacity
-              style={[styles.removeAdsBtn, removeAdsLoading && { opacity: 0.6 }]}
-              disabled={removeAdsLoading}
-              onPress={async () => {
-                setRemoveAdsLoading(true);
-                try {
-                   const result = await iapService.purchase(IAP_SKUS.REMOVE_ADS);
-                   if (result.success) {
-                    removeAds();
-                    hapticsService.notification(1);
-                   } else {
-                     Alert.alert('Purchase not completed', 'The purchase was cancelled or could not be completed.');
-                  }
-                } catch (err) {
-                  if (__DEV__) console.warn('[Settings] remove-ads purchase error', err);
-                } finally {
-                  setRemoveAdsLoading(false);
-                }
-              }}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name={removeAdsLoading ? 'hourglass-outline' : 'star-outline'}
-                size={22}
-                color={GameColors.backgroundPrimary}
-              />
-              <Text style={styles.removeAdsText}>
-                {removeAdsLoading ? 'Processing…' : 'Remove Ads'}
-              </Text>
-            </TouchableOpacity>
-          </>
-        )}
-        {adsRemoved && (
-          <View style={styles.adFreeRow}>
-            <Ionicons name="checkmark-circle" size={20} color={GameColors.accentGreen} />
-            <Text style={styles.adFreeText}>Ad-Free Experience Active</Text>
-          </View>
-        )}
-
         <TouchableOpacity
           style={[styles.restoreBtn, restoreLoading && { opacity: 0.5 }]}
           disabled={restoreLoading}
@@ -306,7 +265,7 @@ export default function SettingsScreen() {
           <SettingRow
             icon="information-circle-outline"
             label="Version"
-            right={<Text style={styles.valueText}>{Constants.expoConfig?.version ?? '1.0.0'}</Text>}
+            right={<Text style={styles.valueText}>{Constants.expoConfig?.version ?? 'Unknown'}</Text>}
           />
         </GlassCard>
       </ScrollView>

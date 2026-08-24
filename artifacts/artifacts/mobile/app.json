@@ -35,7 +35,7 @@
     "android": {
       "package": "com.aiblur.quiz",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 2,
+      "versionCode": 1,
       "backgroundColor": "#0D0221",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
