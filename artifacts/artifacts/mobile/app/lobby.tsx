@@ -20,7 +20,7 @@ import { Audio } from "expo-av";
 import { AvatarFrame } from "@/components/AvatarFrame";
 import { AnimatedIcon } from "@/components/AnimatedIcon";
 import { DailyRewardModal } from "@/components/DailyRewardModal";
-import { PlayerNameModal, isValidPlayerName } from "@/components/PlayerNameModal";
+import { PlayerNameModal } from "@/components/PlayerNameModal";
 import { registerNickname } from "@/services/nicknameService";
 import { getPlayerId } from "@/services/authService";
 import { FullBodyAvatarStage } from "@/components/FullBodyAvatarStage";
@@ -150,7 +150,7 @@ export default function LobbyScreen() {
 
   const {
     username,
-    setUsername,
+    setVerifiedNickname,
     coins,
     gems,
     level,
@@ -292,7 +292,7 @@ export default function LobbyScreen() {
   const handleActionTrigger = async (actionName: string) => {
     if (
       NAME_GATED_ACTIONS.includes(actionName) &&
-      !isValidPlayerName(useUserStore.getState().username)
+      !useUserStore.getState().isNicknameVerifiedFor(getPlayerId())
     ) {
       pendingActionRef.current = actionName;
       setNameModalVisible(true);
@@ -393,18 +393,20 @@ export default function LobbyScreen() {
         return { ok: false, message: "You're not signed in. Please restart the app." };
       }
 
-      const result = await registerNickname(playerId, name);
+      const result = await registerNickname(name);
       if (!result.ok) {
         const message =
           result.reason === "taken"
             ? "Already taken"
             : result.reason === "invalid"
               ? "That nickname isn't valid."
-              : "Could not reach the server. Please try again.";
+              : result.reason === "unauthenticated"
+                ? "You're not signed in. Please restart the app."
+                : "Could not reach the server. Please try again.";
         return { ok: false, message };
       }
 
-      setUsername(result.nickname);
+      setVerifiedNickname(playerId, result.nickname);
       setNameModalVisible(false);
       const action = pendingActionRef.current;
       pendingActionRef.current = null;
@@ -413,7 +415,7 @@ export default function LobbyScreen() {
       }
       return { ok: true };
     },
-    [setUsername], // eslint-disable-line react-hooks/exhaustive-deps
+    [setVerifiedNickname], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // ===================================================

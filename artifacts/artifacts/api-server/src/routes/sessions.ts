@@ -9,11 +9,11 @@
 import { Router, type Request, type Response } from "express";
 import { FieldValue } from "firebase-admin/firestore";
 import { getFirestore } from "../lib/firebaseAdmin";
+import { requireAuth } from "../lib/verifyAuth";
 
 const router = Router();
 
 interface SessionBody {
-  playerId:       string;
   sessionId?:     string;
   difficulty:     "easy" | "medium" | "hard";
   category:       string;
@@ -28,12 +28,16 @@ interface SessionBody {
   wasAbandoned:   boolean;
 }
 
-router.post("/sessions", async (req: Request, res: Response) => {
+router.post("/sessions", requireAuth, async (req: Request, res: Response) => {
   const body = req.body as Partial<SessionBody>;
 
-  const { playerId, difficulty, category } = body;
-  if (!playerId || !difficulty || !category) {
-    res.status(400).json({ error: "playerId, difficulty, and category are required" });
+  // Identity comes only from the verified token — never a client-supplied
+  // playerId — otherwise any caller could record sessions or inflate stats
+  // for an arbitrary player.
+  const playerId = req.uid!;
+  const { difficulty, category } = body;
+  if (!difficulty || !category) {
+    res.status(400).json({ error: "difficulty and category are required" });
     return;
   }
 

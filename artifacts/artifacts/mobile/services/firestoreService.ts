@@ -20,7 +20,11 @@ import type { Achievement } from '@/types';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface FirestorePlayer {
-  username:        string;
+  // `username` is an identity field set only by the server during nickname
+  // registration (see api-server/src/routes/nickname.ts) — Firestore rules
+  // reject any client write that touches it, so the client-side sync payload
+  // (see hooks/useFirestoreSync.ts) never includes it.
+  username?:       string;
   coins:           number;
   gems:            number;
   xp:              number;
@@ -189,12 +193,19 @@ export async function recordGameSession(
 
   // ── API server write (updates aggregate player stats) ────────────────────
   try {
+    // Identity is derived server-side from a verified ID token — the server
+    // never trusts a client-supplied playerId for who a session belongs to.
+    const { getIdToken } = await import('./authService');
+    const idToken = await getIdToken();
+    if (!idToken) throw new Error('not signed in');
     const apiBase = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
     await fetch(`${apiBase}/api/sessions`, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        playerId:   uid,
+      headers: {
+        'Content-Type':  'application/json',
+        Authorization:   `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
         sessionId,
         ...session,
       }),

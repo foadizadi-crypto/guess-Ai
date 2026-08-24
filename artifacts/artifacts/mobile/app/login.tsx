@@ -26,7 +26,7 @@ import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
 import { ROUTES } from '@/navigation/routes';
-import { signInWithGoogle, GoogleSignInError } from '@/services/authService';
+import { signInWithGoogle, GoogleSignInError, getPlayerId } from '@/services/authService';
 import { useGoogleSignIn, isNativeGoogleSignInConfigured } from '@/services/googleAuthNative';
 import { fetchRegisteredNickname } from '@/services/nicknameService';
 
@@ -40,7 +40,7 @@ import { fetchRegisteredNickname } from '@/services/nicknameService';
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const setUsername = useUserStore((s) => s.setUsername);
+  const setVerifiedNickname = useUserStore((s) => s.setVerifiedNickname);
 
   const [googleLoading, setGoogleLoading] = useState(false);
   const { configured: nativeConfigured, response, promptAsync } = useGoogleSignIn();
@@ -76,13 +76,14 @@ export default function LoginScreen() {
    * for this account (returning player / second device) before entering
    * the lobby — so they never see the nickname modal twice. */
   const finishSignIn = useCallback(
-    async (uid: string) => {
-      const existing = await fetchRegisteredNickname(uid);
-      if (existing) setUsername(existing);
+    async () => {
+      const existing = await fetchRegisteredNickname();
+      const uid = getPlayerId();
+      if (existing && uid) setVerifiedNickname(uid, existing);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace(ROUTES.LOBBY);
     },
-    [setUsername, router],
+    [setVerifiedNickname, router],
   );
 
   // ── Native: handle the AuthSession response once Google redirects back ──
@@ -100,8 +101,8 @@ export default function LoginScreen() {
       (async () => {
         try {
           const { signInWithGoogleIdToken } = await import('@/services/authService');
-          const uid = await signInWithGoogleIdToken(idToken);
-          await finishSignIn(uid);
+          await signInWithGoogleIdToken(idToken);
+          await finishSignIn();
         } catch (err) {
           console.warn('[Login] native Google sign-in failed:', err);
           Alert.alert('Sign-In Failed', 'Could not sign in with Google. Please try again.');
@@ -123,8 +124,8 @@ export default function LoginScreen() {
     if (Platform.OS === 'web') {
       setGoogleLoading(true);
       try {
-        const uid = await signInWithGoogle();
-        await finishSignIn(uid);
+        await signInWithGoogle();
+        await finishSignIn();
       } catch (err) {
         if (err instanceof GoogleSignInError && err.code === 'popup_blocked') {
           // A redirect is already underway — the page will reload.

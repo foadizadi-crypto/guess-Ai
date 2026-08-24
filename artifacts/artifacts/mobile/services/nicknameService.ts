@@ -3,23 +3,33 @@
  * (see api-server/src/routes/nickname.ts). This is the only path allowed
  * to confirm a nickname — never accept or display one locally without a
  * successful response from here.
+ *
+ * Both endpoints require a signed-in player: we send the current Firebase
+ * ID token as `Authorization: Bearer <token>` and the server verifies it
+ * and derives the acting uid from the token itself, never from anything
+ * the client sends — a client can only ever register/read its own nickname.
  */
+
+import { getIdToken, getPlayerId } from './authService';
 
 const apiBase = () => process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
 export type RegisterNicknameResult =
   | { ok: true; nickname: string }
-  | { ok: false; reason: 'taken' | 'already_registered' | 'invalid' | 'network' };
+  | { ok: false; reason: 'taken' | 'already_registered' | 'invalid' | 'network' | 'unauthenticated' };
 
-export async function registerNickname(
-  playerId: string,
-  nickname: string,
-): Promise<RegisterNicknameResult> {
+export async function registerNickname(nickname: string): Promise<RegisterNicknameResult> {
+  const idToken = await getIdToken();
+  if (!idToken) return { ok: false, reason: 'unauthenticated' };
+
   try {
     const res = await fetch(`${apiBase()}/api/nickname/register`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerId, nickname }),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ nickname }),
     });
 
     if (res.ok) {
@@ -34,6 +44,9 @@ export async function registerNickname(
     if (res.status === 400) {
       return { ok: false, reason: 'invalid' };
     }
+    if (res.status === 401) {
+      return { ok: false, reason: 'unauthenticated' };
+    }
     return { ok: false, reason: 'network' };
   } catch (err) {
     console.warn('[Nickname] register failed:', err);
@@ -41,10 +54,16 @@ export async function registerNickname(
   }
 }
 
-/** Returns the nickname already registered for this player, or null. */
-export async function fetchRegisteredNickname(playerId: string): Promise<string | null> {
+/** Returns the nickname already registered for the *current* signed-in player, or null. */
+export async function fetchRegisteredNickname(): Promise<string | null> {
+  const uid = getPlayerId();
+  const idToken = await getIdToken();
+  if (!uid || !idToken) return null;
+
   try {
-    const res = await fetch(`${apiBase()}/api/nickname/${encodeURIComponent(playerId)}`);
+    const res = await fetch(`${apiBase()}/api/nickname/${encodeURIComponent(uid)}`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
     if (!res.ok) return null;
     const data = (await res.json()) as { nickname: string | null };
     return data.nickname;

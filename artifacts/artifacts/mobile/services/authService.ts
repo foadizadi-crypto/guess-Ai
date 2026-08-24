@@ -58,6 +58,24 @@ export function getPlayerId(): string | null {
   return _playerId ?? auth.currentUser?.uid ?? null;
 }
 
+/**
+ * Returns a fresh Firebase ID token for the signed-in player, or null if
+ * nobody is signed in. Every backend call that acts on behalf of "the
+ * current player" (nickname registration/lookup, etc.) must send this as
+ * `Authorization: Bearer <token>` — the server derives identity from the
+ * verified token, never from a client-supplied uid.
+ */
+export async function getIdToken(): Promise<string | null> {
+  const user = auth.currentUser;
+  if (!user) return null;
+  try {
+    return await user.getIdToken();
+  } catch (err) {
+    console.warn('[Auth] getIdToken failed:', err);
+    return null;
+  }
+}
+
 /** Subscribe to auth state changes (sign-in / sign-out). */
 export function onPlayerIdChange(cb: (uid: string | null) => void): () => void {
   return onAuthStateChanged(auth, (user) => {

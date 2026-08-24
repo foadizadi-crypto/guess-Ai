@@ -144,9 +144,11 @@ export default function SplashScreen() {
 
         // Signed in: restore this account's registered nickname (if any)
         // so a returning player never sees the nickname modal again.
-        if (!useUserStore.getState().username) {
-          const nickname = await fetchRegisteredNickname(user.uid);
-          if (nickname) useUserStore.getState().setUsername(nickname);
+        // Never trust a leftover local `username` from a previous account on
+        // this device — only a nickname verified for THIS uid counts.
+        if (!useUserStore.getState().isNicknameVerifiedFor(user.uid)) {
+          const nickname = await fetchRegisteredNickname();
+          if (nickname) useUserStore.getState().setVerifiedNickname(user.uid, nickname);
         }
         router.replace(ROUTES.LOBBY);
       } catch (err) {

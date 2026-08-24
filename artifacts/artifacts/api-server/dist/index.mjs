@@ -30528,12 +30528,12 @@ async function defaultCredentials(options, profile) {
 function buildProvider(config, credentialsPath, baseURL, options) {
   switch (config.authentication.type) {
     case "oidc_federation": {
-      const auth = config.authentication;
-      const identityProvider = resolveIdentityTokenProvider(auth);
+      const auth2 = config.authentication;
+      const identityProvider = resolveIdentityTokenProvider(auth2);
       if (!identityProvider) {
         throw new WorkloadIdentityError("oidc_federation config requires an identity token (set authentication.identity_token, ANTHROPIC_IDENTITY_TOKEN_FILE, or ANTHROPIC_IDENTITY_TOKEN)");
       }
-      if (!auth.federation_rule_id) {
+      if (!auth2.federation_rule_id) {
         throw new WorkloadIdentityError("oidc_federation config requires 'federation_rule_id'. Set it in authentication.federation_rule_id in your profile, or via ANTHROPIC_FEDERATION_RULE_ID (profile takes precedence).");
       }
       if (!config.organization_id) {
@@ -30541,9 +30541,9 @@ function buildProvider(config, credentialsPath, baseURL, options) {
       }
       const exchange = oidcFederationProvider({
         identityTokenProvider: identityProvider,
-        federationRuleId: auth.federation_rule_id,
+        federationRuleId: auth2.federation_rule_id,
         organizationId: config.organization_id,
-        serviceAccountId: auth.service_account_id,
+        serviceAccountId: auth2.service_account_id,
         workspaceId: config.workspace_id,
         baseURL,
         fetch: options.fetch,
@@ -30573,16 +30573,16 @@ function buildProvider(config, credentialsPath, baseURL, options) {
     }
   }
 }
-function resolveIdentityTokenProvider(auth) {
-  if (auth.identity_token) {
-    const source = auth.identity_token.source;
+function resolveIdentityTokenProvider(auth2) {
+  if (auth2.identity_token) {
+    const source = auth2.identity_token.source;
     if (source !== "file") {
       throw new WorkloadIdentityError(`identity_token.source "${source}" is not supported by this SDK version (only "file")`);
     }
-    if (!auth.identity_token.path) {
+    if (!auth2.identity_token.path) {
       throw new WorkloadIdentityError(`identity_token.source "file" requires a non-empty path`);
     }
-    return identityTokenFromFile(auth.identity_token.path);
+    return identityTokenFromFile(auth2.identity_token.path);
   }
   const tokenFile = readEnv("ANTHROPIC_IDENTITY_TOKEN_FILE");
   if (tokenFile) {
@@ -57069,12 +57069,43 @@ var config_default = router3;
 // src/routes/sessions.ts
 var import_express4 = __toESM(require_express2(), 1);
 import { FieldValue } from "firebase-admin/firestore";
+
+// src/lib/verifyAuth.ts
+import { getAuth } from "firebase-admin/auth";
+function auth() {
+  getFirestore();
+  return getAuth();
+}
+async function requireAuth(req, res, next) {
+  const header = req.headers.authorization ?? "";
+  const match = /^Bearer (.+)$/.exec(header);
+  if (!match) {
+    res.status(401).json({ error: "unauthenticated", message: "Missing Authorization header." });
+    return;
+  }
+  try {
+    const decoded = await auth().verifyIdToken(match[1]);
+    const provider = decoded.firebase?.sign_in_provider;
+    if (provider !== "google.com") {
+      res.status(403).json({ error: "provider_not_allowed", message: "Only Google Sign-In is supported." });
+      return;
+    }
+    req.uid = decoded.uid;
+    next();
+  } catch (err) {
+    logger.warn({ err }, "ID token verification failed");
+    res.status(401).json({ error: "unauthenticated", message: "Invalid or expired sign-in. Please sign in again." });
+  }
+}
+
+// src/routes/sessions.ts
 var router4 = (0, import_express4.Router)();
-router4.post("/sessions", async (req, res) => {
+router4.post("/sessions", requireAuth, async (req, res) => {
   const body = req.body;
-  const { playerId, difficulty, category } = body;
-  if (!playerId || !difficulty || !category) {
-    res.status(400).json({ error: "playerId, difficulty, and category are required" });
+  const playerId = req.uid;
+  const { difficulty, category } = body;
+  if (!difficulty || !category) {
+    res.status(400).json({ error: "difficulty and category are required" });
     return;
   }
   const db = getFirestore();
@@ -57235,13 +57266,10 @@ function isValidNickname(nickname) {
   const trimmed = nickname.trim();
   return trimmed.length >= MIN_LENGTH && trimmed.length <= MAX_LENGTH;
 }
-router6.post("/nickname/register", async (req, res) => {
+router6.post("/nickname/register", requireAuth, async (req, res) => {
+  const playerId = req.uid;
   const body = req.body;
-  const { playerId, nickname } = body;
-  if (typeof playerId !== "string" || !playerId) {
-    res.status(400).json({ error: "playerId is required" });
-    return;
-  }
+  const { nickname } = body;
   if (!isValidNickname(nickname)) {
     res.status(400).json({ error: "invalid_nickname", message: `Nickname must be ${MIN_LENGTH}-${MAX_LENGTH} characters.` });
     return;
@@ -57301,10 +57329,14 @@ router6.post("/nickname/register", async (req, res) => {
     res.status(503).json({ error: "unavailable", message: "Could not reach the server. Please try again." });
   }
 });
-router6.get("/nickname/:playerId", async (req, res) => {
+router6.get("/nickname/:playerId", requireAuth, async (req, res) => {
   const playerId = req.params.playerId;
   if (!playerId || typeof playerId !== "string") {
     res.status(400).json({ error: "playerId is required" });
+    return;
+  }
+  if (playerId !== req.uid) {
+    res.status(403).json({ error: "forbidden", message: "Cannot look up another player's nickname." });
     return;
   }
   try {

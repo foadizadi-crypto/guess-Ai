@@ -68,6 +68,12 @@ const DEFAULT_CONSUMABLES: ConsumableInventory = {
 interface UserState {
   // Profile State Attributes
   username: string;
+  // The UID this `username` was verified for (via server-confirmed nickname
+  // registration/lookup). A device that previously played as account A and
+  // now signs in as account B must never treat A's leftover `username` as
+  // B's registered nickname — every read of `username` for gating purposes
+  // must first check `nicknameUid === current uid`.
+  nicknameUid: string | null;
   coins: number;
   gems: number;
   xp: number;
@@ -125,6 +131,10 @@ interface UserState {
 
   // Store & Progression Actions Pipelines
   setUsername: (username: string) => void;
+  /** Records a nickname as verified for a specific uid (see `nicknameUid`). */
+  setVerifiedNickname: (uid: string, nickname: string) => void;
+  /** True only if `username` was verified for exactly this uid. */
+  isNicknameVerifiedFor: (uid: string | null) => boolean;
   addCoins: (amount: number) => void;
   spendCoins: (amount: number) => boolean;
   addGems: (amount: number) => void;
@@ -206,6 +216,7 @@ export const useUserStore = create<UserState>()(
   persist(
     (set, get) => ({
       username: '',
+      nicknameUid: null,
       coins: 500,
       gems: 0,
       xp: 0,
@@ -245,6 +256,11 @@ export const useUserStore = create<UserState>()(
       setNetworkMode: (mode) => set({ networkMode: mode }),
 
       setUsername: (username) => set({ username }),
+      setVerifiedNickname: (uid, nickname) => set({ username: nickname, nicknameUid: uid }),
+      isNicknameVerifiedFor: (uid) => {
+        const state = get();
+        return !!uid && state.nicknameUid === uid && !!state.username;
+      },
       addCoins: (amount) => set((state) => ({ coins: state.coins + amount })),
       
       spendCoins: (amount) => {

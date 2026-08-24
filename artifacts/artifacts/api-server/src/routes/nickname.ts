@@ -13,6 +13,7 @@
 
 import { Router, type Request, type Response } from "express";
 import { getFirestore } from "../lib/firebaseAdmin";
+import { requireAuth } from "../lib/verifyAuth";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -32,14 +33,14 @@ function isValidNickname(nickname: unknown): nickname is string {
 }
 
 // ─── POST /api/nickname/register ───────────────────────────────────────────
-router.post("/nickname/register", async (req: Request, res: Response) => {
-  const body = req.body as { playerId?: unknown; nickname?: unknown };
-  const { playerId, nickname } = body;
+// Requires a verified Firebase ID token; the playerId is ALWAYS the verified
+// uid from the token, never a client-supplied value — otherwise any caller
+// could reserve or overwrite another player's nickname.
+router.post("/nickname/register", requireAuth, async (req: Request, res: Response) => {
+  const playerId = req.uid!;
+  const body = req.body as { nickname?: unknown };
+  const { nickname } = body;
 
-  if (typeof playerId !== "string" || !playerId) {
-    res.status(400).json({ error: "playerId is required" });
-    return;
-  }
   if (!isValidNickname(nickname)) {
     res.status(400).json({ error: "invalid_nickname", message: `Nickname must be ${MIN_LENGTH}-${MAX_LENGTH} characters.` });
     return;
@@ -115,10 +116,17 @@ router.post("/nickname/register", async (req: Request, res: Response) => {
 });
 
 // ─── GET /api/nickname/:playerId ────────────────────────────────────────────
-router.get("/nickname/:playerId", async (req: Request, res: Response) => {
+// Only the signed-in player may look up their own nickname (used to restore
+// it on returning sign-ins) — never anyone else's, so this also requires a
+// verified token and the params.playerId must match the caller's own uid.
+router.get("/nickname/:playerId", requireAuth, async (req: Request, res: Response) => {
   const playerId = req.params.playerId;
   if (!playerId || typeof playerId !== "string") {
     res.status(400).json({ error: "playerId is required" });
+    return;
+  }
+  if (playerId !== req.uid) {
+    res.status(403).json({ error: "forbidden", message: "Cannot look up another player's nickname." });
     return;
   }
 

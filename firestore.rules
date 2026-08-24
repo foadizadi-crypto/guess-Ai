@@ -2,22 +2,49 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Mandatory Google Sign-In is a product requirement, not just an app UX
+    // choice — every rule that grants a player access to their own data must
+    // also check the token came from the google.com provider, or another
+    // Firebase Auth provider (if ever enabled in the console) could create
+    // player data outside that guarantee.
+    function isGoogleUser(uid) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+
     // ─── 1. PLAYERS PROFILE COLLECTION ───────────────────────────────────────
     // Path: players/{uid}
     match /players/{uid} {
-      // Only the authenticated user can read or write their own core profile data
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      // Only the authenticated user can read their own core profile data.
+      allow read: if isGoogleUser(uid);
+
+      // Clients may create/update their own profile, but `nickname`,
+      // `nicknameNormalized`, and `username` are identity fields that only
+      // the server (via the Admin SDK in /api/nickname/register, which
+      // bypasses these rules) is allowed to set. This stops a client from
+      // writing an unregistered/duplicate display name straight into
+      // Firestore and bypassing the uniqueness reservation entirely.
+      allow create: if isGoogleUser(uid)
+        && !('nickname' in request.resource.data)
+        && !('nicknameNormalized' in request.resource.data)
+        && !('username' in request.resource.data);
+
+      allow update: if isGoogleUser(uid)
+        && request.resource.data.get('nickname', null) == resource.data.get('nickname', null)
+        && request.resource.data.get('nicknameNormalized', null) == resource.data.get('nicknameNormalized', null)
+        && request.resource.data.get('username', null) == resource.data.get('username', null);
       
       // ─── Subcollection: Purchases (Phase 2 §2) ────────────────────────────
       // Path: players/{uid}/purchases/{transactionId}
       match /purchases/{transactionId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read, write: if isGoogleUser(uid);
       }
       
       // ─── Subcollection: Spin Wheel History (Phase 3) ──────────────────────
       // Path: players/{uid}/spinHistory/{autoId}
       match /spinHistory/{spinId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read, write: if isGoogleUser(uid);
       }
       
       // ─── Subcollection: Private Data Secure Vault ─────────────────────────
@@ -26,7 +53,7 @@ service cloud.firestore {
         // Only the authenticated device owner can write/update their own token.
         // Client reads are strictly forbidden (Deny-All) to protect user privacy.
         // The server-side cloud function Admin SDK retains full backend access.
-        allow write: if request.auth != null && request.auth.uid == uid;
+        allow write: if isGoogleUser(uid);
         allow read: if false;
       }
     }
@@ -44,11 +71,13 @@ service cloud.firestore {
     // ─── 2. GAME SESSIONS COLLECTION ─────────────────────────────────────────
     // Path: game_sessions/{sessionId}
     match /game_sessions/{sessionId} {
-      // Allow creation of a session only if the logged-in user matches the playerId field
-      allow create: if request.auth != null && request.resource.data.playerId == request.auth.uid;
-      
-      // Allow reading or updating only if the existing document belongs to the active user
-      allow read, update, delete: if request.auth != null && resource.data.playerId == request.auth.uid;
+      // Allow creation of a session only if the logged-in Google user matches
+      // the playerId field.
+      allow create: if isGoogleUser(request.resource.data.playerId);
+
+      // Allow reading or updating only if the existing document belongs to
+      // the active Google-signed-in user.
+      allow read, update, delete: if isGoogleUser(resource.data.playerId);
     }
 
   }

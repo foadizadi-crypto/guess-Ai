@@ -39,8 +39,10 @@ export function useFirestoreSync(): void {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(async () => {
       const { savePlayerProfile } = await import('@/services/firestoreService');
+      // Note: `username` is deliberately NOT included here — it's an
+      // identity field the server alone controls via nickname registration,
+      // and Firestore rules reject any client write that touches it.
       await savePlayerProfile(uid, {
-        username,
         coins,
         gems,
         xp,

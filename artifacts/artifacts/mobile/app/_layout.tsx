@@ -1,22 +1,77 @@
-import React, { useEffect, useRef } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { AppState, View, StyleSheet, type AppStateStatus } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { Stack, router } from 'expo-router';
+import { Stack, router, usePathname } from 'expo-router';
 import { GameColors } from '@/theme/colors';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { notificationService } from '@/services/NotificationService';
 import { openAIService } from '@/services/OpenAIService';
 import { savePushToken } from '@/services/firestoreService';
-import { waitForAuthReady } from '@/services/authService';
+import { waitForAuthReady, getPlayerId, onPlayerIdChange } from '@/services/authService';
+import { isValidPlayerName } from '@/components/PlayerNameModal';
+import { useUserStore } from '@/store/userStore';
+import { ROUTES } from '@/navigation/routes';
 
 const queryClient = new QueryClient();
 
 /** Runs Firestore player-profile sync in the background once signed in. */
 function FirestoreSyncProvider() {
   useFirestoreSync();
+  return null;
+}
+
+// Routes reachable with no Google session and/or no registered nickname yet.
+// Every other route — including deep links opened directly — is guarded below.
+const PUBLIC_ROUTES: readonly string[] = ['/', ROUTES.SPLASH, ROUTES.ONBOARDING, ROUTES.LOGIN];
+
+/**
+ * Centralized navigation guard: mandatory Google Sign-In and a registered
+ * nickname are enforced here, not just at the buttons that normally lead a
+ * player through the flow — so opening a gameplay route directly (a deep
+ * link, a stale bookmark, a notification tap) can never skip either step.
+ */
+function AuthGuard() {
+  const pathname = usePathname();
+  const username = useUserStore((s) => s.username);
+  const isNicknameVerifiedFor = useUserStore((s) => s.isNicknameVerifiedFor);
+  const [uid, setUid] = useState<string | null>(getPlayerId());
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    waitForAuthReady().then((user) => {
+      setUid(user?.uid ?? null);
+      setAuthChecked(true);
+    });
+    return onPlayerIdChange((next) => setUid(next));
+  }, []);
+
+  // A `username` string alone is not proof of a valid nickname — it may be
+  // a leftover from a previously signed-in account on this device. Only a
+  // nickname verified for THIS exact uid (see userStore.nicknameUid) counts.
+  const hasVerifiedNickname = !!uid && isNicknameVerifiedFor(uid) && isValidPlayerName(username);
+  const isPublic = PUBLIC_ROUTES.includes(pathname);
+  const needsRedirect = authChecked && !isPublic
+    && (!uid || (pathname !== ROUTES.LOBBY && !hasVerifiedNickname));
+
+  useEffect(() => {
+    if (!authChecked || isPublic) return;
+    if (!uid) {
+      router.replace(ROUTES.LOGIN);
+    } else if (pathname !== ROUTES.LOBBY && !hasVerifiedNickname) {
+      router.replace(ROUTES.LOBBY);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authChecked, uid, hasVerifiedNickname, pathname, isPublic]);
+
+  // While the auth/nickname check is pending (or a redirect is about to
+  // fire) on a protected route, cover the screen so gated content never
+  // flashes visibly before the redirect completes.
+  if (!isPublic && (!authChecked || needsRedirect)) {
+    return <View style={styles.guardOverlay} pointerEvents="auto" />;
+  }
   return null;
 }
 
@@ -122,6 +177,14 @@ function RootLayoutNav() {
   );
 }
 
+const styles = StyleSheet.create({
+  guardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: GameColors.backgroundPrimary,
+    zIndex: 9999,
+  },
+});
+
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
@@ -130,6 +193,7 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
               <FirestoreSyncProvider />
               <NotificationProvider />
+              <AuthGuard />
               <RootLayoutNav />
           </GestureHandlerRootView>
         </QueryClientProvider>
