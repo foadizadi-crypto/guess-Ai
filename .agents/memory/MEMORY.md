@@ -17,3 +17,4 @@
 - [TS type patterns for RN images](ts-rn-image-types.md) — use `Record<string, ImageSourcePropType>` not `Record<string, ReturnType<typeof require>>` for image maps; the latter resolves to unknown in strict mode.
 - [ActiveMission field names](active-mission-fields.md) — use `progress`/`reward`/`rewardClaimed` not `current`/`rewardCoins`/`claimed`; `AchievementCheckContext` wraps stats+avatars into one arg for checkAchievementCondition.
 - [EAS Android Kotlin metadata](eas-android-kotlin-metadata.md) — Google Mobile Ads may require a Gradle metadata compatibility flag on Expo SDK 54 builds.
+- [Release API configuration](release-api-configuration.md) — EAS builds need an explicit HTTPS production API URL; Replit dev workflow variables are not inherited.

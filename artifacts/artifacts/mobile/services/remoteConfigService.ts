@@ -9,8 +9,7 @@
  */
 
 import { applyRemoteConfig } from '@/constants/gameConfig';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
+import { getApiUrl, safeApiTarget } from '@/services/apiConfig';
 const FETCH_TIMEOUT_MS = 5000;
 
 /**
@@ -34,7 +33,8 @@ export async function fetchAndApplyRemoteConfig(): Promise<void> {
     }
 
     const fetchOptions = controller ? { signal: controller.signal } : undefined;
-    const res = await fetch(`${API_URL}/api/config`, fetchOptions as RequestInit | undefined);
+    console.log('[API] remote config request', { target: safeApiTarget(), path: '/api/config' });
+    const res = await fetch(getApiUrl('/api/config'), fetchOptions as RequestInit | undefined);
 
     if (!res.ok) {
       console.warn(

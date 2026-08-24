@@ -42,6 +42,7 @@ function AuthGuard() {
 
   useEffect(() => {
     waitForAuthReady().then((user) => {
+      console.log('[Guard] auth check complete', { pathname, signedIn: !!user });
       setUid(user?.uid ?? null);
       setAuthChecked(true);
     });
@@ -59,8 +60,10 @@ function AuthGuard() {
   useEffect(() => {
     if (!authChecked || isPublic) return;
     if (!uid) {
+      console.log('[Guard] protected route -> login', { pathname });
       router.replace(ROUTES.LOGIN);
     } else if (pathname !== ROUTES.LOBBY && !hasVerifiedNickname) {
+      console.log('[Guard] protected route -> lobby', { pathname });
       router.replace(ROUTES.LOBBY);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -11,8 +11,18 @@
  */
 
 import { getIdToken, getPlayerId } from './authService';
+import { getApiUrl } from './apiConfig';
+const REQUEST_TIMEOUT_MS = 10_000;
 
-const apiBase = () => process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
+async function fetchNickname(input: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export type RegisterNicknameResult =
   | { ok: true; nickname: string }
@@ -23,7 +33,7 @@ export async function registerNickname(nickname: string): Promise<RegisterNickna
   if (!idToken) return { ok: false, reason: 'unauthenticated' };
 
   try {
-    const res = await fetch(`${apiBase()}/api/nickname/register`, {
+    const res = await fetchNickname(getApiUrl('/api/nickname/register'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -61,7 +71,7 @@ export async function fetchRegisteredNickname(): Promise<string | null> {
   if (!uid || !idToken) return null;
 
   try {
-    const res = await fetch(`${apiBase()}/api/nickname/${encodeURIComponent(uid)}`, {
+    const res = await fetchNickname(getApiUrl(`/api/nickname/${encodeURIComponent(uid)}`), {
       headers: { Authorization: `Bearer ${idToken}` },
     });
     if (!res.ok) return null;

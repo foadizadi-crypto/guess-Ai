@@ -149,6 +149,7 @@ export default function GameScreen() {
     let active = true;
     setLoading(true);
     setLoadError(null);
+    console.log('[Game] loading questions', { category, difficulty });
     openAIService.generateQuestions(category, difficulty, 20)
       .then(({ questions: items, fromCache }) => {
         if (!active) return;
@@ -160,10 +161,12 @@ export default function GameScreen() {
         setQuestions(shuffled);
         setIsOffline(fromCache);
         setLoading(false);
+        console.log('[Game] questions ready', { count: items.length, fromCache });
       })
       .catch((err: unknown) => {
         if (!active) return;
         const msg = err instanceof Error ? err.message : 'Could not load questions. Check your connection and API keys.';
+        console.warn('[Game] question load failed; clearing loading state', { message: msg });
         setLoadError(msg);
         setLoading(false);
       });

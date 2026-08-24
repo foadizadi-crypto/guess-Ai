@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Category, Difficulty, Question } from '@/types';
 import { generateId } from '@/utils';
+import { getApiUrl, safeApiTarget } from '@/services/apiConfig';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -108,9 +109,23 @@ async function persistRecentPlay(category: Category, difficulty: Difficulty): Pr
 // HTTPS domain (the API server is routed through the domain, not :8080).
 // For local development outside Replit: falls back to localhost:8080.
 
-const API_BASE: string =
-  (typeof process !== 'undefined' && process.env['EXPO_PUBLIC_API_URL']) ||
-  'http://localhost:8080';
+const REQUEST_TIMEOUT_MS = 20_000;
+
+async function fetchWithTimeout(input: string, init: RequestInit): Promise<Response> {
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timeout = setTimeout(() => controller?.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    console.log('[API] request', { target: safeApiTarget(), path: new URL(input).pathname });
+    return await fetch(input, controller ? { ...init, signal: controller.signal } : init);
+  } catch (error) {
+    if (controller?.signal.aborted) {
+      throw new Error(`API request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 // ─── Service class ────────────────────────────────────────────────────────────
 
@@ -129,7 +144,7 @@ class OpenAIService {
    * Throws if the server returns an error — no picsum fallback.
    */
   async generateImage(prompt: string): Promise<GeneratedImage> {
-    const response = await fetch(`${API_BASE}/api/images`, {
+    const response = await fetchWithTimeout(getApiUrl('/api/images'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt }),
@@ -159,7 +174,7 @@ class OpenAIService {
     count = 20,
   ): Promise<GenerateQuestionsResult> {
     try {
-      const response = await fetch(`${API_BASE}/api/questions`, {
+      const response = await fetchWithTimeout(getApiUrl('/api/questions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ category, difficulty, count }),
@@ -188,6 +203,10 @@ class OpenAIService {
 
       return { questions, fromCache: false };
     } catch (networkErr) {
+      console.warn('[API] questions failed; checking local cache', {
+        message: networkErr instanceof Error ? networkErr.message : 'unknown error',
+        target: safeApiTarget(),
+      });
       // API unreachable or returned an error — try the local cache
       const cached = await readCache(category, difficulty);
       if (cached && cached.length > 0) {

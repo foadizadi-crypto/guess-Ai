@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Achievement } from '@/types';
+import { getApiUrl } from './apiConfig';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -198,8 +199,7 @@ export async function recordGameSession(
     const { getIdToken } = await import('./authService');
     const idToken = await getIdToken();
     if (!idToken) throw new Error('not signed in');
-    const apiBase = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
-    await fetch(`${apiBase}/api/sessions`, {
+    await fetch(getApiUrl('/api/sessions'), {
       method:  'POST',
       headers: {
         'Content-Type':  'application/json',

@@ -34,6 +34,7 @@ import { auth } from './firebase';
 
 let _playerId: string | null = null;
 let _authReady: Promise<User | null> | null = null;
+const AUTH_READY_TIMEOUT_MS = 10_000;
 
 /**
  * Resolves once Firebase has restored (or confirmed the absence of) a
@@ -44,11 +45,21 @@ let _authReady: Promise<User | null> | null = null;
 export function waitForAuthReady(): Promise<User | null> {
   if (_authReady) return _authReady;
   _authReady = new Promise((resolve) => {
-    const unsub = onAuthStateChanged(auth, (user) => {
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const finish = (user: User | null, reason: string) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
       _playerId = user?.uid ?? null;
+      console.log('[Auth] startup state resolved', { signedIn: !!user, reason });
       unsub();
       resolve(user);
+    };
+    const unsub = onAuthStateChanged(auth, (user) => {
+      finish(user, 'firebase');
     });
+    timeout = setTimeout(() => finish(null, 'timeout'), AUTH_READY_TIMEOUT_MS);
   });
   return _authReady;
 }

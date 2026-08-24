@@ -24,6 +24,7 @@ import { BackButton } from '@/components/BackButton';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
+import { getApiUrl, safeApiTarget } from '@/services/apiConfig';
 import { getPlayerId } from '@/services/authService';
 import { formatScore } from '@/utils';
 
@@ -98,7 +99,6 @@ const RANK_COLORS: Record<number, string> = {
   3: '#CD7F32',
 };
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 // Real players' XP changes as anyone plays; poll periodically so the board
 // (and the player's own rank) stays current without needing a manual reload.
 const AUTO_REFRESH_MS = 20_000;
@@ -148,9 +148,9 @@ export default function LeaderboardScreen() {
       // The rank endpoint is supplementary: a slow rank calculation must not
       // prevent the top-10 leaderboard from appearing.
       const [listResult, rankResult] = await Promise.allSettled([
-        fetchWithTimeout(`${API_URL}/api/leaderboard?type=global&limit=10`),
+        fetchWithTimeout(getApiUrl('/api/leaderboard?type=global&limit=10')),
         uid
-          ? fetchWithTimeout(`${API_URL}/api/leaderboard/rank?type=global&userId=${encodeURIComponent(uid)}`)
+          ? fetchWithTimeout(getApiUrl(`/api/leaderboard/rank?type=global&userId=${encodeURIComponent(uid)}`))
           : Promise.resolve(null as Response | null),
       ]);
 
