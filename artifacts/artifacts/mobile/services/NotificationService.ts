@@ -42,6 +42,8 @@ export const notificationService = {
    */
   scheduleInactiveReminder: async (): Promise<void> => {},
   cancelInactiveReminder: async (): Promise<void> => {},
+  /** Cancel all locally scheduled notifications when the preference is off. */
+  cancelAllScheduledNotifications: async (): Promise<void> => {},
 
   // ── Remote push token (notifications #6-10, #12) ─────────────────────────
   /**

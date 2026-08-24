@@ -26,7 +26,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { GradientButton } from '@/components/GradientButton';
 import { storageService } from '@/services/StorageService';
 import { GameColors } from '@/theme/colors';
@@ -82,14 +82,14 @@ export default function OnboardingScreen() {
 
   const goTo = useCallback((index: number) => {
     scrollRef.current?.scrollTo({ x: index * SW, animated: true });
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    hapticsService.impact(0);
   }, []);
 
   // --- CRITICAL FLOW FIX: Connect finishing step directly to Global State App Flow Checkpoints ---
   // Reached by both "Next" on the last slide and by "Skip".
   const finish = useCallback(async () => {
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      hapticsService.impact(1);
 
       // Record completion BEFORE navigating. app/splash.tsx reads this flag on
       // every cold start to decide where to send the player; without it the

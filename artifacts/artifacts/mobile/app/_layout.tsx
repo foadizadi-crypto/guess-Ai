@@ -14,12 +14,19 @@ import { waitForAuthReady, getPlayerId, onPlayerIdChange } from '@/services/auth
 import { isValidPlayerName } from '@/components/PlayerNameModal';
 import { useUserStore } from '@/store/userStore';
 import { ROUTES } from '@/navigation/routes';
+import { useAudio } from '@/hooks/useAudio';
 
 const queryClient = new QueryClient();
 
 /** Runs Firestore player-profile sync in the background once signed in. */
 function FirestoreSyncProvider() {
   useFirestoreSync();
+  return null;
+}
+
+/** Keeps the persisted audio preferences connected for the whole app. */
+function AudioProvider() {
+  useAudio();
   return null;
 }
 
@@ -195,6 +202,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <GestureHandlerRootView style={{ flex: 1 }}>
               <FirestoreSyncProvider />
+              <AudioProvider />
               <NotificationProvider />
               <AuthGuard />
               <RootLayoutNav />

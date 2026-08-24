@@ -131,6 +131,11 @@ async function cancel(id: string): Promise<void> {
   try { await N.cancelScheduledNotificationAsync(id); } catch { /* ignore */ }
 }
 
+async function cancelAllScheduledNotifications(): Promise<void> {
+  if (!N) return;
+  try { await N.cancelAllScheduledNotificationsAsync(); } catch { /* no permission or simulator */ }
+}
+
 // ── 1. Stamina Full ───────────────────────────────────────────────────────────
 async function scheduleStaminaFull(minutesUntilFull: number): Promise<void> {
   if (!N || minutesUntilFull <= 0) return;
@@ -301,6 +306,7 @@ export const notificationService = {
   cancelSpinReady,
   scheduleInactiveReminder,
   cancelInactiveReminder,
+  cancelAllScheduledNotifications,
   getExpoPushToken,
   addResponseListener,
 };

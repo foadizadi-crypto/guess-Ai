@@ -20,7 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { Ionicons } from '@expo/vector-icons';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
@@ -198,7 +198,7 @@ export function WingsShopTab({ scrollable = false }: WingsShopTabProps) {
     }
     const ok = purchaseWing(wing.id, gemCost);
     if (ok) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      hapticsService.notification(1);
       // Auto-equip on first purchase
       equipWing(wing.id);
     } else {
@@ -209,7 +209,7 @@ export function WingsShopTab({ scrollable = false }: WingsShopTabProps) {
   const handleEquip = useCallback((wingId: string) => {
     const alreadyEquipped = equippedWing === wingId;
     equipWing(alreadyEquipped ? null : wingId);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    hapticsService.impact(0);
   }, [equippedWing, equipWing]);
 
   // Split premium by rarity

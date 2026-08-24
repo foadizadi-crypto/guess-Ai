@@ -11,7 +11,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 
@@ -53,7 +53,7 @@ export const PlayerNameModal: React.FC<PlayerNameModalProps> = ({
 
   const handleContinue = useCallback(async () => {
     if (!canContinue) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    hapticsService.impact(1);
     setSubmitting(true);
     setError(null);
     const result = await onSubmit(trimmed);
@@ -61,7 +61,7 @@ export const PlayerNameModal: React.FC<PlayerNameModalProps> = ({
     if (result.ok) {
       setDraft('');
     } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      hapticsService.notification(0);
       setError(result.message ?? 'Something went wrong. Please try again.');
     }
   }, [canContinue, trimmed, onSubmit]);

@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity, FlatList, Platform, ListRende
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { AnimatedBackground } from '@/components/AnimatedBackground';
 import { BackButton } from '@/components/BackButton';
 import { GradientButton } from '@/components/GradientButton';
@@ -47,7 +47,7 @@ export default function CategorySelectScreen() {
   const [confirmVisible, setConfirmVisible] = useState(false);
 
   const handleSelect = (cat: Category) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    hapticsService.impact(0);
     setCategory(cat);
   };
 

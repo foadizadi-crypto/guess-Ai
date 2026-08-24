@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { TouchableOpacity, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { pressIn, pressOut } from '@/animations';
@@ -39,7 +39,7 @@ export const SecondaryButton: React.FC<SecondaryButtonProps> = ({
   const handlePressOut = useCallback(() => { scale.value = pressOut(); }, [scale]);
 
   const handlePress = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    hapticsService.impact(0);
     onPress();
   }, [onPress]);
 

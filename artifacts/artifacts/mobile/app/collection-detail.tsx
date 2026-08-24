@@ -56,7 +56,7 @@ const FRAME_IMAGES: Record<string, ImageSourcePropType> = {
   frame_9_legendary: require('@/assets/frames/9-legendary.jpg'),
 };
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { AnimatedBackground } from '@/components/AnimatedBackground';
@@ -307,7 +307,7 @@ export default function CollectionDetailScreen() {
     if (item.equipped) {
       // Unequip
       equipCosmetic(item.id);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      hapticsService.impact(0);
       showToast('Unequipped');
       return;
     }
@@ -320,14 +320,14 @@ export default function CollectionDetailScreen() {
         equipCosmetic(item.id);
       }
       playEffect('purchase');
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      hapticsService.impact(0);
       showToast('Equipped!');
       return;
     }
 
     if (item.currency === 'free') {
       buyCosmetic(item.id, 0);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      hapticsService.notification(1);
       showToast('Claimed!');
       return;
     }
@@ -353,7 +353,7 @@ export default function CollectionDetailScreen() {
 
     // Generic buyCosmetic
     const ok = buyCosmetic(item.id, item.price);
-    Haptics.notificationAsync(ok ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error);
+    hapticsService.notification(ok ? 1 : 0);
     if (ok) { playEffect('purchase'); showToast(`−${item.price} ${item.currency === 'gems' ? '💎' : '🪙'}`); }
     else Alert.alert('Purchase failed', 'Something went wrong. Please try again.');
   };

@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, Switch, ScrollView, Platform, TouchableOpacity 
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { AnimatedBackground } from '@/components/AnimatedBackground';
 import { BackButton } from '@/components/BackButton';
 import { GlassCard } from '@/components/GlassCard';
@@ -28,7 +28,7 @@ export default function SettingsScreen() {
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
   const toggle = (action: () => void) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    hapticsService.impact(0);
     action();
   };
 
@@ -126,7 +126,7 @@ export default function SettingsScreen() {
         <GlassCard style={styles.card} padding={0}>
           <SettingRow
             icon="phone-portrait-outline"
-            label="Vibration"
+            label="Haptic Feedback"
             right={
               <Switch
                 value={settings.vibration}
@@ -164,7 +164,7 @@ export default function SettingsScreen() {
                   const ok = await iapService.purchase(IAP_SKUS.REMOVE_ADS);
                   if (ok) {
                     removeAds();
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    hapticsService.notification(1);
                   }
                 } catch (err) {
                   if (__DEV__) console.warn('[Settings] remove-ads purchase error', err);
@@ -202,7 +202,7 @@ export default function SettingsScreen() {
               const restored = await iapService.restoreAdsRemoved();
               if (restored) {
                 removeAds();
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                hapticsService.notification(1);
               }
             } catch (err) {
               if (__DEV__) console.warn('[Settings] restore error', err);

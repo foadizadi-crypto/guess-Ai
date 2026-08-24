@@ -46,7 +46,7 @@ import {
 } from '@/constants/collections';
 import { DEFAULT_AVATARS } from '@/constants';
 import { useRouter } from 'expo-router';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -162,7 +162,7 @@ export default function CollectionsScreen() {
   );
 
   const navigateTo = (type: CosmeticType) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    hapticsService.impact(0);
     router.push(`${ROUTES.COLLECTION_DETAIL}?type=${type}` as never);
   };
 

@@ -1,0 +1,66 @@
+BlurQuiz — Task 1: Settings, Sound, Haptic & Notifications
+First inspect the current Settings implementation. Reuse existing components and systems. Do not rebuild working systems.
+Settings structure
+The Settings screen must contain exactly these sections:
+Account
+• Player Name
+• Google Account / Email
+• Delete Account
+Gameplay
+• Sound Effects — ON/OFF
+• Haptic Feedback — ON/OFF
+System
+• Notifications — ON/OFF
+Purchases
+• Restore Purchases
+Support & Legal
+• Privacy Policy
+• Terms of Service
+• Contact Support
+About
+• Version
+IMPORTANT:
+• Do NOT add Appearance.
+• Do NOT add Light Mode.
+• Do NOT add Dark Mode.
+• Keep the existing BlurQuiz visual style.
+For this task, do not implement Account, Delete Account, Purchases, Legal, Support, or Version backend logic. Only make sure their existing UI remains intact.
+Sound Effects
+Connect the existing Sound Effects toggle to the existing global audio system.
+OFF = all game sound effects muted. ON = sound effects enabled.
+Requirements:
+• Global behavior.
+• No restart required.
+• Persist the setting.
+• Restore it after app restart.
+• Do not create a second audio system.
+Haptic Feedback
+Connect the existing Haptic Feedback toggle to the existing haptic system.
+OFF = gameplay haptics disabled. ON = gameplay haptics enabled.
+Persist the setting and restore it after restart.
+Do not create a duplicate haptic system.
+Notifications
+The notification system already exists.
+Do NOT rebuild it.
+Audit and connect the Settings notification toggle to the existing notification system.
+Verify:
+• ON enables intended notifications.
+• OFF disables future notifications where applicable.
+• Android permission handling works.
+• Denied OS permission is handled gracefully.
+• Preference persists after restart.
+Do not create duplicate notification scheduling.
+Final check
+Verify that:
+• Settings opens correctly.
+• Sound toggle works globally.
+• Haptic toggle works globally.
+• Notification toggle is connected.
+• Preferences persist.
+• Existing gameplay is not broken.
+Report:
+• Files changed.
+• Existing systems reused.
+• What was fixed.
+• Any remaining issues.
+Do not modify unrelated systems.

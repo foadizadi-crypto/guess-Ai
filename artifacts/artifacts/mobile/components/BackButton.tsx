@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import { TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { useRouter } from 'expo-router';
 import { GameColors } from '@/theme/colors';
 import { pressIn, pressOut } from '@/animations';
@@ -42,7 +42,7 @@ export const BackButton: React.FC<BackButtonProps> = ({
   const handlePressOut = useCallback(() => { scale.value = pressOut(); }, [scale]);
 
   const handlePress = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    hapticsService.impact(0);
     if (onPress) {
       onPress();
       return;

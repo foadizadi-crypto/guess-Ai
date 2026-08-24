@@ -2,7 +2,7 @@ import React from 'react';
 import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { AnimatedBackground } from '@/components/AnimatedBackground';
 import { BackButton } from '@/components/BackButton';
 import { CoinDisplay } from '@/components/CoinDisplay';
@@ -24,7 +24,7 @@ export default function DailyRewardScreen() {
   const handleClaim = () => {
     if (claimedToday) return;
     claimDailyReward();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    hapticsService.notification(1);
   };
 
   return (

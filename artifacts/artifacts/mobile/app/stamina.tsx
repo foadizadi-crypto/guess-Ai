@@ -9,7 +9,7 @@
 import React, { useCallback } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { PlaceholderScreen } from '@/components/PlaceholderScreen';
 import { ProgressBar } from '@/components/ProgressBar';
 import { GameColors } from '@/theme/colors';
@@ -45,7 +45,7 @@ export default function StaminaScreen() {
       }
       return;
     }
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    hapticsService.notification(1);
   }, [refillEnergyWithGems]);
 
   return (

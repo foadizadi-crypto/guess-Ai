@@ -15,7 +15,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { CoinDisplay } from './CoinDisplay';
@@ -76,7 +76,7 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
 
   const handleClaim = useCallback(() => {
     if (alreadyClaimed) { onClose(); return; }
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    hapticsService.notification(1);
     onClaim();
   }, [alreadyClaimed, onClaim, onClose]);
 

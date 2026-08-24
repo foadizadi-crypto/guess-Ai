@@ -24,7 +24,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 
 import { AnimatedBackground } from '@/components/AnimatedBackground';
 import { BackButton } from '@/components/BackButton';
@@ -62,13 +62,13 @@ export default function CustomizationScreen() {
     // Locked items can never be equipped, and equipping never touches
     // inventory or currency — this is a pure state swap on an owned item.
     if (!unlocked || avatarId === selectedAvatarId) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    hapticsService.impact(0);
     selectAvatar(avatarId);
   };
 
   const handleSelectWing = (wingId: string | null, owned: boolean) => {
     if (!owned || wingId === equippedWing) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    hapticsService.impact(0);
     equipWing(wingId);
   };
 

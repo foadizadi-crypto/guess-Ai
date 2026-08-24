@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity, Platform, ScrollView } from '
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { hapticsService } from '@/services/HapticsService';
 import { AnimatedBackground } from '@/components/AnimatedBackground';
 import { BackButton } from '@/components/BackButton';
 import { GameColors } from '@/theme/colors';
@@ -63,7 +63,7 @@ export default function LevelSelectScreen() {
   const selectedDifficulty = useGameStore((s) => s.selectedDifficulty);
 
   const handleSelect = (difficulty: Difficulty) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    hapticsService.impact(1);
     setDifficulty(difficulty);
   };
 
