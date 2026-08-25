@@ -71,6 +71,7 @@ autoInstallPeers: false
 onlyBuiltDependencies:
   - '@swc/core'
   - esbuild
+  - image-size
   - msw
   - unrs-resolver
 
@@ -165,3 +166,5 @@ overrides:
   "minimatch@^5.0.0": "5.1.8"
   "js-yaml@^3.0.0": "3.15.1"
   "js-yaml@^4.0.0": "4.3.1"
+  # npm 2.0.2 is vulnerable; use the upstream unreleased DoS fix pinned by commit.
+  "image-size@^1.0.0": "file:./vendor/image-size"
