@@ -102,3 +102,4 @@ timeoutMs = 180000
 
 [userenv.shared]
 EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = "415580358646-mt8g3viemul19f6jlavdk9kdhdj9u3ks.apps.googleusercontent.com"
+EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID = "415580358646-h08ns78bf6cevnbknjuhekmota9r8pgf.apps.googleusercontent.com"
