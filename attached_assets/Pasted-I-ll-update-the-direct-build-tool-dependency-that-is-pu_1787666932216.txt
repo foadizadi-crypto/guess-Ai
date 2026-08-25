@@ -1,0 +1,61 @@
+I’ll update the direct build-tool dependency that is pulling these vulnerable transitive packages, regenerate the lockfile through pnpm, then rerun the audit and type checks. I’ll avoid bypasses or manual lockfile edits and will report any remaining findings separately.
+
+The audit shows the four findings come from the root eas-cli dependency, currently pinned at 22.0.0; the latest available eas-cli is 22.4.0. I’m upgrading that direct dependency through pnpm so its Expo/EAS transitive packages can resolve to patched versions, then I’ll verify the result.
+
+The package helper refused because this monorepo requires an explicit workspace-root flag; it did not change anything. I’ll retry the same upgrade with pnpm’s explicit root-workspace option, then verify the lockfile and audit results.
+
+The upgrade completed successfully and updated the workspace dependency metadata. I’m now checking whether all four reported vulnerable versions are gone, reviewing the exact diff, and running the project type checks before I declare the fix complete.
+
+The first upgrade was not enough: eas-cli@22.2.0 still pins older nested Expo tooling, so the vulnerable versions remain. I’ll apply narrowly scoped pnpm overrides for the affected major versions, regenerate the lockfile, and re-audit; this avoids replacing Expo or changing app behavior.
+
+The overrides are now added narrowly for the vulnerable package ranges. I’m regenerating the lockfile and checking that the installed dependency graph actually uses 1.1.18, 2.1.4, 5.0.9, and 5.1.8 rather than merely recording the override.
+Use a more capable model when needed for this request?
+Got it, staying on Free.
+
+The lockfile audit is now clear for the four requested package findings, and all TypeScript checks pass. The existing node_modules tree still shows the old versions because I regenerated only the lockfile; I’m syncing the installed tree now, then I’ll do one final verification.
+
+Fixed the four requested high-severity dependency findings.
+Changes made
+
+    Updated root eas-cli from 22.0.0 to 22.2.0
+    Added scoped pnpm overrides for patched transitive versions:
+        brace-expansion@1.1.18
+        brace-expansion@2.1.4
+        brace-expansion@5.0.9
+        minimatch@5.1.8
+    Regenerated pnpm-lock.yaml
+    Synced the installed dependency tree
+
+Verification
+
+The installed dependency tree now uses the patched versions:
+brace-expansion 1.1.18
+brace-expansion 2.1.4
+brace-expansion 5.0.9
+minimatch 5.1.8
+
+The audit now reports:
+The requested brace-expansion/minimatch findings: 0
+Critical: 0
+High: 12
+Moderate: 14
+Low: 2
+
+The remaining 12 high findings are unrelated packages, not the four findings you provided.
+
+TypeScript verification also passes for:
+
+    API server
+    Mobile app
+    Mockup sandbox
+    Workspace libraries
+    Scripts
+
+All existing workflows remain running successfully, and the API is responding normally.
+
+The changed files are:
+package.json
+pnpm-workspace.yaml
+pnpm-lock.yaml
+
+No APK build or deployment was started. Replit’s Security pane may need to refresh or run its scan again before showing the updated results. Also, if the account-level publishing restriction remains after the scan refreshes, that restriction will still need to be handled by Replit Support.
