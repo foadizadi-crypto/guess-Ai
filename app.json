@@ -1,5 +1,10 @@
 {
   "android": {
     "package": "com.anonymous.workspace"
+  },
+  "extra": {
+    "eas": {
+      "projectId": "32d5a43d-f4bd-46b4-988b-16a0794acd02"
+    }
   }
 }
