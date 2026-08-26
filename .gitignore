@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Secrets and local env (never commit)
+.env
+.env*.local
+google-services-key.json
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# OS / editor
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.iml
+
+# Expo / Metro
+.expo/
+web-build/
+.metro-health-check*
+*.tsbuildinfo
+
+# Native build output
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/local.properties
+local.properties
+ios/
+
+# Preview/release binaries are over GitHub's 100MB git limit.
+# Rebuild with: eas build --profile preview --platform android
+*.apk
+*.aab
+*.ipa

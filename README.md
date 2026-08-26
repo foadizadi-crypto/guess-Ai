@@ -127,6 +127,8 @@ eas build --profile development --platform android
 eas build --profile preview --platform android
 ```
 
+The preview APK is **not stored in git**. It is ~157MB, which is over GitHub's 100MB file limit, so a Git LFS pointer was previously committed instead of the real binary. Cursor then reported that file as “not on GitHub.” Rebuild the APK with the command above whenever you need a side-loadable build.
+
 ### Production build (Google Play)
 
 ```bash
@@ -150,7 +152,7 @@ eas submit --platform android
 - [ ] Create products in Google Play Console matching `IAP_SKUS` in `services/IAPService.ts`
 - [ ] Set `EXPO_PUBLIC_OPENAI_API_KEY` (server-side) or configure the API server URL
 - [ ] Increment `versionCode` in `app.json` for each release
-- [ ] Add `google-services.json` (Firebase) if using Firebase Analytics
+- [ ] Confirm `artifacts/artifacts/mobile/google-services.json` (Firebase) is present for Analytics/Auth
 - [ ] Test interstitial throttle (3-minute cooldown) on a real device
 
 ---
