@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Linking, StyleSheet, View, Text, Switch, ScrollView, Platform, TouchableOpacity } from 'react-native';
+import { Alert, StyleSheet, View, Text, Switch, ScrollView, Platform, TouchableOpacity } from 'react-native';
 import Constants from 'expo-constants';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,9 +21,6 @@ import { signOut } from '@/services/authService';
 import { useGameStore } from '@/store/gameStore';
 import { ROUTES } from '@/navigation/routes';
 import { router } from 'expo-router';
-
-type AppLinks = { privacyPolicyUrl?: string; termsOfServiceUrl?: string; supportEmail?: string };
-const appLinks = (Constants.expoConfig?.extra ?? {}) as AppLinks;
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -55,27 +52,6 @@ export default function SettingsScreen() {
       useUserStore.persist.clearStorage(),
       useAdStore.persist.clearStorage(),
     ]);
-  };
-
-  const openConfiguredLink = async (label: string, value: string | undefined) => {
-    if (!value) {
-      Alert.alert(`${label} unavailable`, `A ${label} has not been configured for this build yet.`);
-      return;
-    }
-    try {
-      if (!(await Linking.canOpenURL(value))) throw new Error('unsupported');
-      await Linking.openURL(value);
-    } catch {
-      Alert.alert(`${label} unavailable`, 'No supported application is available to open this link.');
-    }
-  };
-
-  const contactSupport = () => {
-    if (!appLinks.supportEmail) {
-      Alert.alert('Contact Support unavailable', 'Support contact details have not been configured for this build yet.');
-      return;
-    }
-    void openConfiguredLink('Contact Support', `mailto:${appLinks.supportEmail}`);
   };
 
   const handleDeleteAccount = () => {
@@ -133,16 +109,18 @@ export default function SettingsScreen() {
         {/* Account */}
         <Text style={[styles.sectionLabel, { textAlign }]}>Account</Text>
         <GlassCard style={styles.card} padding={0}>
-          <View style={styles.settingRow}>
-            <Ionicons name="person-outline" size={20} color={GameColors.textSecondary} />
-            <Text style={styles.rowLabel}>Player Name</Text>
-            <View style={styles.nicknameValueWrap}>
-              <Text style={styles.nicknameValue} numberOfLines={1}>
-                {username || '—'}
-              </Text>
-              <Ionicons name="lock-closed" size={13} color={GameColors.textSecondary} />
+          <TouchableOpacity onPress={() => router.push(ROUTES.PROFILE)}>
+            <View style={styles.settingRow}>
+              <Ionicons name="person-outline" size={20} color={GameColors.textSecondary} />
+              <Text style={styles.rowLabel}>Profile / Nickname</Text>
+              <View style={styles.nicknameValueWrap}>
+                <Text style={styles.nicknameValue} numberOfLines={1}>
+                  {username || '—'}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={GameColors.textSecondary} />
+              </View>
             </View>
-          </View>
+          </TouchableOpacity>
           <Separator />
           <SettingRow
             icon="mail-outline"
@@ -166,8 +144,8 @@ export default function SettingsScreen() {
           />
         </GlassCard>
 
-        {/* Gameplay */}
-        <Text style={[styles.sectionLabel, { textAlign }]}>Gameplay</Text>
+        {/* Game */}
+        <Text style={[styles.sectionLabel, { textAlign }]}>Game</Text>
         <GlassCard style={styles.card} padding={0}>
           <SettingRow
             icon="volume-high-outline"
@@ -194,11 +172,7 @@ export default function SettingsScreen() {
               />
             }
           />
-        </GlassCard>
-
-        {/* System */}
-        <Text style={[styles.sectionLabel, { textAlign }]}>System</Text>
-        <GlassCard style={styles.card} padding={0}>
+          <Separator />
           <SettingRow
             icon="notifications-outline"
             label="Notifications"
@@ -215,57 +189,51 @@ export default function SettingsScreen() {
 
         {/* Purchases */}
         <Text style={[styles.sectionLabel, { textAlign }]}>Purchases</Text>
-        <TouchableOpacity
-          style={[styles.restoreBtn, restoreLoading && { opacity: 0.5 }]}
-          disabled={restoreLoading}
-          onPress={async () => {
-            setRestoreLoading(true);
-            try {
-              const restored = await iapService.restoreAdsRemoved();
-              if (restored) {
-                removeAds();
-                hapticsService.notification(1);
-                Alert.alert('Purchases restored', 'Your previous Ad-Free purchase is active on this device.');
-              } else {
-                Alert.alert('Nothing to restore', 'No previous Ad-Free purchase was found.');
-              }
-            } catch (err) {
-              if (__DEV__) console.warn('[Settings] restore error', err);
-              Alert.alert('Restore failed', 'Could not reach the App Store or Google Play.');
-            } finally {
-              setRestoreLoading(false);
-            }
-          }}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.restoreText}>
-            {restoreLoading ? 'Restoring…' : 'Restore Purchases'}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Support & Legal */}
-        <Text style={[styles.sectionLabel, { textAlign }]}>Support & Legal</Text>
         <GlassCard style={styles.card} padding={0}>
-          <TouchableOpacity onPress={() => openConfiguredLink('Privacy Policy', appLinks.privacyPolicyUrl)}>
-            <SettingRow icon="shield-checkmark-outline" label="Privacy Policy" right={<Text style={styles.linkText}>Open</Text>} />
-          </TouchableOpacity>
-          <Separator />
-          <TouchableOpacity onPress={() => openConfiguredLink('Terms of Service', appLinks.termsOfServiceUrl)}>
-            <SettingRow icon="document-text-outline" label="Terms of Service" right={<Text style={styles.linkText}>Open</Text>} />
-          </TouchableOpacity>
-          <Separator />
-          <TouchableOpacity onPress={contactSupport}>
-            <SettingRow icon="chatbubble-ellipses-outline" label="Contact Support" right={<Text style={styles.linkText}>Contact</Text>} />
+          <TouchableOpacity
+            disabled={restoreLoading}
+            onPress={async () => {
+              setRestoreLoading(true);
+              try {
+                const restored = await iapService.restoreAdsRemoved();
+                if (restored) {
+                  removeAds();
+                  hapticsService.notification(1);
+                  Alert.alert('Purchases restored', 'Your previous Ad-Free purchase is active on this device.');
+                } else {
+                  Alert.alert('Nothing to restore', 'No previous Ad-Free purchase was found.');
+                }
+              } catch (err) {
+                if (__DEV__) console.warn('[Settings] restore error', err);
+                Alert.alert('Restore failed', 'Could not reach the App Store or Google Play.');
+              } finally {
+                setRestoreLoading(false);
+              }
+            }}
+          >
+            <SettingRow
+              icon="refresh-outline"
+              label="Restore Purchases"
+              right={<Text style={styles.linkText}>{restoreLoading ? 'Restoring…' : 'Restore'}</Text>}
+            />
           </TouchableOpacity>
         </GlassCard>
 
         {/* About */}
         <Text style={[styles.sectionLabel, { textAlign }]}>About</Text>
         <GlassCard style={styles.card} padding={0}>
+          <TouchableOpacity onPress={() => router.push(ROUTES.PRIVACY)}>
+            <SettingRow icon="shield-checkmark-outline" label="Privacy Policy" right={<Text style={styles.linkText}>Open</Text>} />
+          </TouchableOpacity>
+          <Separator />
+          <TouchableOpacity onPress={() => router.push(ROUTES.TERMS)}>
+            <SettingRow icon="document-text-outline" label="Terms of Service" right={<Text style={styles.linkText}>Open</Text>} />
+          </TouchableOpacity>
+          <Separator />
           <SettingRow
             icon="information-circle-outline"
-            label="Version"
-            right={<Text style={styles.valueText}>{Constants.expoConfig?.version ?? 'Unknown'}</Text>}
+            label="App Version"
+            right={<Text style={styles.valueText}>{Constants.expoConfig?.version ?? '1.0.0'}</Text>}
           />
         </GlassCard>
       </ScrollView>

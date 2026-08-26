@@ -30,15 +30,17 @@ export interface SpinReward {
 export interface SpinWheelConfig {
   /** Coin cost for an extra (paid) spin */
   extraSpinCost:         number;
-  /** Maximum paid spins per calendar day */
+  /** Maximum paid spins per UTC calendar day */
   extraSpinsPerDay:      number;
-  /** Hours between free spins */
+  /** Free spins granted each UTC calendar day */
+  freeSpinsPerDay:       number;
+  /** Hours between free spins (legacy; calendar-day reset is authoritative) */
   freeSpinCooldownHours: number;
   /** Multiplier applied to base reward on a Jackpot landing */
   jackpotMultiplier:     number;
   /** Maximum coins awarded on Jackpot (economy safety cap) */
   jackpotMaxReward:      number;
-  /** Ordered reward pool — probabilities MUST sum to 100 */
+  /** Ordered reward pool — probabilities MUST sum to 100 and stay server-side */
   rewards:               readonly SpinReward[];
 }
 
@@ -47,6 +49,7 @@ export interface SpinWheelConfig {
 export const SPIN_CONFIG: SpinWheelConfig = {
   extraSpinCost:         100,
   extraSpinsPerDay:      5,
+  freeSpinsPerDay:       1,
   freeSpinCooldownHours: 24,
   jackpotMultiplier:     5,
   jackpotMaxReward:      10_000,

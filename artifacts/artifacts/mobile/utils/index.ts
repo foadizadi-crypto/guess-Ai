@@ -91,6 +91,37 @@ export const isToday = (dateStr: string | null): boolean => {
 export const getTodayUTCString = (): string =>
   new Date().toISOString().split('T')[0]!;
 
+/** UTC calendar day (YYYY-MM-DD) for an ISO timestamp. */
+export const utcDayString = (dateStr: string | null | undefined): string | null => {
+  if (!dateStr) return null;
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().split('T')[0]!;
+};
+
+/**
+ * True when the daily login reward was already collected for the current UTC day.
+ * Checks both the UTC date key and the local timestamp so older saves cannot
+ * pay out twice around timezone boundaries.
+ */
+export const hasClaimedDailyRewardToday = (daily: {
+  lastClaimed: string | null;
+  lastClaimDate?: string | null;
+}): boolean => {
+  const today = getTodayUTCString();
+  if (daily.lastClaimDate === today) return true;
+  if (utcDayString(daily.lastClaimed) === today) return true;
+  if (isToday(daily.lastClaimed)) return true;
+  return false;
+};
+
+/** Milliseconds remaining until the next UTC midnight (calendar-day reset). */
+export const msUntilNextUtcMidnight = (): number => {
+  const now = new Date();
+  const next = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  return Math.max(0, next - now.getTime());
+};
+
 // ─── Math helpers ──────────────────────────────────────────────────────────
 
 export const clamp = (value: number, min: number, max: number): number =>

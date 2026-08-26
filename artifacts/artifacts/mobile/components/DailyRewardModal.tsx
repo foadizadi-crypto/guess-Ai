@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import {
   Modal,
   View,
@@ -29,7 +29,7 @@ interface DailyRewardModalProps {
   /** Index into DAILY_REWARDS of the reward claimable right now. */
   currentDay: number;
   alreadyClaimed: boolean;
-  onClaim: () => void;
+  onClaim: () => number;
   onClose: () => void;
   /** Energy granted on claim (spec: +10 energy per daily reward). */
   energyReward?: number;
@@ -49,9 +49,11 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
   const scale = useSharedValue(0.7);
   const opacity = useSharedValue(0);
   const trophyScale = useSharedValue(1);
+  const claimLock = useRef(false);
 
   useEffect(() => {
     if (visible) {
+      claimLock.current = alreadyClaimed;
       scale.value = withSpring(1, { damping: 14, stiffness: 120 });
       opacity.value = withTiming(1, { duration: 250 });
       // Pulse trophy
@@ -76,8 +78,15 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
 
   const handleClaim = useCallback(() => {
     if (alreadyClaimed) { onClose(); return; }
+    if (claimLock.current) return;
+    claimLock.current = true;
+    const awarded = onClaim();
+    if (awarded <= 0) {
+      claimLock.current = true;
+      onClose();
+      return;
+    }
     hapticsService.notification(1);
-    onClaim();
   }, [alreadyClaimed, onClaim, onClose]);
 
   // Preview of the current claim day plus the next two, from the configured schedule
@@ -160,6 +169,7 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
               style={[styles.claimBtn, alreadyClaimed && styles.claimBtnDone]}
               onPress={handleClaim}
               activeOpacity={0.85}
+              disabled={alreadyClaimed ? false : claimLock.current}
             >
               <Text style={styles.claimText}>
                 {alreadyClaimed ? 'Close' : `Claim ${amount} Coins`}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Platform,
   ScrollView,
@@ -6,388 +6,267 @@ import {
   Text,
   View,
   ImageBackground,
-  Switch,
-  Pressable,
-  DimensionValue,
-  ViewStyle,
-  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-} from 'react-native-reanimated';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { hapticsService } from '@/services/HapticsService';
-import { useRouter } from 'expo-router';
 import { AvatarFrame } from '@/components/AvatarFrame';
-import { CoinDisplay } from '@/components/CoinDisplay';
+import { BackButton } from '@/components/BackButton';
 import { ProgressBar } from '@/components/ProgressBar';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
-import { calculateXPProgress, formatScore, xpInCurrentLevel, xpForCurrentLevel } from '@/utils';
+import { calculateXPProgress, formatCoins, xpInCurrentLevel, xpForCurrentLevel } from '@/utils';
 import { useAudio } from '@/hooks/useAudio';
+import { ALL_WINGS } from '@/constants/wings';
+import { COSMETIC_BY_ID } from '@/constants/collections';
+import { ACHIEVEMENTS } from '@/constants/achievements';
+import { getApiUrl } from '@/services/apiConfig';
+import { getIdToken, getPlayerId } from '@/services/authService';
+import { ROUTES } from '@/navigation/routes';
 
-const { width: SW, height: SH } = Dimensions.get('window');
+const REQUEST_TIMEOUT_MS = 8_000;
 
-/**
- * Strict TypeScript 1080x2340 Active UI Profile Screen Component
- * File Path: app/profile.tsx (Expo Router TypeScript Structure)
- * Integrates haptics, tap audio feeds, and dynamic store bindings safely.
- */
+async function fetchPlayerRank(): Promise<number | null> {
+  const uid = getPlayerId();
+  if (!uid) return null;
+  try {
+    const token = await getIdToken();
+    if (!token) return null;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(getApiUrl('/api/leaderboard/rank?type=global'), {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+        cache: 'no-store',
+      });
+      if (!response.ok) return null;
+      const data = (await response.json()) as { rank?: number | null };
+      return typeof data.rank === 'number' ? data.rank : null;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  } catch {
+    return null;
+  }
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [debugMode, setDebugMode] = useState<boolean>(false);
-  
-  // --- 1. Pulling live player records directly from your real store context ---
-  const { 
-    username, 
-    coins, 
-    xp, 
-    level, 
-    selectedAvatarId, 
-    avatars, 
-    statistics, 
-    equippedCosmetics 
+  const {
+    username,
+    coins,
+    gems,
+    xp,
+    level,
+    selectedAvatarId,
+    avatars,
+    equippedCosmetics,
+    equippedWing,
+    achievements,
   } = useUserStore();
-  
-  const currentAvatar = avatars?.find((avatar) => avatar.id === selectedAvatarId);
+
+  const currentAvatar = avatars.find((avatar) => avatar.id === selectedAvatarId);
   const xpInLevel = xpInCurrentLevel(xp);
   const xpLevelCap = xpForCurrentLevel(level);
-  const winRate = statistics?.totalGamesPlayed 
-    ? Math.round((statistics.totalWins / statistics.totalGamesPlayed) * 100) 
-    : 0;
-  
-  const topPad = Platform.OS === 'web' ? 20 : insets.top + 6;
-  const bottomPad = Platform.OS === 'web' ? 20 : insets.bottom + 20;
+  const wing = ALL_WINGS.find((item) => item.id === equippedWing);
+  const frame = equippedCosmetics?.frame
+    ? COSMETIC_BY_ID.get(equippedCosmetics.frame)
+    : undefined;
+  const unlockedBadges = ACHIEVEMENTS.filter((def) =>
+    achievements.some((owned) => owned.id === def.id && owned.unlocked),
+  );
 
-  // Real statistics data matrix layout
-  const stats = [
-    ['game-controller-outline', 'Games Played', `${statistics?.totalGamesPlayed || 0}`],
-    ['trophy-outline', 'Win Rate', `${winRate}%`],
-    ['analytics-outline', 'Total Score', formatScore(statistics?.bestScore || 0)],
-    ['checkmark-circle-outline', 'Correct Answers', `${statistics?.totalCorrectAnswers || 0}`],
-    ['grid-outline', 'Favorite Category', statistics?.favoriteCategory ? statistics.favoriteCategory[0].toUpperCase() + statistics.favoriteCategory.slice(1) : '—'],
-    ['flame-outline', 'Best Streak', `${statistics?.longestStreak || 0}`],
-  ] as const;
-
+  const [rank, setRank] = useState<number | null>(null);
   const { playEffect } = useAudio();
 
-  // --- 2. Unified Touch Interaction Feedback Pipeline ---
-  const handleBackNavigation = async () => {
-    await hapticsService.impact(1);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      fetchPlayerRank().then((value) => {
+        if (!cancelled) setRank(value);
+      });
+      return () => { cancelled = true; };
+    }, [xp, username]),
+  );
+
+  const handleBack = () => {
+    hapticsService.impact(1);
     playEffect('button_click');
-    router.back();
+    if (router.canGoBack()) router.back();
+    else router.replace(ROUTES.LOBBY);
   };
 
-  // Helper utility to draw clean layout caliper boxes during calibration phases
-  const getProportionalStyle = (left: string, top: string, width: string, height: string): ViewStyle[] => [
-    styles.absoluteRegion,
-    {
-      left:   left   as DimensionValue,
-      top:    top    as DimensionValue,
-      width:  width  as DimensionValue,
-      height: height as DimensionValue,
-      backgroundColor: debugMode ? 'rgba(56, 189, 248, 0.25)' : 'transparent',
-      borderWidth: debugMode ? 1 : 0,
-      borderColor: '#38bdf8',
-    }
-  ];
+  const topPad = Platform.OS === 'web' ? 20 : insets.top + 6;
+  const bottomPad = Platform.OS === 'web' ? 28 : insets.bottom + 24;
 
   return (
-    <View style={styles.viewViewportContainer}>
+    <View style={styles.root}>
       <ImageBackground
-        source={require('../assets/background/profile_bg.png')} 
-        style={styles.responsiveImageContainerBg}
-        resizeMode="stretch"
+        source={require('../assets/background/profile_bg.png')}
+        style={styles.bg}
+        resizeMode="cover"
       >
-        
-        {/* --- A. TOP CONTROL HEADER BAR (BACK BUTTON MESH) --- */}
-        <View style={[styles.headerContainerOverlay, { top: topPad }]}>
-          <WaveWrapper onPress={handleBackNavigation} style={styles.backButtonTouchWrapper}>
-            <View style={styles.backButtonInnerFrame}>
-              <Ionicons name="chevron-back" size={24} color={GameColors.textWhite} />
-            </View>
-          </WaveWrapper>
-          <Text style={styles.titleText}>Profile</Text>
-          <View style={styles.spacerNode} />
+        <View style={[styles.header, { paddingTop: topPad }]}>
+          <BackButton onPress={handleBack} />
+          <Text style={styles.title}>Profile</Text>
+          <View style={styles.headerSpacer} />
         </View>
 
-        {/* --- B. HERO CHARACTER CONTAINER (AVATAR, NAME, COINS, XP) --- */}
-        <View style={getProportionalStyle('5%', '13%', '90%', '28%')}>
-          <View style={styles.heroBoxCenterContent}>
-            
-            <AvatarFrame 
-              imageKey={currentAvatar?.imageKey ?? 'abigail'} 
-              frameId={equippedCosmetics?.frame} 
-              size={80} 
-              showLevel 
-              level={level} 
+        <ScrollView
+          contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.hero}>
+            <AvatarFrame
+              imageKey={currentAvatar?.imageKey ?? 'abigail'}
+              frameId={equippedCosmetics?.frame}
+              size={88}
+              showLevel
+              level={level}
             />
-            
-            <Text style={styles.usernameText}>{username || 'Player'}</Text>
-            
-            <View style={styles.coinDisplayWrapper}>
-              <CoinDisplay amount={coins} size="medium" animate />
-            </View>
-
-            {/* Proportional Level Progression Tracker elements */}
-            <View style={styles.xpWrap}>
-              <View style={styles.xpLabelsRow}>
-                <Text style={styles.mutedLevelLabel}>Level {level}</Text>
-                <Text style={styles.xpNumericText}>
-                  {xpInLevel} / {xpLevelCap === Infinity ? '∞' : xpLevelCap} XP
-                </Text>
-              </View>
-              <ProgressBar progress={calculateXPProgress(xp)} height={7} animated />
-            </View>
-
+            <Text style={styles.username}>{username || 'Player'}</Text>
+            <Text style={styles.levelLine}>Level {level}</Text>
           </View>
-        </View>
 
+          <View style={styles.xpCard}>
+            <View style={styles.xpLabels}>
+              <Text style={styles.muted}>XP</Text>
+              <Text style={styles.xpValue}>
+                {xpInLevel} / {xpLevelCap === Infinity ? 'MAX' : xpLevelCap}
+              </Text>
+            </View>
+            <ProgressBar progress={calculateXPProgress(xp)} height={8} animated />
+          </View>
 
-        {/* --- C. SCROLLABLE STATISTICS HOUSING OVERLAY --- */}
-        <View style={styles.scrollContainerLayoutBoundary}>
-          <ScrollView 
-            contentContainerStyle={[styles.scrollContentLayout, { paddingBottom: bottomPad }]} 
-            showsVerticalScrollIndicator={false}
-          >
-            
-            <Text style={styles.sectionTitleText}>Statistics</Text>
-            
-            <View style={styles.statsGridMesh}>
-              {stats.map(([icon, label, value]) => (
-                <View key={label} style={styles.statCardNode}>
-                  <Ionicons 
-                    name={icon as React.ComponentProps<typeof Ionicons>['name']} 
-                    size={20} 
-                    color={GameColors.accentGold} 
-                    style={styles.statIcon} 
+          <View style={styles.currencyRow}>
+            <StatChip icon="logo-bitcoin" label="Coins" value={formatCoins(coins)} />
+            <StatChip icon="diamond-outline" label="Gems" value={gems.toLocaleString()} />
+            <StatChip icon="podium-outline" label="Rank" value={rank != null ? `#${rank}` : '—'} />
+          </View>
+
+          <Text style={styles.section}>Equipped</Text>
+          <View style={styles.infoCard}>
+            <InfoRow label="Avatar" value={currentAvatar?.name ?? '—'} />
+            <InfoRow label="Wings" value={wing?.name ?? 'None'} />
+            <InfoRow label="Frame" value={frame?.name ?? 'Default'} />
+          </View>
+
+          <Text style={styles.section}>Badges</Text>
+          {unlockedBadges.length === 0 ? (
+            <Text style={styles.empty}>Win achievements to earn badges.</Text>
+          ) : (
+            <View style={styles.badgeGrid}>
+              {unlockedBadges.map((badge) => (
+                <View key={badge.id} style={styles.badge}>
+                  <Ionicons
+                    name={badge.icon as React.ComponentProps<typeof Ionicons>['name']}
+                    size={18}
+                    color={badge.color}
                   />
-                  <Text style={styles.statLabelText}>{label}</Text>
-                  <Text style={styles.statValueText} numberOfLines={1}>{value}</Text>
+                  <Text style={styles.badgeLabel} numberOfLines={2}>{badge.title}</Text>
                 </View>
               ))}
             </View>
-
-            <Text style={styles.footerNoteText}>15 categories · one blurred image at a time.</Text>
-            
-          </ScrollView>
-        </View>
-
-
-        {/* --- D. VISUAL INTERFACE CALIBRATION MESH PANEL --- */}
-        <View style={[styles.debugPanel, { bottom: insets.bottom + 20 }]}>
-          <Text style={styles.debugText}>Profile Grid Align:</Text>
-          <Switch 
-            value={debugMode} 
-            onValueChange={setDebugMode}
-            trackColor={{ false: '#475569', true: '#3b82f6' }}
-            thumbColor={debugMode ? '#60a5fa' : '#cbd5e1'}
-          />
-        </View>
-
+          )}
+        </ScrollView>
       </ImageBackground>
     </View>
   );
 }
 
-// ─── Custom Animated Response Effect Framework Wrappers ───
-
-function WaveWrapper({ style, onPress, children }: any) {
-  const waveScale = useSharedValue(0);
-  const waveOpacity = useSharedValue(0);
-
-  const handlePressIn = () => {
-    waveScale.value = 0.2;
-    waveOpacity.value = 0.55;
-    waveScale.value = withTiming(1.35, { duration: 400 });
-    waveOpacity.value = withTiming(0, { duration: 400 });
-  };
-
-  const animatedWaveStyle = useAnimatedStyle(() => ({
-    position: 'absolute',
-    top: '25%',
-    left: '25%',
-    width: '50%',
-    height: '50%',
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.35)',
-    transform: [{ scale: waveScale.value }],
-    opacity: waveOpacity.value,
-  }));
-
+function StatChip({ icon, label, value }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string }) {
   return (
-    <Pressable
-      onPressIn={handlePressIn}
-      onPress={onPress}
-      style={[style, { overflow: 'hidden' }]}
-    >
-      <Animated.View style={animatedWaveStyle} />
-      {children}
-    </Pressable>
+    <View style={styles.chip}>
+      <Ionicons name={icon} size={16} color={GameColors.accentGold} />
+      <Text style={styles.chipLabel}>{label}</Text>
+      <Text style={styles.chipValue}>{value}</Text>
+    </View>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value}</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  viewViewportContainer: {
-    flex: 1,
-    backgroundColor: '#02000A',
-  },
-  responsiveImageContainerBg: {
-    width: '100%',
-    height: '100%',
-    position: 'relative',
-  },
-  absoluteRegion: {
-    position: 'absolute',
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  headerContainerOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
+  root: { flex: 1, backgroundColor: '#02000A' },
+  bg: { flex: 1 },
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    zIndex: 10,
-  },
-  backButtonTouchWrapper: {
-    borderRadius: 99,
-  },
-  backButtonInnerFrame: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-    borderWidth: 1.2,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  titleText: {
-    ...Typography.header, 
-    color: GameColors.textWhite, 
-    fontSize: 26,
-    fontWeight: 'bold',
-  },
-  spacerNode: { 
-    width: 40 
-  },
-  heroBoxCenterContent: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 16,
+    paddingBottom: 8,
   },
-  usernameText: { 
-    color: GameColors.textWhite, 
-    fontFamily: 'Inter_700Bold', 
-    fontSize: 22, 
-    marginTop: 8 
-  },
-  coinDisplayWrapper: {
-    marginTop: 4,
-  },
-  xpWrap: { 
-    width: '100%', 
-    marginTop: 12, 
-    gap: 6 
-  },
-  xpLabelsRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between' 
-  },
-  mutedLevelLabel: { 
-    color: GameColors.textSecondary, 
-    fontSize: 12 
-  },
-  xpNumericText: { 
-    color: GameColors.accentGold, 
-    fontFamily: 'Inter_600SemiBold', 
-    fontSize: 12 
-  },
-  scrollContainerLayoutBoundary: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: '43%', // Locks the tracking boundary cleanly below the upper hero stats panel cards graphic
-    bottom: 80,
-  },
-  scrollContentLayout: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  sectionTitleText: { 
-    color: GameColors.textWhite, 
-    fontFamily: 'Inter_700Bold', 
-    fontSize: 18,
-    marginBottom: 12,
-  },
-  statsGridMesh: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  statCardNode: {
-    width: '48%',
-    minHeight: 96,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
-    borderWidth: 1.2,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-    gap: 4,
-    marginBottom: 2,
-  },
-  statIcon: {
-    marginBottom: 2,
-  },
-  statLabelText: {
-    color: GameColors.textSecondary,
-    fontSize: 11,
-  },
-  statValueText: {
-    color: GameColors.textWhite,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  footerNoteText: {
-    color: GameColors.textSecondary,
-    textAlign: 'center',
-    fontSize: 11,
-    marginTop: 24,
-    opacity: 0.7,
-  },
-  debugPanel: {
-    position: 'absolute',
-    alignSelf: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+  headerSpacer: { width: 44 },
+  title: { ...Typography.header, color: GameColors.textWhite, fontSize: 24 },
+  scroll: { paddingHorizontal: 20, gap: 14 },
+  hero: { alignItems: 'center', gap: 6, marginTop: 8 },
+  username: { color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 22 },
+  levelLine: { color: GameColors.accentGold, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  xpCard: {
+    backgroundColor: 'rgba(15, 23, 42, 0.78)',
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 99,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-    zIndex: 999,
+    borderColor: 'rgba(255,255,255,0.08)',
+    gap: 8,
   },
-  debugText: {
-    color: '#94a3b8',
-    fontSize: 11,
-    fontWeight: '600',
-    marginRight: 6,
-  }
+  xpLabels: { flexDirection: 'row', justifyContent: 'space-between' },
+  muted: { color: GameColors.textSecondary, fontSize: 12 },
+  xpValue: { color: GameColors.accentGold, fontFamily: 'Inter_600SemiBold', fontSize: 12 },
+  currencyRow: { flexDirection: 'row', gap: 8 },
+  chip: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.78)',
+    borderRadius: 14,
+    padding: 10,
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  chipLabel: { color: GameColors.textSecondary, fontSize: 10 },
+  chipValue: { color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 14 },
+  section: { color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 16, marginTop: 4 },
+  infoCard: {
+    backgroundColor: 'rgba(15, 23, 42, 0.78)',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  infoLabel: { color: GameColors.textSecondary, fontSize: 13 },
+  infoValue: { color: GameColors.textWhite, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  empty: { color: GameColors.textSecondary, fontSize: 13 },
+  badgeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  badge: {
+    width: '31%',
+    minHeight: 76,
+    borderRadius: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.78)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+    gap: 4,
+  },
+  badgeLabel: { color: GameColors.textWhite, fontSize: 10, textAlign: 'center' },
 });

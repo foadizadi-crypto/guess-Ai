@@ -10,14 +10,14 @@ import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { DAILY_REWARDS } from '@/constants';
 import { useUserStore } from '@/store/userStore';
-import { isToday } from '@/utils';
+import { hasClaimedDailyRewardToday } from '@/utils';
 
 export default function DailyRewardScreen() {
   const insets = useSafeAreaInsets();
   const dailyReward = useUserStore((s) => s.dailyReward);
   const coins = useUserStore((s) => s.coins);
   const claimDailyReward = useUserStore((s) => s.claimDailyReward);
-  const claimedToday = isToday(dailyReward.lastClaimed);
+  const claimedToday = hasClaimedDailyRewardToday(dailyReward);
   const nextDay = ((dailyReward.currentDay ?? 0) % 7) + 1;
   const topPad = Platform.OS === 'web' ? 62 : insets.top + 12;
   const bottomPad = Platform.OS === 'web' ? 28 : insets.bottom + 24;

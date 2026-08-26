@@ -19,6 +19,7 @@ import { hapticsService } from '@/services/HapticsService';
 import { AvatarFrame } from "@/components/AvatarFrame";
 import { AnimatedIcon } from "@/components/AnimatedIcon";
 import { DailyRewardModal } from "@/components/DailyRewardModal";
+import { LobbyHudBar } from "@/components/LobbyHudBar";
 import { PlayerNameModal } from "@/components/PlayerNameModal";
 import { registerNickname } from "@/services/nicknameService";
 import { getPlayerId } from "@/services/authService";
@@ -27,12 +28,13 @@ import { FullBodyAvatarStage } from "@/components/FullBodyAvatarStage";
 import { useUserStore } from "@/store/userStore";
 import { useAudio } from "@/hooks/useAudio";
 import { useAdStore } from "@/store/adStore";
-import { isToday } from "@/utils";
+import { hasClaimedDailyRewardToday, calculateXPProgress } from "@/utils";
 
 import {
   MAX_ENERGY,
   STAMINA_AD_REWARD,
   STAMINA_ADS_PER_DAY,
+  ENERGY_DAILY_REWARD,
 } from "@/constants/economy";
 import { DAILY_REWARDS } from "@/constants";
 import { ROUTES } from "@/navigation/routes";
@@ -151,10 +153,12 @@ export default function LobbyScreen() {
     setVerifiedNickname,
     coins,
     gems,
+    xp,
     level,
     selectedAvatarId,
     dailyReward,
     claimDailyReward,
+    hasClaimedDailyRewardToday: claimedDailyToday,
     energy,
     tickEnergy,
     avatars,
@@ -236,18 +240,22 @@ export default function LobbyScreen() {
       playMusic("menu_music");
       tickEnergy();
 
-      const claimed = isToday(dailyReward?.lastClaimed);
-      if (!claimed) {
+      const claimed = claimedDailyToday() || hasClaimedDailyRewardToday(dailyReward);
+      const needsName = !!getPlayerId() && !useUserStore.getState().isNicknameVerifiedFor(getPlayerId());
+      if (!claimed && !needsName) {
         // Held back until the one-shot entry animation (splash.json, ~1.2s)
         // has finished, so the modal does not cover the flourish.
         const t = setTimeout(() => setDailyModal(true), 2000);
-        return () => clearTimeout(t);
+        return () => {
+          clearTimeout(t);
+          stopMusic();
+        };
       }
 
       return () => {
         stopMusic();
       };
-    }, [dailyReward?.lastClaimed, playMusic, stopMusic, tickEnergy]),
+    }, [claimedDailyToday, dailyReward, playMusic, stopMusic, tickEnergy]),
   );
 
   // ===================================================
@@ -430,26 +438,6 @@ export default function LobbyScreen() {
       label: `${energy || 0}/${MAX_ENERGY || 20}`,
       hasTextOverlay: true,
       iconScale: 1.3 ,
-    },
-    {
-      id: "gem",
-      left: "82.00%",
-      top: "20.50%",
-      width: "20.32%",
-      height: "4.94%",
-      label: gems?.toString() || "0",
-      hasTextOverlay: true,
-      iconScale: 1.3 ,
-    },
-    {
-      id: "coin",
-      left: "83.00%",
-      top: "28.00%",
-      width: "19.35%",
-      height: "5.39%",
-      label: coins?.toLocaleString() || "0",
-      hasTextOverlay: true,
-      iconScale: 1.1 ,
     },
     {
       id: "spinwheel",
@@ -813,6 +801,24 @@ export default function LobbyScreen() {
           );
         })()}
 
+        <View
+          pointerEvents="box-none"
+          style={[
+            styles.hudWrap,
+            { top: insets.top + 8 },
+          ]}
+        >
+          <LobbyHudBar
+            xpProgress={calculateXPProgress(xp)}
+            xpLabel={`Lv.${level}`}
+            coins={coins}
+            gems={gems}
+            onPressXp={() => handleActionTrigger("profile_lvl_playername")}
+            onPressCoins={() => handleActionTrigger("coin")}
+            onPressGems={() => handleActionTrigger("gem")}
+          />
+        </View>
+
         <DailyRewardModal
           visible={dailyModal}
           amount={
@@ -821,10 +827,10 @@ export default function LobbyScreen() {
           }
           streak={dailyReward?.streak ?? 0}
           currentDay={dailyReward?.currentDay ?? 0}
-          alreadyClaimed={isToday(dailyReward?.lastClaimed ?? null)}
+          alreadyClaimed={hasClaimedDailyRewardToday(dailyReward)}
           onClose={() => setDailyModal(false)}
           onClaim={claimDailyReward}
-          energyReward={10}
+          energyReward={ENERGY_DAILY_REWARD}
         />
 
         <PlayerNameModal visible={nameModalVisible} onSubmit={handleNameSubmit} />
@@ -975,6 +981,12 @@ const styles = StyleSheet.create({
     flex: 1,
     position: "relative",
     zIndex: 1,
+  },
+  hudWrap: {
+    position: "absolute",
+    left: "24%",
+    right: "16%",
+    zIndex: HITBOX_Z_BASE + 50,
   },
   hitboxAbsoluteNode: {
     position: "absolute",

@@ -192,6 +192,8 @@ function RootLayoutNav() {
       <Stack.Screen name="profile" />
       <Stack.Screen name="daily-reward" />
       <Stack.Screen name="settings" />
+      <Stack.Screen name="privacy" />
+      <Stack.Screen name="terms" />
       <Stack.Screen name="achievements" />
       <Stack.Screen name="collections" />
       <Stack.Screen name="collection-detail" />

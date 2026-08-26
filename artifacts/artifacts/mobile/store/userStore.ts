@@ -46,10 +46,12 @@ import {
   ENERGY_DAILY_REWARD,
   STAMINA_PER_GAME,
   COIN_GEM_EXCHANGES,
+  DAILY_REWARD_SCHEDULE,
+  DAILY_MILESTONE_REWARDS,
   type CoinGemExchangeId,
 } from '@/constants/economy';
 import { notificationService } from '@/services/NotificationService';
-import { calculateLevel, isToday, getTodayUTCString } from '@/utils';
+import { calculateLevel, getTodayUTCString, hasClaimedDailyRewardToday, utcDayString } from '@/utils';
 import { WING_STAGE_ASSETS } from '@/constants/avatarStageAssets';
 
 const DEFAULT_NETWORK_MODE: 'auto' | 'online' | 'offline' =
@@ -164,6 +166,7 @@ interface UserState {
   mockPurchaseCoins: (amount: number) => void;
   updateBestScore: (score: number) => void;
   claimDailyReward: () => number;
+  hasClaimedDailyRewardToday: () => boolean;
   updateSettings: (settings: Partial<UserSettings>) => void;
   updateLanguage: (language: Language) => void;
   updateStatistics: (stats: Partial<UserStatistics>) => void;
@@ -479,40 +482,50 @@ export const useUserStore = create<UserState>()(
       mockPurchaseCoins: (amount) => set((state) => ({ coins: state.coins + amount })),
       updateBestScore: (score) => set({ bestScore: score }),
       
+      hasClaimedDailyRewardToday: () => hasClaimedDailyRewardToday(get().dailyReward),
+
       // --- CALIBRATED DAILY STREAK SCHEDULER ---
+      // One payout per UTC calendar day. Duplicate taps and stale saves are no-ops.
       claimDailyReward: () => {
         const todayStr = getTodayUTCString();
-        // Award the configured reward for the current schedule day, so a stale
-        // persisted nextRewardAmount can never pay out the wrong number of coins.
-        const currentDayIdx = get().dailyReward.currentDay ?? 0;
-        const amt = DAILY_REWARDS[currentDayIdx]?.coins ?? DAILY_REWARDS[0].coins;
+        let awarded = 0;
 
         set((state) => {
-          let currentStreak = state.dailyReward.streak;
-
-          if (state.dailyReward.lastClaimDate === todayStr) {
-            console.log('[Daily Streak Engine] Reward already claimed for today.');
+          if (hasClaimedDailyRewardToday(state.dailyReward)) {
             return {};
           }
 
-          const nextDayIdx = (currentDayIdx + 1) % DAILY_REWARDS.length;
-          const configNextAmount = DAILY_REWARDS[nextDayIdx].coins;
+          const currentDayIdx = state.dailyReward.currentDay ?? 0;
+          const schedule = DAILY_REWARD_SCHEDULE[currentDayIdx] ?? DAILY_REWARD_SCHEDULE[0];
+          const uiReward = DAILY_REWARDS[currentDayIdx] ?? DAILY_REWARDS[0];
+          awarded = schedule.coins ?? uiReward.coins;
 
-          // Spec v1.0.0: daily reward also grants +10 energy (capped at MAX_ENERGY)
-          const newEnergy = Math.min(MAX_ENERGY, state.energy + ENERGY_DAILY_REWARD);
+          const nextDayIdx = (currentDayIdx + 1) % DAILY_REWARDS.length;
+          const nextStreak = state.dailyReward.streak + 1;
+          const milestone = DAILY_MILESTONE_REWARDS.find((m) => m.streak === nextStreak);
+          if (milestone) awarded += milestone.coins;
+
+          const powerUps = { ...state.powerUps };
+          if (schedule.bonus === 'hint') {
+            powerUps.hint = (powerUps.hint ?? 0) + 1;
+          } else if (schedule.bonus === 'reveal') {
+            powerUps['reveal-blur'] = (powerUps['reveal-blur'] ?? 0) + 1;
+          }
+
           return {
-            coins: state.coins + amt,
-            energy: newEnergy,
+            coins: state.coins + awarded,
+            energy: Math.min(MAX_ENERGY, state.energy + ENERGY_DAILY_REWARD),
+            powerUps,
             dailyReward: {
               lastClaimed: new Date().toISOString(),
               lastClaimDate: todayStr,
-              streak: currentStreak + 1,
+              streak: nextStreak,
               currentDay: nextDayIdx,
-              nextRewardAmount: configNextAmount
-            }
+              nextRewardAmount: DAILY_REWARDS[nextDayIdx].coins,
+            },
           };
         });
-        return amt;
+        return awarded;
       },
 
       updateSettings: (settings) => set((state) => ({ settings: { ...state.settings, ...settings } })),
@@ -799,53 +812,66 @@ export const useUserStore = create<UserState>()(
       canFreeSpin: () => {
         const lastSpin = get().lastSpinDate;
         if (!lastSpin) return true;
-        return !isToday(lastSpin);
+        return utcDayString(lastSpin) !== getTodayUTCString();
       },
 
       canExtraSpin: () => {
         const todayStr = getTodayUTCString();
         const state = get();
         const currentExtraSpins = state.lastExtraSpinDate === todayStr ? state.extraSpinsToday : 0;
-        return currentExtraSpins < SPIN_CONFIG.extraSpinsPerDay;
+        return currentExtraSpins < SPIN_CONFIG.extraSpinsPerDay
+          && state.coins >= SPIN_CONFIG.extraSpinCost;
       },
 
       // --- RANDOMIZED JACKPOT SPIN WHEEL CONTROLLER ---
+      // Weighted pick is computed here (never rendered). Free: 1/UTC day.
+      // Extra: up to extraSpinsPerDay, each costing extraSpinCost coins.
       performSpin: (isFree) => {
         const todayStr = getTodayUTCString();
         let selectedReward: SpinReward | null = null;
 
-        if (isFree && !get().canFreeSpin()) return null;
-        if (!isFree && !get().canExtraSpin()) return null;
-
-        const drawnRewardIndex = pickRewardIndex(SPIN_CONFIG.rewards);
-        selectedReward = SPIN_CONFIG.rewards[drawnRewardIndex] || null;
-
-        if (!selectedReward) return null;
-
         set((state) => {
+          const freeUsedToday = utcDayString(state.lastSpinDate) === todayStr;
+          if (isFree && freeUsedToday) return {};
+
+          const extraUsed = state.lastExtraSpinDate === todayStr ? state.extraSpinsToday : 0;
+          if (!isFree) {
+            if (extraUsed >= SPIN_CONFIG.extraSpinsPerDay) return {};
+            if (state.coins < SPIN_CONFIG.extraSpinCost) return {};
+          }
+
+          const drawnRewardIndex = pickRewardIndex(SPIN_CONFIG.rewards);
+          selectedReward = SPIN_CONFIG.rewards[drawnRewardIndex] ?? null;
+          if (!selectedReward) return {};
+
           let updatedCoins = state.coins;
           let updatedGems = state.gems;
-          let updatedFragments = state.avatarFragments;
-          let updatedExtraSpins = state.extraSpinsToday;
-          let trackerExtraSpinDate = state.lastExtraSpinDate;
+          const consumables = { ...state.consumables };
+          const ownedCosmetics = { ...state.ownedCosmetics };
 
-          if (selectedReward!.type === 'coins') updatedCoins += selectedReward!.amount;
-          if (selectedReward!.type === 'gems')  updatedGems += selectedReward!.amount;
-          // note: 'fragment' type removed from SpinRewardType — no-op if encountered
+          if (!isFree) updatedCoins -= SPIN_CONFIG.extraSpinCost;
 
-          if (!isFree) {
-            const currentExtraSpinsCount = state.lastExtraSpinDate === todayStr ? state.extraSpinsToday : 0;
-            updatedExtraSpins = currentExtraSpinsCount + 1;
-            trackerExtraSpinDate = todayStr;
+          if (selectedReward.type === 'coins' || selectedReward.type === 'jackpot') {
+            updatedCoins += selectedReward.amount;
+          } else if (selectedReward.type === 'gems') {
+            updatedGems += selectedReward.amount;
+          } else if (selectedReward.type === 'consumable' && selectedReward.itemId) {
+            const itemId = selectedReward.itemId as ConsumableId;
+            if (itemId in consumables) {
+              consumables[itemId] = (consumables[itemId] ?? 0) + selectedReward.amount;
+            }
+          } else if (selectedReward.type === 'cosmetic') {
+            ownedCosmetics[selectedReward.id] = true;
           }
 
           return {
             coins: updatedCoins,
             gems: updatedGems,
-            avatarFragments: updatedFragments,
-            extraSpinsToday: updatedExtraSpins,
-            lastExtraSpinDate: trackerExtraSpinDate,
-            lastSpinDate: isFree ? new Date().toISOString() : state.lastSpinDate
+            consumables,
+            ownedCosmetics,
+            extraSpinsToday: isFree ? extraUsed : extraUsed + 1,
+            lastExtraSpinDate: isFree ? state.lastExtraSpinDate : todayStr,
+            lastSpinDate: isFree ? new Date().toISOString() : state.lastSpinDate,
           };
         });
 
@@ -976,17 +1002,34 @@ export const useUserStore = create<UserState>()(
         const hasSupportedWingEquipped =
           !!persisted.equippedWing &&
           !!WING_STAGE_ASSETS[persisted.equippedWing];
+
+        const persistedDaily = persisted.dailyReward;
+        const dailyReward = persistedDaily
+          ? {
+              ...persistedDaily,
+              lastClaimDate:
+                persistedDaily.lastClaimDate
+                ?? utcDayString(persistedDaily.lastClaimed)
+                ?? null,
+            }
+          : currentState.dailyReward;
+
+        const merged = {
+          ...currentState,
+          ...persisted,
+          dailyReward,
+        };
+
         if (__DEV__ && !hasSupportedWingEquipped) {
           return {
-            ...currentState,
-            ...persisted,
+            ...merged,
             ownedWings: Array.from(
               new Set([...(persisted.ownedWings ?? []), 'wing_basic']),
             ),
             equippedWing: 'wing_basic',
           };
         }
-        return { ...currentState, ...persisted };
+        return merged;
       },
     }
   )

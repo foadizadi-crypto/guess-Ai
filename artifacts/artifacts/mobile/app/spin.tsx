@@ -3,7 +3,7 @@
  *
  * Spec §2-3:
  *  · Visual 8-segment wheel with Reanimated deceleration
- *  · Free spin every 24 h
+ *  · Free spin: 1 per UTC calendar day
  *  · Paid extra spin (100 coins, max 5/day)
  *  · Countdown timer to next free spin
  *  · Persists spin history to Firestore
@@ -37,12 +37,12 @@ import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
 import {
   SPIN_CONFIG,
-  pickRewardIndex,
   angleForSegment,
   type SpinReward,
 } from '@/constants/spinConfig';
 import { saveSpinHistory } from '@/services/firestoreService';
 import { getPlayerId } from '@/services/authService';
+import { getTodayUTCString, msUntilNextUtcMidnight } from '@/utils';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -166,8 +166,8 @@ export default function SpinScreen() {
 
   // Store
   const coins         = useUserStore((s) => s.coins);
-  const lastSpinDate  = useUserStore((s) => s.lastSpinDate);
   const extraSpinsToday = useUserStore((s) => s.extraSpinsToday);
+  const lastExtraSpinDate = useUserStore((s) => s.lastExtraSpinDate);
   const performSpin   = useUserStore((s) => s.performSpin);
   const canFreeSpin   = useUserStore((s) => s.canFreeSpin);
   const canExtraSpin  = useUserStore((s) => s.canExtraSpin);
@@ -187,12 +187,9 @@ export default function SpinScreen() {
 
   // ── Countdown timer ────────────────────────────────────────────────────────
   const refreshCountdown = useCallback(() => {
-    if (!lastSpinDate) { setCountdown(0); return; }
-    const elapsed = (Date.now() - new Date(lastSpinDate).getTime()) / 1000;
-    const cooldownSec = SPIN_CONFIG.freeSpinCooldownHours * 3600;
-    const remaining = Math.max(0, Math.ceil(cooldownSec - elapsed));
-    setCountdown(remaining);
-  }, [lastSpinDate]);
+    if (canFreeSpin()) { setCountdown(0); return; }
+    setCountdown(Math.ceil(msUntilNextUtcMidnight() / 1000));
+  }, [canFreeSpin]);
 
   useEffect(() => {
     refreshCountdown();
@@ -254,7 +251,7 @@ export default function SpinScreen() {
 
   const isFreeAvailable  = canFreeSpin();
   const isExtraAvailable = canExtraSpin() && coins >= SPIN_CONFIG.extraSpinCost;
-  const extraUsed        = extraSpinsToday;
+  const extraUsed        = lastExtraSpinDate === getTodayUTCString() ? extraSpinsToday : 0;
   const extraMax         = SPIN_CONFIG.extraSpinsPerDay;
 
   return (
@@ -319,7 +316,7 @@ export default function SpinScreen() {
             <View>
               <Text style={styles.spinBtnLabel}>Free Spin</Text>
               <Text style={styles.spinBtnSub}>
-                {isFreeAvailable ? 'Available now!' : `${fmtCountdown(countdown)}`}
+                {isFreeAvailable ? '1 free spin today' : `${fmtCountdown(countdown)}`}
               </Text>
             </View>
           </TouchableOpacity>
@@ -343,14 +340,13 @@ export default function SpinScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Reward table */}
+        {/* Reward table — names only. Odds stay in spinConfig / performSpin. */}
         <View style={styles.rewardTable}>
-          <Text style={styles.rewardTableTitle}>Rewards</Text>
+          <Text style={styles.rewardTableTitle}>Possible rewards</Text>
           {SPIN_CONFIG.rewards.map((r) => (
             <View key={r.id} style={styles.rewardRow}>
               <View style={[styles.rewardDot, { backgroundColor: r.color }]} />
               <Text style={styles.rewardName}>{r.label}</Text>
-              <Text style={styles.rewardPct}>{r.probability}%</Text>
             </View>
           ))}
         </View>

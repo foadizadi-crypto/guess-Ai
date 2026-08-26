@@ -16,6 +16,8 @@ export const ROUTES = {
   CUSTOMIZATION: '/customization',
   DAILY_REWARD: '/daily-reward',
   SETTINGS: '/settings',
+  PRIVACY: '/privacy',
+  TERMS: '/terms',
   ACHIEVEMENTS: '/achievements',
   COLLECTIONS:  '/collections',
   COLLECTION_DETAIL: '/collection-detail',
