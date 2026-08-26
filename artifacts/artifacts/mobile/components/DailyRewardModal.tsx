@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import {
   Modal,
   View,
@@ -50,10 +50,16 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
   const opacity = useSharedValue(0);
   const trophyScale = useSharedValue(1);
   const claimLock = useRef(false);
+  const [claimedNow, setClaimedNow] = useState(false);
+  // Freeze the payout shown in this session so a successful claim does not
+  // jump to tomorrow's schedule amount (store advances currentDay immediately).
+  const [displayAmount, setDisplayAmount] = useState(amount);
 
   useEffect(() => {
     if (visible) {
       claimLock.current = alreadyClaimed;
+      setClaimedNow(false);
+      if (!alreadyClaimed) setDisplayAmount(amount);
       scale.value = withSpring(1, { damping: 14, stiffness: 120 });
       opacity.value = withTiming(1, { duration: 250 });
       // Pulse trophy
@@ -77,17 +83,18 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
   }));
 
   const handleClaim = useCallback(() => {
-    if (alreadyClaimed) { onClose(); return; }
+    if (alreadyClaimed || claimedNow) { onClose(); return; }
     if (claimLock.current) return;
     claimLock.current = true;
     const awarded = onClaim();
     if (awarded <= 0) {
-      claimLock.current = true;
       onClose();
       return;
     }
+    setDisplayAmount(awarded);
+    setClaimedNow(true);
     hapticsService.notification(1);
-  }, [alreadyClaimed, onClaim, onClose]);
+  }, [alreadyClaimed, claimedNow, onClaim, onClose]);
 
   // Preview of the current claim day plus the next two, from the configured schedule
   const streakPreview = [0, 1, 2].map((offset) => {
@@ -113,27 +120,29 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
             <Animated.View style={[styles.iconWrap, trophyStyle]}>
               <View style={styles.iconCircle}>
                 <Ionicons
-                  name={alreadyClaimed ? 'checkmark-circle' : 'gift'}
+                  name={alreadyClaimed || claimedNow ? 'checkmark-circle' : 'gift'}
                   size={48}
-                  color={alreadyClaimed ? GameColors.accentGreen : GameColors.accentGold}
+                  color={alreadyClaimed || claimedNow ? GameColors.accentGreen : GameColors.accentGold}
                 />
               </View>
             </Animated.View>
 
             {/* Title */}
             <Text style={[styles.title, { textAlign }]}>
-              {alreadyClaimed ? 'Already Claimed!' : 'Daily Reward'}
+              {claimedNow ? 'Reward Claimed!' : alreadyClaimed ? 'Already Claimed!' : 'Daily Reward'}
             </Text>
             <Text style={[styles.sub, { textAlign }]}>
-              {alreadyClaimed
-                ? 'Come back tomorrow for your next reward'
-                : `Day ${streak + 1} Streak Bonus`}
+              {claimedNow
+                ? 'Come back tomorrow for the next streak bonus'
+                : alreadyClaimed
+                  ? 'Come back tomorrow for your next reward'
+                  : `Day ${streak + 1} Streak Bonus`}
             </Text>
 
-            {/* Reward amount */}
-            {!alreadyClaimed && (
+            {/* Reward amount — keep showing the payout just collected */}
+            {(!alreadyClaimed || claimedNow) && (
               <View style={styles.rewardRow}>
-                <CoinDisplay amount={amount} size="large" animate={visible} />
+                <CoinDisplay amount={displayAmount} size="large" animate={visible} />
                 {energyReward > 0 && (
                   <View style={styles.energyPill}>
                     <Text style={styles.energyText}>+{energyReward} ⚡</Text>
@@ -166,13 +175,12 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
 
             {/* CTA */}
             <TouchableOpacity
-              style={[styles.claimBtn, alreadyClaimed && styles.claimBtnDone]}
+              style={[styles.claimBtn, (alreadyClaimed || claimedNow) && styles.claimBtnDone]}
               onPress={handleClaim}
               activeOpacity={0.85}
-              disabled={alreadyClaimed ? false : claimLock.current}
             >
               <Text style={styles.claimText}>
-                {alreadyClaimed ? 'Close' : `Claim ${amount} Coins`}
+                {alreadyClaimed || claimedNow ? 'Close' : `Claim ${displayAmount} Coins`}
               </Text>
             </TouchableOpacity>
           </Pressable>

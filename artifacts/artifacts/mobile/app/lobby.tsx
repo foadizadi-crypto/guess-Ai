@@ -28,7 +28,12 @@ import { FullBodyAvatarStage } from "@/components/FullBodyAvatarStage";
 import { useUserStore } from "@/store/userStore";
 import { useAudio } from "@/hooks/useAudio";
 import { useAdStore } from "@/store/adStore";
-import { hasClaimedDailyRewardToday, calculateXPProgress } from "@/utils";
+import {
+  hasClaimedDailyRewardToday,
+  calculateXPProgress,
+  xpInCurrentLevel,
+  xpForCurrentLevel,
+} from "@/utils";
 
 import {
   MAX_ENERGY,
@@ -175,6 +180,17 @@ export default function LobbyScreen() {
   const { playMusic, stopMusic, playEffect } = useAudio();
   const isNicknameVerifiedFor = useUserStore((s) => s.isNicknameVerifiedFor);
 
+  const tryShowDailyReward = useCallback(() => {
+    const uid = getPlayerId();
+    const needsName = !!uid && !useUserStore.getState().isNicknameVerifiedFor(uid);
+    if (needsName) return;
+    const claimed =
+      claimedDailyToday() ||
+      hasClaimedDailyRewardToday(useUserStore.getState().dailyReward);
+    if (claimed) return;
+    setDailyModal(true);
+  }, [claimedDailyToday]);
+
   // A signed-in player must register a name before they can continue. Show
   // the existing blocking modal on lobby entry, not only after a gated tap.
   useEffect(() => {
@@ -240,22 +256,15 @@ export default function LobbyScreen() {
       playMusic("menu_music");
       tickEnergy();
 
-      const claimed = claimedDailyToday() || hasClaimedDailyRewardToday(dailyReward);
-      const needsName = !!getPlayerId() && !useUserStore.getState().isNicknameVerifiedFor(getPlayerId());
-      if (!claimed && !needsName) {
-        // Held back until the one-shot entry animation (splash.json, ~1.2s)
-        // has finished, so the modal does not cover the flourish.
-        const t = setTimeout(() => setDailyModal(true), 2000);
-        return () => {
-          clearTimeout(t);
-          stopMusic();
-        };
-      }
-
+      // Held back until the one-shot entry animation (splash.json, ~1.2s)
+      // has finished, so the modal does not cover the flourish. Also waits
+      // until a nickname is registered — see handleNameSubmit.
+      const t = setTimeout(tryShowDailyReward, 2000);
       return () => {
+        clearTimeout(t);
         stopMusic();
       };
-    }, [claimedDailyToday, dailyReward, playMusic, stopMusic, tickEnergy]),
+    }, [playMusic, stopMusic, tickEnergy, tryShowDailyReward]),
   );
 
   // ===================================================
@@ -401,10 +410,12 @@ export default function LobbyScreen() {
       pendingActionRef.current = null;
       if (action) {
         performAction(action);
+      } else {
+        setTimeout(tryShowDailyReward, 400);
       }
       return { ok: true };
     },
-    [setVerifiedNickname], // eslint-disable-line react-hooks/exhaustive-deps
+    [setVerifiedNickname, tryShowDailyReward], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // ===================================================
@@ -811,6 +822,11 @@ export default function LobbyScreen() {
           <LobbyHudBar
             xpProgress={calculateXPProgress(xp)}
             xpLabel={`Lv.${level}`}
+            xpDetail={
+              xpForCurrentLevel(level) === Infinity
+                ? "MAX"
+                : `${xpInCurrentLevel(xp)}/${xpForCurrentLevel(level)}`
+            }
             coins={coins}
             gems={gems}
             onPressXp={() => handleActionTrigger("profile_lvl_playername")}
@@ -835,25 +851,27 @@ export default function LobbyScreen() {
 
         <PlayerNameModal visible={nameModalVisible} onSubmit={handleNameSubmit} />
 
-        <View
-          style={[
-            styles.debugPanel,
-            {
-              bottom: insets.bottom + 20,
-            },
-          ]}
-        >
-          <Text style={styles.debugText}>Caliper Debug Mode:</Text>
-          <Switch
-            value={debugMode}
-            onValueChange={setDebugMode}
-            trackColor={{
-              false: "#475569",
-              true: "#3b82f6",
-            }}
-            thumbColor={debugMode ? "#60a5fa" : "#cbd5e1"}
-          />
-        </View>
+        {__DEV__ && (
+          <View
+            style={[
+              styles.debugPanel,
+              {
+                bottom: insets.bottom + 20,
+              },
+            ]}
+          >
+            <Text style={styles.debugText}>Caliper Debug Mode:</Text>
+            <Switch
+              value={debugMode}
+              onValueChange={setDebugMode}
+              trackColor={{
+                false: "#475569",
+                true: "#3b82f6",
+              }}
+              thumbColor={debugMode ? "#60a5fa" : "#cbd5e1"}
+            />
+          </View>
+        )}
       </View>
     </View>
   );
@@ -984,8 +1002,8 @@ const styles = StyleSheet.create({
   },
   hudWrap: {
     position: "absolute",
-    left: "24%",
-    right: "16%",
+    left: "26%",
+    right: "20%",
     zIndex: HITBOX_Z_BASE + 50,
   },
   hitboxAbsoluteNode: {
