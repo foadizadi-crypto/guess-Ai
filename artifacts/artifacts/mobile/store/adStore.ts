@@ -74,6 +74,8 @@ interface AdState {
   // ── Actions ───────────────────────────────────────────────────────────────
   /** Show a rewarded ad (always opt-in; available even for ad-free users). */
   showRewarded: () => Promise<boolean>;
+  /** Full-screen interstitial. No-ops when ad-free or ads are unconfigured. */
+  showInterstitial: () => Promise<void>;
 
   /** Called at the end of every game session to advance the session counter. */
   incrementSessionCounter: () => void;
@@ -141,6 +143,11 @@ export const useAdStore = create<AdState>()(
       // ── Actions ──────────────────────────────────────────────────────────
 
       showRewarded: (): Promise<boolean> => adService.showRewarded(),
+
+      showInterstitial: async () => {
+        if (get().isAdFreePassActive()) return;
+        await adService.showInterstitial();
+      },
 
       incrementSessionCounter: () =>
         set((s) => ({ sessionCounter: s.sessionCounter + 1 })),

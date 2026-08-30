@@ -266,13 +266,14 @@ export interface AchievementCheckContext {
   ownedCosmeticsCount: number;
   isPerfectGame?:     boolean;
   maxComboThisGame?:  number;
+  dailyLoginStreak?:  number;
 }
 
 export function checkAchievementCondition(
   id:  string,
   ctx: AchievementCheckContext,
 ): boolean {
-  const { stats, avatars, ownedCosmeticsCount, isPerfectGame, maxComboThisGame } = ctx;
+  const { stats, avatars, ownedCosmeticsCount, isPerfectGame, maxComboThisGame, dailyLoginStreak } = ctx;
   switch (id) {
     // Beginner
     case 'first-win':        return stats.totalWins >= 1;
@@ -282,12 +283,12 @@ export function checkAchievementCondition(
     case 'sharp-eye':        return stats.totalCorrectAnswers >= 10;
     case 'combo-king':       return stats.longestStreak >= 12 || (maxComboThisGame ?? 0) >= 12;
     case 'blur-master':      return stats.totalCorrectAnswers >= 200;
-    case 'hard-mode-master': return stats.totalGamesPlayed >= 10;
+    case 'hard-mode-master': return stats.hardGamesPlayed >= 10;
     case 'streak-master':    return stats.longestStreak >= 7 || (maxComboThisGame ?? 0) >= 7;
     // Progress
     case 'quiz-veteran':     return stats.totalGamesPlayed >= 25;
     case 'century':          return stats.totalCorrectAnswers >= 100;
-    case 'dedicated':        return (stats.currentStreak ?? 0) >= 7;
+    case 'dedicated':        return (ctx.dailyLoginStreak ?? stats.currentStreak ?? 0) >= 7;
     case 'high-roller':      return stats.totalCoinsEarned >= 1000;
     // Collection
     case 'first-cosmetic':   return ownedCosmeticsCount >= 1;

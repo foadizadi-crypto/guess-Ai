@@ -143,7 +143,7 @@ async function scheduleStaminaFull(minutesUntilFull: number): Promise<void> {
     IDS.STAMINA_FULL,
     {
       title: '⚡ Stamina fully restored!',
-      body: 'Your energy is at 50/50 — come back and play GUESSAi!',
+      body: 'Your stamina bar is full — come back and play GUESSAi!',
       data: { screen: 'lobby' },
       ...(Platform.OS === 'android' ? { android: { channelId: 'gameplay' } } : {}),
     },

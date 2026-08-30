@@ -1,0 +1,34 @@
+# Exclude large directories that are irrelevant to the Android/iOS native
+# build so the EAS Build upload archive stays small and fast to upload.
+# (This project is a pnpm monorepo; EAS uploads the whole repo root by
+# default so it can resolve workspace packages, so this file lives at the
+# monorepo root, not inside artifacts/artifacts/mobile.)
+
+node_modules/
+.expo/
+.git/
+android/
+ios/
+
+.git
+.cache
+.local
+.upm
+.config
+node_modules
+attached_assets
+screenshots
+*.log
+/tmp
+*.apk
+*.aab
+/android
+/app.json
+/temp
+
+# Other artifacts in this monorepo that the mobile app doesn't depend on at
+# build time (their own node_modules/dist are excluded via node_modules above
+# and their build.mjs output isn't needed to build the Android app).
+artifacts/artifacts/mockup-sandbox
+artifacts/artifacts/api-server/dist
+.vscode

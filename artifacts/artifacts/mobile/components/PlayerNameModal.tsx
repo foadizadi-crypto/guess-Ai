@@ -82,7 +82,7 @@ export const PlayerNameModal: React.FC<PlayerNameModalProps> = ({
         <Pressable style={StyleSheet.absoluteFill} />
         <View style={styles.card}>
           <Text style={styles.title}>HELLO, COMMANDER</Text>
-          <Text style={styles.sub}>What&apos;s your nickname?</Text>
+          <Text style={styles.sub}>Enter a unique nickname</Text>
 
           <TextInput
             style={styles.input}

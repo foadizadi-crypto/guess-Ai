@@ -34,6 +34,7 @@ export interface FirestorePlayer {
   selectedAvatarId: string;
   totalGamesPlayed: number;
   totalWins:       number;
+  achievements?:   Array<{ id: string; unlocked?: boolean; unlockedAt?: string | null }>;
   updatedAt:       unknown; // serverTimestamp
 }
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, FlatList, Platform, ListRenderItem, Modal } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Alert, StyleSheet, View, Text, TouchableOpacity, FlatList, Platform, ListRenderItem, Modal } from 'react-native';
+import { useRouter, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { hapticsService } from '@/services/HapticsService';
@@ -10,9 +10,12 @@ import { GradientButton } from '@/components/GradientButton';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useGameStore } from '@/store/gameStore';
+import { useUserStore } from '@/store/userStore';
 import { ROUTES } from '@/navigation/routes';
 import type { Category } from '@/types';
 import { useRTL } from '@/hooks/useRTL';
+import { categoryUnlockLevel, isCategoryUnlocked } from '@/constants/categories';
+import { STAMINA_PER_GAME } from '@/constants/economy';
 
 interface CatItem {
   key: Category;
@@ -34,6 +37,10 @@ const CATEGORIES: CatItem[] = [
   { key: 'celebrities', label: 'Celebrities', icon: 'star-outline', color: '#FF8A65' },
   { key: 'history', label: 'History', icon: 'time-outline', color: '#A5D6A7' },
   { key: 'space', label: 'Space', icon: 'planet-outline', color: '#90CAF9' },
+  { key: 'cities', label: 'Cities', icon: 'business-outline', color: '#81D4FA' },
+  { key: 'music', label: 'Music', icon: 'musical-notes-outline', color: '#F48FB1' },
+  { key: 'science', label: 'Science', icon: 'flask-outline', color: '#80CBC4' },
+  { key: 'speed_card', label: 'Speed Card', icon: 'albums-outline', color: '#FFD54F' },
 ];
 
 export default function CategorySelectScreen() {
@@ -44,17 +51,36 @@ export default function CategorySelectScreen() {
   const selectedCategory = useGameStore((s) => s.selectedCategory);
   const selectedDifficulty = useGameStore((s) => s.selectedDifficulty);
   const startSession = useGameStore((s) => s.startSession);
+  const playerLevel = useUserStore((s) => s.level);
+  const spendEnergy = useUserStore((s) => s.spendEnergy);
   const [confirmVisible, setConfirmVisible] = useState(false);
 
   const handleSelect = (cat: Category) => {
+    if (!isCategoryUnlocked(cat, playerLevel)) {
+      hapticsService.notification(0);
+      router.push({ pathname: ROUTES.SHOP, params: { tab: 'play' } });
+      return;
+    }
     hapticsService.impact(0);
     setCategory(cat);
   };
 
   const handlePlay = () => {
+    if (!isCategoryUnlocked(selectedCategory, playerLevel)) return;
+    if (!spendEnergy()) {
+      Alert.alert(
+        'Not enough stamina',
+        `Each round costs ${STAMINA_PER_GAME} stamina. Watch a rewarded ad on the lobby AdMob button to refill.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Go to Lobby', onPress: () => router.replace(ROUTES.LOBBY) },
+        ],
+      );
+      return;
+    }
     startSession(selectedDifficulty, selectedCategory);
     setConfirmVisible(false);
-    router.replace(ROUTES.GAME);
+    router.replace((selectedCategory === 'speed_card' ? ROUTES.SPEED_CARD : ROUTES.GAME) as Href);
   };
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
@@ -62,25 +88,32 @@ export default function CategorySelectScreen() {
 
   const renderItem: ListRenderItem<CatItem> = ({ item }) => {
     const selected = selectedCategory === item.key;
+    const locked = !isCategoryUnlocked(item.key, playerLevel);
     return (
       <TouchableOpacity
         style={[
           styles.catCard,
-          { borderColor: selected ? item.color : GameColors.border },
-          selected && { backgroundColor: `${item.color}18` },
+          { borderColor: selected && !locked ? item.color : GameColors.border },
+          selected && !locked && { backgroundColor: `${item.color}18` },
+          locked && styles.catLocked,
         ]}
         onPress={() => handleSelect(item.key)}
         activeOpacity={0.8}
       >
-        <Ionicons name={item.icon} size={32} color={selected ? item.color : GameColors.textSecondary} />
-        <Text style={[styles.catLabel, { color: selected ? item.color : GameColors.textSecondary }]}>
+        <Ionicons name={item.icon} size={32} color={locked ? GameColors.textSecondary : selected ? item.color : GameColors.textSecondary} />
+        <Text style={[styles.catLabel, { color: locked ? GameColors.textSecondary : selected ? item.color : GameColors.textSecondary }]}>
           {item.label}
         </Text>
-        {selected && (
+        {locked ? (
+          <View style={styles.lockBadge}>
+            <Ionicons name="lock-closed" size={12} color={GameColors.textWhite} />
+            <Text style={styles.lockText}>Lv {categoryUnlockLevel(item.key)}</Text>
+          </View>
+        ) : selected ? (
           <View style={[styles.badge, { backgroundColor: item.color }]}>
             <Ionicons name="checkmark" size={10} color={GameColors.backgroundPrimary} />
           </View>
-        )}
+        ) : null}
       </TouchableOpacity>
     );
   };
@@ -94,7 +127,7 @@ export default function CategorySelectScreen() {
           <View style={styles.placeholder} />
         </View>
 
-        <Text style={[styles.sub, { textAlign }]}>What would you like to guess?</Text>
+        <Text style={[styles.sub, { textAlign }]}>Animals, Nature, Food, and Speed Card start unlocked</Text>
 
         <FlatList
           data={CATEGORIES}
@@ -118,7 +151,11 @@ export default function CategorySelectScreen() {
           <View style={styles.modalCard}>
             <Ionicons name="eye-outline" size={42} color={GameColors.accentGold} />
             <Text style={styles.modalTitle}>Start Game?</Text>
-            <Text style={styles.modalCopy}>20 questions • 120 seconds{'\n'}{selectedCategory} • {selectedDifficulty} mode</Text>
+            <Text style={styles.modalCopy}>
+              {selectedCategory === 'speed_card'
+                ? `5 cards • Speed Card\n${selectedDifficulty} mode`
+                : `20 questions • 120 seconds\n${selectedCategory} • ${selectedDifficulty} mode`}
+            </Text>
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelButton} onPress={() => setConfirmVisible(false)}>
                 <Text style={styles.cancelText}>Not yet</Text>
@@ -164,6 +201,19 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontWeight: '600',
   },
+  catLocked: { opacity: 0.55 },
+  lockBadge: {
+    position: 'absolute',
+    bottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  lockText: { color: GameColors.textWhite, fontSize: 10, fontFamily: 'Inter_700Bold' },
   badge: {
     position: 'absolute',
     top: 8,

@@ -20,14 +20,14 @@ import { getAuth, initializeAuth } from 'firebase/auth';
 // against the browser types where it is absent.
 import { Platform } from 'react-native';
 
-// ─── Firebase project config (from google-services.json / Firebase console) ─
+// ─── Firebase project config (must match google-services.json) ─
 const firebaseConfig = {
-  apiKey:            'AIzaSyDZdpmXwDlv8Ber4mwkMzJ-8Z5TlKspQZY',
-  authDomain:        'blurquiz-554ea.firebaseapp.com',
-  projectId:         'blurquiz-554ea',
-  storageBucket:     'blurquiz-554ea.firebasestorage.app',
-  messagingSenderId: '415580358646',
-  appId:             '1:415580358646:android:c8fb4ff2423755cfc4a9d7',
+  apiKey: "AIzaSyADHkHJ0xCWoLc0fKoHlJXFttdJqZPCq7U",
+  authDomain: "guess-ai-ai.firebaseapp.com",
+  projectId: "guess-ai-ai",
+  storageBucket: "guess-ai-ai.firebasestorage.app",
+  messagingSenderId: "593305587333",
+  appId: "1:593305587333:android:6b48d5ec9d54622269e3ec",
 };
 
 // Guard against hot-reload double-initialization

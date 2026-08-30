@@ -26,8 +26,8 @@ import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
 import { ROUTES } from '@/navigation/routes';
-import { signInWithGoogle, GoogleSignInError, getPlayerId } from '@/services/authService';
-import { useGoogleSignIn, isNativeGoogleSignInConfigured } from '@/services/googleAuthNative';
+import { signInWithGoogle, signInWithGoogleIdToken, GoogleSignInError, getPlayerId } from '@/services/authService';
+import { promptNativeGoogleIdToken, isNativeGoogleSignInConfigured } from '@/services/googleAuthNative';
 import { fetchRegisteredNickname } from '@/services/nicknameService';
 
 /**
@@ -43,9 +43,7 @@ export default function LoginScreen() {
   const setVerifiedNickname = useUserStore((s) => s.setVerifiedNickname);
 
   const [googleLoading, setGoogleLoading] = useState(false);
-  const { configured: nativeConfigured, response, promptAsync } = useGoogleSignIn();
 
-  // Entrance animations
   const cardY = useSharedValue(60);
   const cardOpacity = useSharedValue(0);
   const logoScale = useSharedValue(0.6);
@@ -72,105 +70,55 @@ export default function LoginScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Once we have a Firebase UID, restore any nickname already registered
-   * for this account (returning player / second device) before entering
-   * the lobby — so they never see the nickname modal twice. */
-  const finishSignIn = useCallback(
-    async () => {
-      const existing = await fetchRegisteredNickname();
-      const uid = getPlayerId();
-      if (existing && uid) setVerifiedNickname(uid, existing);
-      hapticsService.notification(1);
-      router.replace(ROUTES.LOBBY);
-    },
-    [setVerifiedNickname, router],
-  );
-
-  // ── Native: handle the AuthSession response once Google redirects back ──
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    if (!response) return;
-
-    if (response.type === 'success') {
-      const idToken = response.params?.id_token;
-      if (!idToken) {
-        setGoogleLoading(false);
-        Alert.alert('Sign-In Failed', 'Google did not return a valid credential.');
-        return;
-      }
-      (async () => {
-        try {
-          const { signInWithGoogleIdToken } = await import('@/services/authService');
-          await signInWithGoogleIdToken(idToken);
-          await finishSignIn();
-        } catch (err) {
-          console.warn('[Login] native Google sign-in failed:', err);
-          Alert.alert('Sign-In Failed', 'Could not sign in with Google. Please try again.');
-        } finally {
-          setGoogleLoading(false);
-        }
-      })();
-    } else if (response.type === 'error') {
-      setGoogleLoading(false);
-      Alert.alert('Sign-In Failed', 'Could not sign in with Google. Please try again.');
-    } else if (response.type === 'dismiss' || response.type === 'cancel') {
-      setGoogleLoading(false);
-    }
-  }, [response, finishSignIn]);
+  const finishSignIn = useCallback(async () => {
+    const existing = await fetchRegisteredNickname();
+    const uid = getPlayerId();
+    if (existing && uid) setVerifiedNickname(uid, existing);
+    hapticsService.notification(1);
+    router.replace(ROUTES.LOBBY);
+  }, [setVerifiedNickname, router]);
 
   const handleGoogle = useCallback(async () => {
     hapticsService.impact(0);
+    setGoogleLoading(true);
 
-    if (Platform.OS === 'web') {
-      setGoogleLoading(true);
-      try {
+    try {
+      if (Platform.OS === 'web') {
         await signInWithGoogle();
-        await finishSignIn();
-      } catch (err) {
-        if (err instanceof GoogleSignInError && err.code === 'popup_blocked') {
-          // A redirect is already underway — the page will reload.
+      } else {
+        if (!isNativeGoogleSignInConfigured()) {
+          Alert.alert(
+            'Google Sign-In Not Ready',
+            "This build's Google OAuth client hasn't been finished yet in Google Cloud Console.",
+          );
           return;
         }
-        if (err instanceof GoogleSignInError && err.code === 'cancelled') {
-          // Silent — the player just closed the popup.
-        } else {
-          console.warn('[Login] Google sign-in failed:', err);
-          Alert.alert('Sign-In Failed', 'Could not sign in with Google. Please try again.');
-        }
-      } finally {
-        setGoogleLoading(false);
+        const idToken = await promptNativeGoogleIdToken();
+        await signInWithGoogleIdToken(idToken);
       }
-      return;
-    }
-
-    if (!nativeConfigured) {
-      Alert.alert(
-        'Google Sign-In Not Ready',
-        "This build's Google OAuth client hasn't been finished yet in Google Cloud Console. Web sign-in is fully working in the meantime.",
-      );
-      return;
-    }
-
-    setGoogleLoading(true);
-    try {
-      await promptAsync();
+      await finishSignIn();
     } catch (err) {
-      console.warn('[Login] promptAsync failed:', err);
+      if (err instanceof GoogleSignInError && err.code === 'popup_blocked') {
+        return;
+      }
+      if (err instanceof GoogleSignInError && err.code === 'cancelled') {
+        return;
+      }
+      console.warn('[Login] Google sign-in failed:', err);
+      Alert.alert('Sign-In Failed', 'Could not sign in with Google. Please try again.');
+    } finally {
       setGoogleLoading(false);
-      Alert.alert('Sign-In Failed', 'Could not open Google Sign-In. Please try again.');
     }
-  }, [finishSignIn, nativeConfigured, promptAsync]);
+  }, [finishSignIn]);
 
   const topPad = Platform.OS === 'web' ? 60 : insets.top;
   const botPad = Platform.OS === 'web' ? 40 : insets.bottom;
 
   return (
     <AnimatedGradientBackground>
-      {/* Gold particles float in background */}
       <GoldParticles />
 
       <View style={[styles.container, { paddingTop: topPad, paddingBottom: botPad }]}>
-        {/* ── Logo ────────────────────────────────────────────────────────── */}
         <Animated.View style={[styles.logoArea, logoStyle]}>
           <View style={styles.logoCircle}>
             <Text style={styles.logoW}>B</Text>
@@ -180,16 +128,13 @@ export default function LoginScreen() {
           <Text style={styles.tagline}>GUESS WHAT YOU SEE</Text>
         </Animated.View>
 
-        {/* ── Glassmorphism login card ─────────────────────────────────────── */}
         <Animated.View style={[styles.cardWrap, cardStyle]}>
           <GlassCard intensity={22} padding={28} style={styles.card}>
-            {/* Welcome text */}
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>Welcome!</Text>
               <Text style={styles.cardSub}>Sign in to start playing</Text>
             </View>
 
-            {/* ── Google Sign In ────────────────────────────────────────────── */}
             <TouchableOpacity
               style={[styles.googleBtn, googleLoading && styles.googleBtnLoading]}
               onPress={handleGoogle}
@@ -209,7 +154,6 @@ export default function LoginScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* Fine print */}
             <Text style={styles.finePrint}>
               By continuing you agree to our Terms of Service and Privacy Policy.
             </Text>
@@ -272,8 +216,6 @@ const styles = StyleSheet.create({
     color: GameColors.textSecondary,
     letterSpacing: 2.5,
   },
-
-  // ── Card ────────────────────────────────────────────────────────────────
   cardWrap: { width: '100%', paddingBottom: 8 },
   card: { gap: 0 },
   cardHeader: { marginBottom: 24, gap: 6 },
@@ -284,8 +226,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   cardSub: { ...Typography.caption, color: GameColors.textSecondary },
-
-  // ── Google button ────────────────────────────────────────────────────────
   googleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -313,8 +253,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
   },
-
-  // ── Fine print ────────────────────────────────────────────────────────────
   finePrint: {
     ...Typography.small,
     color: 'rgba(176,176,176,0.6)',

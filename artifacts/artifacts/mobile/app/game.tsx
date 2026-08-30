@@ -10,7 +10,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
+  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -25,7 +27,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { hapticsService } from '@/services/HapticsService';
@@ -41,8 +43,10 @@ import { useGameStore } from '@/store/gameStore';
 import { useUserStore } from '@/store/userStore';
 import { useAdStore } from '@/store/adStore';
 import { useAudio } from '@/hooks/useAudio';
-import { openAIService } from '@/services/OpenAIService';
+import { MAINTENANCE_MESSAGE, openAIService } from '@/services/OpenAIService';
 import { DIFFICULTY_CONFIG, calculateAnswerScore, getAvatarAbility, getTimerColor, shuffleOptions } from '@/gameEngine';
+import { GAME_CONFIG } from '@/constants/gameConfig';
+import { STAMINA_PER_GAME } from '@/constants/economy';
 import { ROUTES } from '@/navigation/routes';
 import type { Question, PowerUpId } from '@/types';
 
@@ -50,11 +54,9 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 // ─── Local Button Power-up Asset Mapping Pipeline ───────────────────────────
 // All four power-ups use the customized artwork from the canonical icon folder.
-const POWER_UP_ICONS: Record<PowerUpId, ReturnType<typeof require>> = {
-  'hint': require('@/assets/icon/hint.jpg'),
-  'reveal-blur': require('@/assets/icon/reveal-blur.png'),
-  'skip-question': require('@/assets/icon/skip-question.png'),
-  'double-xp': require('@/assets/icon/double-xp.jpg'),
+const POWER_UP_ICONS: Partial<Record<PowerUpId, number>> = {
+  'reveal-blur': require('@/assets/icon/reveal-blur.webp'),
+  'skip-question': require('@/assets/icon/skip-question.webp'),
 };
 
 export default function GameScreen() {
@@ -85,16 +87,22 @@ export default function GameScreen() {
   
   const usePowerUp = useUserStore((s) => s.usePowerUp);
   const powerUps = useUserStore((s) => s.powerUps);
+  const useConsumable = useUserStore((s) => s.useConsumable);
+  const consumables = useUserStore((s) => s.consumables);
   const selectedAvatarId = useUserStore((s) => s.selectedAvatarId);
-  const { incrementSessionCounter } = useAdStore();
-  const { playEffect, playMusic, stopMusic } = useAudio();
+  const spendEnergy = useUserStore((s) => s.spendEnergy);
+  const addTimerSeconds = useGameStore((s) => s.addTimerSeconds);
+  const clearStrikeOut = useGameStore((s) => s.clearStrikeOut);
+  const boostClarity = useGameStore((s) => s.boostClarity);
+  const { showRewarded, isAdFreePassActive } = useAdStore();
+  const { playEffect } = useAudio();
 
   // --- Dynamic State Array Engine ---
   const [questions, setQuestions] = useState<Question[]>([]);
   const [gameImageUrl, setGameImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [isOffline, setIsOffline] = useState<boolean>(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [removedOptions, setRemovedOptions] = useState<number[]>([]);
@@ -102,11 +110,17 @@ export default function GameScreen() {
   const [superComboVisible, setSuperComboVisible] = useState<boolean>(false);
   const [hintUsed, setHintUsed] = useState<boolean>(false);
   const [countdown, setCountdown] = useState<number>(-1);
-  const [darkness, setDarkness] = useState<number>(0);
   const [answerHistory, setAnswerHistory] = useState<('correct' | 'wrong')[]>([]);
+  const [snapArmed, setSnapArmed] = useState(false);
+  const [bannerText, setBannerText] = useState<string | null>(null);
+  const [lossReason, setLossReason] = useState<null | 'timer' | 'snap' | 'strikes'>(null);
+  const [reviveOpen, setReviveOpen] = useState(false);
+  const [reviveLoading, setReviveLoading] = useState(false);
   
   const endedRef = useRef<boolean>(false);
   const countdownStarted = useRef<boolean>(false);
+  const reviveUsedRef = useRef<boolean>(false);
+  const pendingSnapWrongRef = useRef<number | null>(null);
   
   // Shared Animation Values
   const shakeX = useSharedValue<number>(0);
@@ -118,40 +132,110 @@ export default function GameScreen() {
   const currentQuestion = questions[questionIndex];
   const config = DIFFICULTY_CONFIG[difficulty];
 
-  // --- Background Loop Track Management ---
-  useFocusEffect(
-    useCallback(() => {
-      playMusic('game_music');
-      return () => { 
-        stopMusic(); 
-      };
-    }, [playMusic, stopMusic]),
-  );
-
   const finishGame = useCallback(() => {
     if (endedRef.current) return;
     endedRef.current = true;
+    setReviveOpen(false);
     setIsTimerRunning(false);
     endSession();
     router.replace(ROUTES.RESULT);
   }, [endSession, router, setIsTimerRunning]);
 
-  const handleTimerEnd = useCallback(() => {
+  const offerLoss = useCallback((reason: 'timer' | 'snap' | 'strikes') => {
+    if (endedRef.current) return;
+    setIsTimerRunning(false);
+    if (!reviveUsedRef.current && GAME_CONFIG.max_revives_per_round > 0) {
+      setLossReason(reason);
+      setReviveOpen(true);
+      return;
+    }
     finishGame();
-  }, [finishGame]);
+  }, [finishGame, setIsTimerRunning]);
+
+  const handleTimerEnd = useCallback(() => {
+    offerLoss('timer');
+  }, [offerLoss]);
+
+  const continueAfterRevive = useCallback((reason: 'timer' | 'snap' | 'strikes') => {
+    setBannerText(null);
+    setSelectedAnswer(null);
+    setFeedback(null);
+    setSnapArmed(false);
+    setLossReason(null);
+    pendingSnapWrongRef.current = null;
+
+    if (reason === 'timer') {
+      addTimerSeconds(GAME_CONFIG.revive_bonus_seconds);
+      return;
+    }
+    if (reason === 'snap') {
+      setIsTimerRunning(true);
+      return;
+    }
+    clearStrikeOut();
+    const isLast = questionIndex >= questions.length - 1 || questionIndex >= 19;
+    if (isLast) {
+      finishGame();
+      return;
+    }
+    advanceQuestion();
+    setIsTimerRunning(true);
+  }, [addTimerSeconds, advanceQuestion, clearStrikeOut, finishGame, questionIndex, questions.length, setIsTimerRunning]);
+
+  const handleRevive = useCallback(async () => {
+    if (reviveLoading || !lossReason) return;
+    setReviveLoading(true);
+    try {
+      const granted = isAdFreePassActive() || (await showRewarded());
+      if (!granted) {
+        Alert.alert('Ad not finished', 'Watch the full video to continue this round.');
+        return;
+      }
+      reviveUsedRef.current = true;
+      setReviveOpen(false);
+      continueAfterRevive(lossReason);
+    } finally {
+      setReviveLoading(false);
+    }
+  }, [continueAfterRevive, isAdFreePassActive, lossReason, reviveLoading, showRewarded]);
+
+  const declineRevive = useCallback(() => {
+    if (lossReason === 'snap' && pendingSnapWrongRef.current != null) {
+      recordAnswer(false, 0);
+      setAnswerHistory((prev) => {
+        const next = [...prev];
+        next[questionIndex] = 'wrong';
+        return next;
+      });
+      pendingSnapWrongRef.current = null;
+    }
+    setReviveOpen(false);
+    finishGame();
+  }, [finishGame, lossReason, questionIndex, recordAnswer]);
 
   useEffect(() => {
     setRemovedOptions([]);
   }, [questionIndex]);
 
-  // Load question datasets from remote config / storage pipeline
+  const retryLoadQuestions = useCallback(() => {
+    setLoadAttempt((n) => n + 1);
+  }, []);
+
+  const exitToLobby = useCallback(() => {
+    resetGame();
+    router.replace(ROUTES.LOBBY);
+  }, [resetGame, router]);
+
+  // Load fresh questions from the online AI backend only.
   useEffect(() => {
     let active = true;
     setLoading(true);
     setLoadError(null);
-    console.log('[Game] loading questions', { category, difficulty });
+    countdownStarted.current = false;
+    setCountdown(-1);
+    console.log('[Game] loading questions', { category, difficulty, loadAttempt });
     openAIService.generateQuestions(category, difficulty, 20)
-      .then(({ questions: items, fromCache }) => {
+      .then(({ questions: items }) => {
         if (!active) return;
         const shuffled = items.map((q) => {
           const { options, correctIndex } = shuffleOptions(q);
@@ -159,25 +243,37 @@ export default function GameScreen() {
         });
         setGameImageUrl(shuffled[0]?.imageUrl ?? null);
         setQuestions(shuffled);
-        setIsOffline(fromCache);
         setLoading(false);
-        console.log('[Game] questions ready', { count: items.length, fromCache });
+        console.log('[Game] questions ready', { count: items.length });
       })
       .catch((err: unknown) => {
         if (!active) return;
-        const msg = err instanceof Error ? err.message : 'Could not load questions. Check your connection and API keys.';
-        console.warn('[Game] question load failed; clearing loading state', { message: msg });
+        const msg = err instanceof Error ? err.message : MAINTENANCE_MESSAGE;
+        console.warn('[Game] question load failed', { message: msg });
         setLoadError(msg);
         setLoading(false);
       });
-    return () => { 
-      active = false; 
+    return () => {
+      active = false;
     };
-  }, [category, difficulty]);
+  }, [category, difficulty, loadAttempt]);
+
+  // One-image-per-round: the round image is set once when questions load and
+  // NEVER changes between questions — only its blur level changes.
+  useEffect(() => {
+    setSnapArmed(false);
+    setBannerText(null);
+  }, [currentQuestion]);
 
   useEffect(() => {
-    if (!gameSession) startSession(difficulty, category);
-  }, [category, difficulty, gameSession, startSession]);
+    // Sessions are started from category-select (after stamina spend) or
+    // pause-menu restart. Opening /game with no session must not grant a free round.
+    if (gameSession) return;
+    const t = setTimeout(() => {
+      if (!useGameStore.getState().gameSession) router.replace(ROUTES.LOBBY);
+    }, 50);
+    return () => clearTimeout(t);
+  }, [gameSession, router]);
 
   useEffect(() => {
     if (!loading && questions.length > 0 && !countdownStarted.current) {
@@ -204,7 +300,7 @@ export default function GameScreen() {
   }, [countdown, cdScale]);
 
   useEffect(() => {
-    if (!isTimerRunning || paused || loading || feedback || endedRef.current || countdown > -1) return;
+    if (!isTimerRunning || paused || loading || feedback || endedRef.current || countdown > -1 || reviveOpen) return;
     const interval = setInterval(() => {
       const next = Math.max(0, timer - 1);
       setTimer(next);
@@ -212,35 +308,50 @@ export default function GameScreen() {
       if (next === 0) handleTimerEnd();
     }, 1000);
     return () => clearInterval(interval);
-  }, [feedback, handleTimerEnd, isTimerRunning, loading, paused, playEffect, setTimer, timer, countdown]);
+  }, [feedback, handleTimerEnd, isTimerRunning, loading, paused, playEffect, setTimer, timer, countdown, reviveOpen]);
 
   const answerQuestion = useCallback(
-    (answerIndex: number) => {
-      if (!currentQuestion || feedback || paused || endedRef.current) return;
+    (answerIndex: number, snap = false) => {
+      if (!currentQuestion || feedback || paused || endedRef.current || reviveOpen) return;
       const correct = answerIndex === currentQuestion.correctIndex;
+
+      if (snap && !correct) {
+        pendingSnapWrongRef.current = answerIndex;
+        setSelectedAnswer(answerIndex);
+        setFeedback('wrong');
+        setBannerText('Wrong!');
+        setIsTimerRunning(false);
+        flashGreen.value = 0;
+        flashOpacity.value = withSequence(
+          withTiming(0.55, { duration: 80 }),
+          withTiming(0, { duration: 500 }),
+        );
+        hapticsService.notification(0);
+        playEffect('wrong');
+        offerLoss('snap');
+        return;
+      }
+
       const points = correct ? calculateAnswerScore(difficulty, timer, getAvatarAbility(selectedAvatarId), streak) : 0;
       const newStreak = correct ? streak + 1 : 0;
       
-      if (correct && !superComboActive && newStreak >= 15) {
+      if (correct && !superComboActive && newStreak >= GAME_CONFIG.super_combo_threshold) {
         setSuperComboVisible(true);
         setTimeout(() => setSuperComboVisible(false), 2500);
         playEffect('coin');
       }
       setSelectedAnswer(answerIndex);
       setFeedback(correct ? 'correct' : 'wrong');
+      setBannerText(correct ? 'Correct!' : 'Wrong!');
+      setSnapArmed(false);
       setIsTimerRunning(false);
-      recordAnswer(correct, points);
+      recordAnswer(correct, points, snap);
 
       setAnswerHistory((prev) => {
         const next = [...prev];
         next[questionIndex] = correct ? 'correct' : 'wrong';
         return next;
       });
-
-      if (!correct) {
-        const penaltyAmount = difficulty === 'hard' ? 7 : difficulty === 'medium' ? 5 : 3;
-        setDarkness((prev) => Math.min(70, prev + penaltyAmount));
-      }
 
       flashGreen.value = correct ? 1 : 0;
       flashOpacity.value = withSequence(
@@ -259,9 +370,10 @@ export default function GameScreen() {
         );
       }
       setTimeout(() => {
+        setBannerText(null);
         const { consecutiveWrong: cw, totalWrong: tw } = useGameStore.getState();
         if (cw >= 5 || tw >= 10) {
-          finishGame();
+          offerLoss('strikes');
           return;
         }
         const isLast = questionIndex >= questions.length - 1 || questionIndex >= 19;
@@ -281,11 +393,13 @@ export default function GameScreen() {
       difficulty,
       feedback,
       finishGame,
+      offerLoss,
       paused,
       playEffect,
       questionIndex,
       questions.length,
       recordAnswer,
+      reviveOpen,
       selectedAvatarId,
       setIsTimerRunning,
       shakeX,
@@ -308,6 +422,7 @@ export default function GameScreen() {
         playEffect('coin');
       } else if (powerUpId === 'reveal-blur') {
         setBlurAmount(Math.max(0, blurAmount - 5));
+        boostClarity(10);
         playEffect('coin');
       } else if (powerUpId === 'skip-question') {
         if (questionIndex >= questions.length - 1 || questionIndex >= 19) {
@@ -324,6 +439,7 @@ export default function GameScreen() {
       activateDoubleXP,
       advanceQuestion,
       blurAmount,
+      boostClarity,
       currentQuestion,
       feedback,
       finishGame,
@@ -337,22 +453,42 @@ export default function GameScreen() {
     ],
   );
 
+  const useClarityBomb = useCallback(() => {
+    if (feedback || paused || endedRef.current || reviveOpen) return;
+    if (!useConsumable('clarity_bomb')) return;
+    hapticsService.notification(1);
+    playEffect('coin');
+    boostClarity(15);
+  }, [boostClarity, feedback, paused, playEffect, reviveOpen, useConsumable]);
+
   const restart = useCallback(() => {
+    // A restart is a brand-new round, so it must cost stamina like any other.
+    // Without this the pause menu is an infinite free-round exploit.
+    if (!spendEnergy()) {
+      Alert.alert(
+        'Not enough stamina',
+        `Restarting starts a new round and costs ${STAMINA_PER_GAME} stamina. Refill from the lobby first.`,
+        [
+          { text: 'Keep playing', style: 'cancel' },
+          { text: 'Exit to lobby', onPress: exitToLobby },
+        ],
+      );
+      return;
+    }
     endedRef.current = false;
+    reviveUsedRef.current = false;
+    pendingSnapWrongRef.current = null;
     setPaused(false);
     setSelectedAnswer(null);
     setFeedback(null);
-    setDarkness(0);
+    setBannerText(null);
+    setSnapArmed(false);
+    setReviveOpen(false);
+    setLossReason(null);
     setAnswerHistory([]);
     setCountdown(3);
     startSession(difficulty, category);
-  }, [category, difficulty, startSession]);
-
-  const exitToLobby = useCallback(() => {
-    incrementSessionCounter();
-    resetGame();
-    router.replace(ROUTES.LOBBY);
-  }, [incrementSessionCounter, resetGame, router]);
+  }, [category, difficulty, exitToLobby, spendEnergy, startSession]);
 
   // Reanimated Styles
   const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }] }));
@@ -365,7 +501,11 @@ export default function GameScreen() {
   }));
   const cdStyle = useAnimatedStyle(() => ({ transform: [{ scale: cdScale.value }] }));
 
-  const blurRadius = useMemo(() => Math.max(0, Math.round((100 - clarityProgress) / 5)), [clarityProgress]);
+  const blurRadius = useMemo(
+    () => Math.round(Math.max(0, Math.min(100, 100 - clarityProgress)) / 100 * 72),
+    [clarityProgress],
+  );
+  const blurOverlay = Math.max(0, Math.min(100, 100 - clarityProgress)) / 100 * 0.52;
   const topPad = Platform.OS === 'web' ? 54 : insets.top + 8;
   const botPad = Platform.OS === 'web' ? 24 : insets.bottom + 12;
 
@@ -417,25 +557,17 @@ export default function GameScreen() {
           <Text style={styles.score}>+{score}</Text>
         </View>
 
-        {isOffline && !loading && !loadError && (
-          <View style={styles.offlineBanner}>
-            <Ionicons name="cloud-offline-outline" size={13} color="#A78BFA" />
-            <Text style={styles.offlineBannerText}>Offline — using cached questions</Text>
-          </View>
-        )}
-
         {loadError ? (
-          <View style={styles.loading}>
-            <Ionicons name="cloud-offline-outline" size={48} color={GameColors.textSecondary} />
-            <Text style={[styles.loadingText, { color: '#FF4444', textAlign: 'center', paddingHorizontal: 24 }]}>
-              {loadError}
-            </Text>
-            <TouchableOpacity
-              style={styles.errorBackBtn}
-              onPress={() => router.back()}
-            >
-              <Text style={styles.errorBackText}>← Go Back</Text>
-            </TouchableOpacity>
+          <View style={styles.errorPanel}>
+            <GlassCard style={styles.errorCard}>
+              <Ionicons name="cloud-outline" size={48} color="#A78BFA" />
+              <Text style={styles.errorTitle}>Couldn't reach the game server</Text>
+              <Text style={styles.errorMessage}>{loadError}</Text>
+              <GradientButton title="Try Again" onPress={retryLoadQuestions} style={styles.errorPrimaryBtn} />
+              <TouchableOpacity style={styles.errorBackBtn} onPress={exitToLobby}>
+                <Text style={styles.errorBackText}>← Back to Lobby</Text>
+              </TouchableOpacity>
+            </GlassCard>
           </View>
         ) : loading ? (
           <View style={styles.loading}>
@@ -447,7 +579,7 @@ export default function GameScreen() {
             {/* CORE IMAGE DISPLAY BLUR CONTAINER */}
             <Animated.View style={[styles.imageWrap, shakeStyle]}>
               {gameImageUrl ? (
-                <Image source={{ uri: gameImageUrl }} style={styles.image} blurRadius={blurRadius} />
+                <Image source={{ uri: gameImageUrl }} style={styles.image} resizeMode="cover" blurRadius={blurRadius} />
               ) : (
                 <View style={styles.imagePlaceholder}>
                   <Ionicons name="image-outline" size={48} color={GameColors.textSecondary} />
@@ -470,14 +602,23 @@ export default function GameScreen() {
                 </View>
               )}
 
-              {superComboVisible && (
+                  {superComboVisible && (
                 <View style={styles.superComboAnnounce}>
-                  <Text style={styles.superComboAnnounceText}>⚡ SUPER COMBO! ×2.5 XP</Text>
+                  <Text style={styles.superComboAnnounceText}>⚡ SUPER COMBO! ×{GAME_CONFIG.super_combo_multiplier} XP</Text>
                 </View>
               )}
 
-              {darkness > 0 && <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: `rgba(0,0,0,${darkness / 100})` }]} />}
+              {blurOverlay > 0 && (
+                <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, { backgroundColor: `rgba(0,0,0,${blurOverlay})` }]} />
+              )}
               <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFillObject, flashOverlayStyle]} />
+              {bannerText ? (
+                <View pointerEvents="none" style={styles.bannerOverlay}>
+                  <Text style={[styles.bannerText, feedback === 'correct' ? styles.bannerCorrect : styles.bannerWrong]}>
+                    {bannerText}
+                  </Text>
+                </View>
+              ) : null}
             </Animated.View>
 
             {/* QUESTION DISPLAY PANEL */}
@@ -486,7 +627,7 @@ export default function GameScreen() {
               <Text style={styles.questionText} numberOfLines={3}>Identify the mystery image</Text>
               {feedback && (
                 <Text style={[styles.feedback, { color: feedback === 'correct' ? GameColors.accentGreen : GameColors.accentRed }]}>
-                  {feedback === 'correct' ? `Correct! +${calculateAnswerScore(difficulty, timer, getAvatarAbility(selectedAvatarId), streak)}` : `Not quite — ${currentQuestion.answer}`}
+                  {feedback === 'correct' ? `Correct! +${calculateAnswerScore(difficulty, timer, getAvatarAbility(selectedAvatarId), streak)}` : 'Not quite — look closer!'}
                 </Text>
               )}
             </GlassCard>
@@ -503,7 +644,7 @@ export default function GameScreen() {
                   key={id}
                   style={[styles.powerButton, powerUps[id] < 1 && styles.powerButtonDisabled]}
                   onPress={() => useGamePowerUp(id)}
-                  disabled={powerUps[id] < 1 || Boolean(feedback)}
+                  disabled={powerUps[id] < 1 || Boolean(feedback) || reviveOpen}
                 >
                   {POWER_UP_ICONS[id] ? (
                     <AnimatedIcon animation="pulse" style={styles.powerIconMotion}>
@@ -516,36 +657,78 @@ export default function GameScreen() {
                   <Text style={styles.powerCount}>{powerUps[id]}</Text>
                 </TouchableOpacity>
               ))}
+              <TouchableOpacity
+                style={[styles.powerButton, (consumables.clarity_bomb ?? 0) < 1 && styles.powerButtonDisabled]}
+                onPress={useClarityBomb}
+                disabled={(consumables.clarity_bomb ?? 0) < 1 || Boolean(feedback) || reviveOpen}
+              >
+                <Ionicons
+                  name="sparkles-outline"
+                  size={14}
+                  color={(consumables.clarity_bomb ?? 0) > 0 ? GameColors.accentGold : GameColors.textSecondary}
+                />
+                <Text style={styles.powerLabel}>Bomb</Text>
+                <Text style={styles.powerCount}>{consumables.clarity_bomb ?? 0}</Text>
+              </TouchableOpacity>
             </View>
 
-            {/* MULTIPLE CHOICE OPTIONS GRID */}
+            {/* FIVE-BUTTON ROW: A B SNAP C D */}
             <View style={styles.answers}>
-              {currentQuestion.options.map((option, index) => {
-                if (removedOptions.includes(index)) return null;
-                const isCorrect = index === currentQuestion.correctIndex;
-                const isSelected = selectedAnswer === index;
-                const color = feedback && isCorrect ? GameColors.accentGreen : feedback && isSelected ? GameColors.accentRed : GameColors.textWhite;
+              {(() => {
+                if (!currentQuestion) return null;
+                const visible = currentQuestion.options
+                  .map((option, index) => ({ option, index }))
+                  .filter(({ index }) => !removedOptions.includes(index));
+                const mid = Math.ceil(visible.length / 2);
+                const renderAnswer = ({ option, index }: { option: string; index: number }) => {
+                  const isCorrect = index === currentQuestion.correctIndex;
+                  const isSelected = selectedAnswer === index;
+                  const color = feedback && isCorrect ? GameColors.accentGreen : feedback && isSelected ? GameColors.accentRed : GameColors.textWhite;
+                  return (
+                    <AnimatedTouchable
+                      key={`${currentQuestion.id}-${option}`}
+                      style={[
+                        styles.answerButton,
+                        isCorrect && feedback === 'correct' && styles.correctButton,
+                        isSelected && feedback === 'wrong' && styles.wrongButton,
+                      ]}
+                      onPress={() => answerQuestion(index, snapArmed)}
+                      disabled={Boolean(feedback) || countdown > -1 || reviveOpen}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.answerLetter, { borderColor: color }]}>
+                        <Text style={[styles.answerLetterText, { color }]}>{String.fromCharCode(65 + index)}</Text>
+                      </View>
+                      <Text style={[styles.answerText, { color }]} numberOfLines={2}>{option}</Text>
+                    </AnimatedTouchable>
+                  );
+                };
                 return (
-                  <AnimatedTouchable
-                    key={`${currentQuestion.id}-${option}`}
-                    style={[
-                      styles.answerButton,
-                      isCorrect && feedback === 'correct' && styles.correctButton,
-                      isSelected && feedback === 'wrong' && styles.wrongButton,
-                    ]}
-                    onPress={() => answerQuestion(index)}
-                    disabled={Boolean(feedback) || countdown > -1}
-                    activeOpacity={0.8}
-                  >
-                    <View style={[styles.answerLetter, { borderColor: color }]}>
-                      <Text style={[styles.answerLetterText, { color }]}>{String.fromCharCode(65 + index)}</Text>
-                    </View>
-                    <Text style={[styles.answerText, { color }]} numberOfLines={2}>{option}</Text>
-                    {feedback && isCorrect && <Ionicons name="checkmark-circle" size={20} color={GameColors.accentGreen} />}
-                  </AnimatedTouchable>
+                  <>
+                    {visible.slice(0, mid).map(renderAnswer)}
+                    <TouchableOpacity
+                      style={[styles.snapButton, snapArmed && styles.snapButtonArmed]}
+                      onPress={() => {
+                        if (feedback || countdown > -1 || reviveOpen) return;
+                        hapticsService.impact(1);
+                        playEffect('button_click');
+                        setSnapArmed((armed) => !armed);
+                      }}
+                      disabled={Boolean(feedback) || countdown > -1 || reviveOpen}
+                      activeOpacity={0.85}
+                      accessibilityLabel="Early recognition"
+                    >
+                      <Ionicons name="flash" size={16} color={snapArmed ? '#0D0221' : '#FFF8E1'} />
+                      <Text style={[styles.snapLabel, snapArmed && styles.snapLabelArmed]}>SNAP</Text>
+                    </TouchableOpacity>
+                    {visible.slice(mid).map(renderAnswer)}
+                  </>
                 );
-              })}
+              })()}
             </View>
+            {snapArmed && !feedback ? (
+              <Text style={styles.snapHint}>Tap an answer — high risk, extra coins if you are right</Text>
+            ) : null}
           </>
         )}
       </View>
@@ -561,6 +744,30 @@ export default function GameScreen() {
       )}
 
       <PauseMenu visible={paused} onResume={() => { setPaused(false); setIsTimerRunning(true); }} onRestart={restart} onExit={exitToLobby} />
+
+      <Modal visible={reviveOpen} transparent animationType="fade" onRequestClose={declineRevive}>
+        <View style={styles.reviveBackdrop}>
+          <View style={styles.reviveCard}>
+            <Text style={styles.reviveTitle}>Continue?</Text>
+            <Text style={styles.reviveCopy}>
+              {lossReason === 'timer'
+                ? `Time is up. Watch an ad to add ${GAME_CONFIG.revive_bonus_seconds} seconds.`
+                : lossReason === 'snap'
+                  ? 'Wrong SNAP. Watch an ad to retry this image.'
+                  : 'Too many misses. Watch an ad to keep playing.'}
+            </Text>
+            <GradientButton
+              title={reviveLoading ? 'Loading ad…' : isAdFreePassActive() ? 'Continue (Ad-Free)' : 'Watch ad & continue'}
+              onPress={() => { void handleRevive(); }}
+              disabled={reviveLoading}
+              style={styles.revivePrimary}
+            />
+            <TouchableOpacity style={styles.reviveSkip} onPress={declineRevive} disabled={reviveLoading}>
+              <Text style={styles.reviveSkipText}>No thanks — end round</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </AnimatedBackground>
   );
 }
@@ -580,7 +787,7 @@ const styles = StyleSheet.create({
   segmentDone: { backgroundColor: GameColors.accentGreen },
   segmentWrong: { backgroundColor: GameColors.accentRed },
   imageWrap: { flex: 1, minHeight: 240, maxHeight: 330, borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: GameColors.cardBorder, backgroundColor: GameColors.backgroundSecondary },
-  image: { width: '100%', height: '100%', resizeMode: 'cover' },
+  image: { width: '100%', height: '100%' },
   imagePlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(139,92,246,0.1)' },
   imagePlaceholderText: { color: GameColors.textSecondary, fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 8 },
   imageBadge: { position: 'absolute', left: 14, top: 14, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, backgroundColor: 'rgba(13,2,33,0.75)', flexDirection: 'row', gap: 5, alignItems: 'center' },
@@ -602,18 +809,39 @@ const styles = StyleSheet.create({
   questionLabel: { ...Typography.small, color: GameColors.accentGold, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
   questionText: { ...Typography.semibold, color: GameColors.textWhite, textAlign: 'right' },
   feedback: { ...Typography.small, fontFamily: 'Inter_700Bold', marginTop: 3 },
-  answers: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  answerButton: { width: '48%', minHeight: 62, flexGrow: 1, flexBasis: '46%', flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: GameColors.border, backgroundColor: 'rgba(255,255,255,0.06)' },
+  answers: { flexDirection: 'row', alignItems: 'stretch', gap: 6 },
+  answerButton: { flex: 1, minHeight: 72, minWidth: 0, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 4, paddingVertical: 8, borderRadius: 14, borderWidth: 1, borderColor: GameColors.border, backgroundColor: 'rgba(255,255,255,0.06)' },
   correctButton: { borderColor: GameColors.accentGreen, backgroundColor: 'rgba(0,230,118,0.16)' },
   wrongButton: { borderColor: GameColors.accentRed, backgroundColor: 'rgba(255,23,68,0.16)' },
-  answerLetter: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  answerLetterText: { ...Typography.small, fontFamily: 'Inter_700Bold' },
-  answerText: { ...Typography.small, flex: 1, fontFamily: 'Inter_600SemiBold' },
+  answerLetter: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  answerLetterText: { ...Typography.small, fontFamily: 'Inter_700Bold', fontSize: 11 },
+  answerText: { ...Typography.small, fontFamily: 'Inter_600SemiBold', fontSize: 10, textAlign: 'center' },
+  snapButton: { flex: 1.15, minHeight: 72, minWidth: 0, borderRadius: 16, borderWidth: 2, borderColor: '#FF6D00', backgroundColor: '#FF3D00', alignItems: 'center', justifyContent: 'center', gap: 2, paddingHorizontal: 4 },
+  snapButtonArmed: { backgroundColor: '#FFD600', borderColor: '#FFF59D' },
+  snapLabel: { color: '#FFF8E1', fontFamily: 'Inter_700Bold', fontSize: 11, letterSpacing: 1 },
+  snapLabelArmed: { color: '#0D0221' },
+  snapHint: { color: GameColors.accentGold, fontFamily: 'Inter_600SemiBold', fontSize: 11, textAlign: 'center', marginTop: -4 },
+  bannerOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  bannerText: { fontFamily: 'Inter_700Bold', fontSize: 42, letterSpacing: 1, textShadowColor: '#000', textShadowRadius: 12 },
+  bannerCorrect: { color: '#00E676' },
+  bannerWrong: { color: '#FF1744' },
+  reviveBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.82)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  reviveCard: { width: '100%', borderRadius: 24, padding: 24, alignItems: 'center', backgroundColor: GameColors.card, borderWidth: 1, borderColor: GameColors.cardBorder, gap: 12 },
+  reviveTitle: { ...Typography.header, color: GameColors.textWhite, fontSize: 28 },
+  reviveCopy: { ...Typography.caption, color: GameColors.textSecondary, textAlign: 'center' },
+  revivePrimary: { width: '100%' },
+  reviveSkip: { paddingVertical: 10 },
+  reviveSkipText: { color: GameColors.textSecondary, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
   offlineBanner: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(167,139,250,0.35)', backgroundColor: 'rgba(167,139,250,0.10)' },
   offlineBannerText: { color: '#A78BFA', fontFamily: 'Inter_600SemiBold', fontSize: 10, letterSpacing: 0.4 },
+  errorPanel: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  errorCard: { width: '100%', alignItems: 'center', gap: 12, paddingVertical: 28, paddingHorizontal: 20 },
+  errorTitle: { ...Typography.semibold, color: GameColors.textWhite, fontSize: 18, textAlign: 'center' },
+  errorMessage: { ...Typography.caption, color: GameColors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  errorPrimaryBtn: { width: '100%', marginTop: 4 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
   loadingText: { ...Typography.caption, color: GameColors.textSecondary },
-  errorBackBtn: { marginTop: 12, paddingVertical: 12, paddingHorizontal: 28, borderRadius: 12, borderWidth: 1, borderColor: GameColors.border },
+  errorBackBtn: { marginTop: 4, paddingVertical: 12, paddingHorizontal: 28, borderRadius: 12, borderWidth: 1, borderColor: GameColors.border },
   errorBackText: { color: GameColors.textWhite, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   countdownOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(13,2,33,0.82)', zIndex: 100 },
   countdownNumber: { fontSize: 96, fontFamily: 'Inter_700Bold', color: GameColors.textWhite, textShadowColor: GameColors.glow, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 32, lineHeight: 110 },

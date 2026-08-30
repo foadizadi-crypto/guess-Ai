@@ -5,7 +5,7 @@ import { DIFFICULTY_CONFIG, getStartingClarity, getStartingTime, getAvatarAbilit
 import { useUserStore } from '@/store/userStore';
 import { generateId } from '@/utils';
 import { getDifficultyXP, XP_WRONG } from '@/constants/economy';
-import { GAME_CONFIG, computeAnswerXP } from '@/constants/gameConfig';
+import { GAME_CONFIG, computeAnswerXP, coinsForCorrect } from '@/constants/gameConfig';
 import { type ConsumableId } from '@/constants/shopData';
 
 // ─── State shape ──────────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ interface GameState {
   doubleXPActive: boolean;
   lastGameWasTimedOut: boolean;
   streak: number;              // consecutive correct answers in this session
-  superComboActive: boolean;   // true once streak reaches super_combo_threshold; 2.5× XP + clarity protection
+  superComboActive: boolean;   // true once streak reaches super_combo_threshold; multiplier XP + clarity protection
   comboShieldActive: boolean;  // wrong answer drops combo 1 tier instead of full reset
   errorNullifierActive: boolean; // next wrong answer won't reduce clarity
   timeBoosted: boolean;        // time_boost consumable was applied this session
@@ -56,8 +56,11 @@ interface GameState {
   setBlurAmount: (amount: number) => void;
   useHint: () => void;
   startSession: (difficulty: Difficulty, category: Category) => void;
-  recordAnswer: (correct: boolean, points: number) => void;
+  recordAnswer: (correct: boolean, points: number, snap?: boolean) => void;
   advanceQuestion: () => void;
+  addTimerSeconds: (seconds: number) => void;
+  clearStrikeOut: () => void;
+  boostClarity: (delta: number) => void;
   endSession: () => void;
   resetGame: () => void;
   activateDoubleXP: () => void;
@@ -144,7 +147,14 @@ export const useGameStore = create<GameState>((set) => ({
       // Combo Shield, Error Nullifier, 2x Multiplier activate for this session
       const comboShieldActive    = consumables.combo_shield > 0;
       const errorNullifierActive = consumables.error_nullifier > 0;
-      const multiplierActive     = userState.multiplierSessionsLeft > 0;
+
+      // 2× multiplier: remaining armed sessions, or consume one pack for 3 sessions.
+      let multiplierActive = userState.multiplierSessionsLeft > 0;
+      if (!multiplierActive && consumables.multiplier_2x > 0) {
+        userState.useConsumable('multiplier_2x');
+        useUserStore.setState({ multiplierSessionsLeft: 3 });
+        multiplierActive = true;
+      }
 
       // Deduct consumables that were activated
       if (timeBoosted)         userState.useConsumable('time_boost');
@@ -170,7 +180,7 @@ export const useGameStore = create<GameState>((set) => ({
         isTimerRunning: true,
         currentQuestionIndex: 0,
         correctAnswers: 0,
-        totalQuestions: GAME_CONSTANTS.TOTAL_QUESTIONS,
+        totalQuestions: category === 'speed_card' ? 5 : GAME_CONSTANTS.TOTAL_QUESTIONS,
         clarity: getStartingClarity(difficulty, ability),
         xpEarned: 0,
         coinsEarned: 0,
@@ -188,7 +198,7 @@ export const useGameStore = create<GameState>((set) => ({
       };
     }),
 
-  recordAnswer: (correct, points) =>
+  recordAnswer: (correct, points, snap = false) =>
     set((state) => {
       // ── Combo Shield: on wrong answer drop 1 tier instead of full reset ─
       let newStreak: number;
@@ -223,13 +233,16 @@ export const useGameStore = create<GameState>((set) => ({
       let questionXP: number;
       if (correct) {
         questionXP = Math.ceil(computeAnswerXP(state.selectedDifficulty, newStreak) * xpSageMultiplier * sessionXPMult);
+        if (snap) questionXP += GAME_CONFIG.snap_correct_xp;
       } else {
         questionXP = Math.ceil(XP_WRONG * xpSageMultiplier);
       }
 
       // ── Coin calculation ────────────────────────────────────────────────
       const coinMultiplier = (avatarAbility === 'coin-magnet' ? 1.25 : 1) * (state.multiplierActive ? 2 : 1);
-      const questionCoins  = correct ? Math.ceil(1 * coinMultiplier) : 0;
+      const questionCoins  = correct
+        ? Math.ceil(coinsForCorrect(state.selectedDifficulty, newStreak, snap) * coinMultiplier)
+        : 0;
 
       // ── Clarity / blur update ───────────────────────────────────────────
       // Suppress penalty when: super combo is broken, or error nullifier is active
@@ -268,22 +281,37 @@ export const useGameStore = create<GameState>((set) => ({
   advanceQuestion: () =>
     set((state) => ({ currentQuestionIndex: state.currentQuestionIndex + 1 })),
 
+  addTimerSeconds: (seconds) =>
+    set((state) => ({ timer: Math.max(0, state.timer + seconds), isTimerRunning: true })),
+
+  clearStrikeOut: () => set({ consecutiveWrong: 0 }),
+
+  boostClarity: (delta) =>
+    set((state) => ({
+      clarity: Math.min(100, Math.max(0, state.clarity + delta)),
+    })),
+
   activateDoubleXP: () => set({ doubleXPActive: true }),
 
   endSession: () =>
-    set((state) => ({
-      gameSession: state.gameSession
-        ? {
-            ...state.gameSession,
-            isComplete: true,
-            endTime: Date.now(),
-            score: state.score,
-            hintsUsed: state.hintsUsed,
-          }
-        : null,
-      isTimerRunning: false,
-      lastGameWasTimedOut: state.timer <= 0,
-    })),
+    set((state) => {
+      if (state.multiplierActive) {
+        useUserStore.getState().decrementMultiplierSession();
+      }
+      return {
+        gameSession: state.gameSession
+          ? {
+              ...state.gameSession,
+              isComplete: true,
+              endTime: Date.now(),
+              score: state.score,
+              hintsUsed: state.hintsUsed,
+            }
+          : null,
+        isTimerRunning: false,
+        lastGameWasTimedOut: state.timer <= 0,
+      };
+    }),
 
   resetGame: () => set({ ...initialState }),
 }));

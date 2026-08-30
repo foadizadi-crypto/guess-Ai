@@ -17,7 +17,8 @@ export type Category =
   | 'sports'
   | 'movies'
   | 'music'
-  | 'science';
+  | 'science'
+  | 'speed_card';
 
 export type AppScreen =
   | 'splash'
@@ -86,6 +87,7 @@ export interface UserStatistics {
   currentStreak: number;
   longestStreak: number;
   totalCorrectAnswers: number;
+  hardGamesPlayed: number;
   favoriteCategory: Category | null;
 }
 

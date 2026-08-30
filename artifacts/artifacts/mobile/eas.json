@@ -11,7 +11,10 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_ENV": "development"
+        "EXPO_PUBLIC_ENV": "development",
+        "EXPO_PUBLIC_API_URL": "https://guess-ai-4sqt.onrender.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "593305587333-3ths0ajkbvnafscim6igcuki56sesvlh.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "593305587333-250mi4l6t3terntac2e9imen18it8mpt.apps.googleusercontent.com"
       }
     },
     "preview": {
@@ -20,13 +23,19 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_ENV": "preview"
+        "EXPO_PUBLIC_ENV": "preview",
+        "EXPO_PUBLIC_API_URL": "https://guess-ai-4sqt.onrender.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "593305587333-3ths0ajkbvnafscim6igcuki56sesvlh.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "593305587333-250mi4l6t3terntac2e9imen18it8mpt.apps.googleusercontent.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_ENV": "production"
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://guess-ai-4sqt.onrender.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "593305587333-3ths0ajkbvnafscim6igcuki56sesvlh.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "593305587333-250mi4l6t3terntac2e9imen18it8mpt.apps.googleusercontent.com"
       }
     }
   },

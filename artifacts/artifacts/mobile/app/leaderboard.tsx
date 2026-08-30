@@ -7,14 +7,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  withDelay,
-  Easing,
-} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,7 +16,7 @@ import { BackButton } from '@/components/BackButton';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
-import { getApiUrl, safeApiTarget } from '@/services/apiConfig';
+import { getApiUrl } from '@/services/apiConfig';
 import { getPlayerId } from '@/services/authService';
 import { getIdToken } from '@/services/authService';
 import { formatScore } from '@/utils';
@@ -35,48 +27,6 @@ import { formatScore } from '@/utils';
 // GET /api/leaderboard/rank, a count() aggregation against the full player
 // base — see artifacts/api-server/src/routes/leaderboard.ts). No mock,
 // placeholder, or locally generated players are used anywhere on this screen.
-
-// ─── Glow pulse wrapper ─────────────────────────────────────────────────────
-// Purely visual: animates a soft glow ring around the podium/top rows and the
-// current player's row. Does not intercept touches or alter layout/data flow.
-const GlowPulse: React.FC<{
-  color: string;
-  delay?: number;
-  style?: object;
-  children: React.ReactNode;
-}> = ({ color, delay = 0, style, children }) => {
-  const glow = useSharedValue(0.35);
-
-  useEffect(() => {
-    glow.value = withDelay(
-      delay,
-      withRepeat(
-        withTiming(0.9, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
-        -1,
-        true,
-      ),
-    );
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glow.value,
-    shadowOpacity: glow.value,
-  }));
-
-  return (
-    <Animated.View
-      pointerEvents="box-none"
-      style={[
-        styles.glowWrap,
-        style,
-        glowStyle,
-        { shadowColor: color, borderColor: color },
-      ]}
-    >
-      {children}
-    </Animated.View>
-  );
-};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -138,7 +88,7 @@ export default function LeaderboardScreen() {
   const [error, setError]     = useState<string | null>(null);
   const [myRank, setMyRank]   = useState<number | null>(null);
 
-  const { xp, username, selectedAvatarId, avatars } = useUserStore();
+  const { xp, level, username, selectedAvatarId, avatars } = useUserStore();
   const currentAvatar = avatars.find((a) => a.id === selectedAvatarId);
   const uid = getPlayerId();
 
@@ -167,8 +117,13 @@ export default function LeaderboardScreen() {
       if (listResult.status === 'rejected') throw listResult.reason;
       const listRes = listResult.value;
       if (!listRes.ok) throw new Error(`Server returned ${listRes.status}`);
-      const list = (await listRes.json()) as ApiEntry[];
-      setTop10(list);
+      const payload = await listRes.json() as ApiEntry[] | { entries?: ApiEntry[] };
+      const list = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload.entries)
+          ? payload.entries
+          : [];
+      setTop10(list.slice(0, 10));
 
       // Prefer the dedicated rank endpoint (accurate even outside Top 10);
       // fall back to the Top 10 list itself if that request failed.
@@ -216,14 +171,11 @@ export default function LeaderboardScreen() {
   const topPad    = Platform.OS === 'web' ? 40 : insets.top + 8;
   const bottomPad = Platform.OS === 'web' ? 20 : insets.bottom + 12;
 
-  const podium = top10.slice(0, 3);
   const list10 = top10.slice(0, 10);
+  const showPinnedSelf = uid != null;
 
   return (
-    <AnimatedBackground
-      backgroundImage={require('../assets/background/leaderboard_BG.webp')}
-      overlayOpacity={0.3}
-    >
+    <AnimatedBackground>
       <View style={[styles.container, { paddingTop: topPad, paddingBottom: bottomPad }]}>
 
         {/* Header */}
@@ -255,54 +207,16 @@ export default function LeaderboardScreen() {
           </View>
         ) : (
           <>
-            {/* Top 3 podium */}
-            <View style={styles.podiumRow}>
-              {[1, 0, 2].map((idx) => {
-                const entry = podium[idx];
-                if (!entry) return <View key={idx} style={styles.podiumSlotEmpty} />;
-                const isMe = entry.userId === uid;
-                const color = RANK_COLORS[entry.rank] ?? GameColors.textSecondary;
-                const isFirst = entry.rank === 1;
-                return (
-                  <GlowPulse
-                    key={entry.userId}
-                    color={color}
-                    delay={entry.rank * 150}
-                    style={[
-                      styles.podiumSlot,
-                      isFirst && styles.podiumSlotFirst,
-                      { borderColor: color },
-                      isMe && styles.myGlowBorder,
-                    ]}
-                  >
-                    <Ionicons
-                      name={isFirst ? 'trophy' : 'medal'}
-                      size={isFirst ? 24 : 18}
-                      color={color}
-                      style={styles.podiumMedal}
-                    />
-                    <AvatarFrame imageKey={avatarKey(entry.avatarId)} size={isFirst ? 54 : 42} />
-                    <Text style={styles.podiumRank}>#{entry.rank}</Text>
-                    <Text style={styles.podiumName} numberOfLines={1}>
-                      {entry.username}{isMe ? ' (You)' : ''}
-                    </Text>
-                    <Text style={[styles.podiumScore, { color }]} numberOfLines={1}>
-                      {formatScore(entry.xp)} XP
-                    </Text>
-                  </GlowPulse>
-                );
-              })}
-            </View>
-
-            {/* Top 10 list */}
+            {/* Top 10 — one row per rank, no duplicate podium */}
             <View style={styles.listContainer}>
               {list10.map((item) => {
                 const color = RANK_COLORS[item.rank] ?? GameColors.textSecondary;
                 const isTop = item.rank <= 3;
                 const isMe  = item.userId === uid;
 
-                const row = (
+                return (
                   <View
+                    key={item.userId}
                     style={[
                       styles.row,
                       isTop && styles.topRow,
@@ -310,9 +224,7 @@ export default function LeaderboardScreen() {
                     ]}
                   >
                     <View style={styles.rankBadge}>
-                      {isTop
-                        ? <Ionicons name="trophy" size={16} color={color} />
-                        : <Text style={[styles.rankText, { color }]}>{item.rank}</Text>}
+                      <Text style={[styles.rankText, { color }]}>{item.rank}</Text>
                     </View>
                     <AvatarFrame imageKey={avatarKey(item.avatarId)} size={30} />
                     <View style={styles.identity}>
@@ -322,31 +234,35 @@ export default function LeaderboardScreen() {
                       <Text style={styles.levelText}>Level {item.level}</Text>
                     </View>
                     <Text style={[styles.score, { color }]} numberOfLines={1}>
-                      {formatScore(item.xp)} XP
+                      {formatScore(Number(item.xp) || 0)} XP
                     </Text>
                   </View>
                 );
-
-                if (isMe) {
-                  return (
-                    <GlowPulse key={item.userId} color={GameColors.accentGold} style={styles.rowGlowWrap}>
-                      {row}
-                    </GlowPulse>
-                  );
-                }
-                return <View key={item.userId} style={styles.rowFlexWrap}>{row}</View>;
               })}
             </View>
 
-            {/* Current player's real rank (separate, compact — no duplicated info) */}
-            <GlowPulse color={GameColors.accentGold} style={styles.myRankBar}>
-              <AvatarFrame imageKey={currentAvatar?.imageKey ?? 'abigail'} size={28} />
-              <Text style={styles.myRankLabel} numberOfLines={1}>{username || 'You'}</Text>
-              <View style={styles.myRankDivider} />
-              <Text style={styles.myRankValue}>
-                {myRank != null ? `#${myRank}` : 'Unranked'}
-              </Text>
-            </GlowPulse>
+            {showPinnedSelf && (
+              <>
+                {(myRank == null || myRank > 10) && (
+                  <Text style={styles.ellipsis}>------------------------</Text>
+                )}
+                <View style={styles.myRankBar}>
+                  <AvatarFrame imageKey={currentAvatar?.imageKey ?? 'abigail'} size={30} />
+                  <View style={styles.identity}>
+                    <Text style={styles.myRankLabel} numberOfLines={1}>
+                      {username || 'You'}
+                    </Text>
+                    <Text style={styles.levelText}>Level {level}</Text>
+                  </View>
+                  <Text style={styles.myRankXp} numberOfLines={1}>
+                    {formatScore(Number(xp) || 0)} XP
+                  </Text>
+                  <Text style={styles.myRankValue}>
+                    {myRank != null ? String(myRank) : 'Unranked'}
+                  </Text>
+                </View>
+              </>
+            )}
           </>
         )}
       </View>
@@ -362,21 +278,9 @@ const styles = StyleSheet.create({
   title:           { ...Typography.header, fontSize: 20, letterSpacing: 2, color: GameColors.textWhite, flex: 1, textAlign: 'center' },
   spacer:          { width: 40 },
 
-  // ── Podium ──
-  podiumRow:       { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 10, marginBottom: 10 },
-  podiumSlot:      { flex: 1, maxWidth: 130, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 6, borderRadius: 18, borderWidth: 1.5, backgroundColor: 'rgba(24, 8, 44, 0.55)' },
-  podiumSlotFirst: { paddingVertical: 14, backgroundColor: 'rgba(40, 14, 66, 0.6)' },
-  podiumSlotEmpty: { flex: 1, maxWidth: 130 },
-  podiumMedal:     { marginBottom: 4 },
-  podiumRank:      { ...Typography.small, color: GameColors.textWhite, fontFamily: 'Inter_700Bold', marginTop: 6, fontSize: 12 },
-  podiumName:      { ...Typography.small, color: GameColors.textWhite, fontSize: 12, marginTop: 2, maxWidth: 110 },
-  podiumScore:     { fontSize: 11, fontFamily: 'Inter_700Bold', marginTop: 2 },
-
-  // ── Top 10 list (fixed, no scroll — rows share the remaining space) ──
-  listContainer:   { flex: 1, gap: 6 },
-  rowFlexWrap:     { flex: 1 },
-  rowGlowWrap:     { flex: 1, marginBottom: 0 },
-  row:             { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, borderRadius: 14, backgroundColor: 'rgba(20, 6, 38, 0.6)' },
+  // ── Top 10 list (fixed height rows — no scroll) ──
+  listContainer:   { flex: 1, gap: 5, justifyContent: 'space-evenly' },
+  row:             { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8, minHeight: 44, flexShrink: 0, borderRadius: 14, backgroundColor: 'rgba(20, 6, 38, 0.6)' },
   topRow:          { backgroundColor: 'rgba(255,215,0,0.09)', borderWidth: 1, borderColor: 'rgba(255,215,0,0.22)' },
   myRow:           { borderWidth: 1.5, borderColor: GameColors.accentGold },
   rankBadge:       { width: 22, alignItems: 'center' },
@@ -386,15 +290,11 @@ const styles = StyleSheet.create({
   levelText:       { ...Typography.small, color: GameColors.textSecondary, fontSize: 10 },
   score:           { fontSize: 13, fontFamily: 'Inter_700Bold' },
 
-  // Glow wrapper shared by podium slots, "my row" in the list, and the rank bar.
-  glowWrap:        { borderRadius: 16, borderWidth: 1.5, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 5 },
-  myGlowBorder:    { borderColor: GameColors.accentGold },
-
-  // ── Current player's real rank (compact, separate section) ──
-  myRankBar:       { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 14, marginTop: 8, backgroundColor: 'rgba(30, 10, 50, 0.6)' },
-  myRankLabel:     { ...Typography.bodyMedium, color: GameColors.textWhite, fontSize: 13, flex: 1 },
-  myRankDivider:   { width: 1, height: 18, backgroundColor: 'rgba(255,255,255,0.15)' },
-  myRankValue:     { fontSize: 17, fontFamily: 'Inter_700Bold', color: GameColors.accentGold },
+  ellipsis:        { textAlign: 'center', color: GameColors.textSecondary, letterSpacing: 2, fontSize: 12, marginVertical: 4 },
+  myRankBar:       { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14, marginTop: 4, borderRadius: 14, borderWidth: 1.5, borderColor: GameColors.accentGold, backgroundColor: 'rgba(30, 10, 50, 0.75)' },
+  myRankLabel:     { ...Typography.bodyMedium, color: GameColors.textWhite, fontSize: 13 },
+  myRankXp:        { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#CE93D8' },
+  myRankValue:     { fontSize: 16, fontFamily: 'Inter_700Bold', color: GameColors.accentGold, minWidth: 52, textAlign: 'right' },
 
   center:          { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   emptyTitle:      { ...Typography.bodyMedium, color: GameColors.textWhite, fontFamily: 'Inter_700Bold', fontSize: 16 },

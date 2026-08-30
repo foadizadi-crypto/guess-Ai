@@ -100,7 +100,7 @@ export default function ProfileScreen() {
   return (
     <View style={styles.viewViewportContainer}>
       <ImageBackground
-        source={require('../assets/background/profile_bg.png')} 
+        source={require('../assets/background/profile_bg.webp')} 
         style={styles.responsiveImageContainerBg}
         resizeMode="stretch"
       >

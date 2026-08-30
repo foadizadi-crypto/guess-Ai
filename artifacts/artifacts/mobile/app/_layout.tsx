@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AppState, View, StyleSheet, type AppStateStatus } from 'react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -8,12 +8,11 @@ import { Stack, router, usePathname } from 'expo-router';
 import { GameColors } from '@/theme/colors';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { notificationService } from '@/services/NotificationService';
-import { openAIService } from '@/services/OpenAIService';
 import { savePushToken } from '@/services/firestoreService';
-import { waitForAuthReady, getPlayerId, onPlayerIdChange } from '@/services/authService';
-import { isValidPlayerName } from '@/components/PlayerNameModal';
+import { waitForAuthReady, getPlayerId, onPlayerIdChange, isGoogleUser, signOutIfNotGoogle } from '@/services/authService';
 import { useUserStore } from '@/store/userStore';
 import { ROUTES } from '@/navigation/routes';
+import { adService } from '@/services/AdService';
 import { useAudio } from '@/hooks/useAudio';
 
 const queryClient = new QueryClient();
@@ -24,7 +23,13 @@ function FirestoreSyncProvider() {
   return null;
 }
 
-/** Keeps the persisted audio preferences connected for the whole app. */
+function AdsProvider() {
+  useEffect(() => {
+    void adService.initialize();
+  }, []);
+  return null;
+}
+
 function AudioProvider() {
   useAudio();
   return null;
@@ -32,56 +37,45 @@ function AudioProvider() {
 
 // Routes reachable with no Google session and/or no registered nickname yet.
 // Every other route — including deep links opened directly — is guarded below.
-const PUBLIC_ROUTES: readonly string[] = ['/', ROUTES.SPLASH, ROUTES.ONBOARDING, ROUTES.LOGIN];
+const PUBLIC_ROUTES: readonly string[] = ['/', ROUTES.SPLASH, ROUTES.ONBOARDING, ROUTES.LOGIN, ROUTES.LEGAL];
 
 /**
- * Centralized navigation guard: mandatory Google Sign-In and a registered
- * nickname are enforced here, not just at the buttons that normally lead a
- * player through the flow — so opening a gameplay route directly (a deep
- * link, a stale bookmark, a notification tap) can never skip either step.
+ * Gameplay routes require a Google session. Nickname is still gated on lobby.
  */
 function AuthGuard() {
   const pathname = usePathname();
-  const username = useUserStore((s) => s.username);
-  const isNicknameVerifiedFor = useUserStore((s) => s.isNicknameVerifiedFor);
   const [uid, setUid] = useState<string | null>(getPlayerId());
+  const [googleOk, setGoogleOk] = useState(isGoogleUser());
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    waitForAuthReady().then((user) => {
-      console.log('[Guard] auth check complete', { pathname, signedIn: !!user });
-      setUid(user?.uid ?? null);
+    const unsub = onPlayerIdChange((next) => {
+      setUid(next);
+      setGoogleOk(isGoogleUser());
+    });
+    waitForAuthReady().then(async (user) => {
+      if (user && !isGoogleUser(user)) {
+        await signOutIfNotGoogle();
+        setUid(null);
+        setGoogleOk(false);
+      } else {
+        setUid((prev) => prev ?? user?.uid ?? getPlayerId());
+        setGoogleOk(isGoogleUser(user));
+      }
       setAuthChecked(true);
     });
-    return onPlayerIdChange((next) => setUid(next));
+    return unsub;
   }, []);
 
-  // A `username` string alone is not proof of a valid nickname — it may be
-  // a leftover from a previously signed-in account on this device. Only a
-  // nickname verified for THIS exact uid (see userStore.nicknameUid) counts.
-  const hasVerifiedNickname = !!uid && isNicknameVerifiedFor(uid) && isValidPlayerName(username);
   const isPublic = PUBLIC_ROUTES.includes(pathname);
-  const needsRedirect = authChecked && !isPublic
-    && (!uid || (pathname !== ROUTES.LOBBY && !hasVerifiedNickname));
 
   useEffect(() => {
     if (!authChecked || isPublic) return;
-    if (!uid) {
-      console.log('[Guard] protected route -> login', { pathname });
-      router.replace(ROUTES.LOGIN);
-    } else if (pathname !== ROUTES.LOBBY && !hasVerifiedNickname) {
-      console.log('[Guard] protected route -> lobby', { pathname });
-      router.replace(ROUTES.LOBBY);
-    }
+    if (googleOk && uid) return;
+    router.replace(ROUTES.LOGIN);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authChecked, uid, hasVerifiedNickname, pathname, isPublic]);
+  }, [authChecked, uid, googleOk, pathname, isPublic]);
 
-  // While the auth/nickname check is pending (or a redirect is about to
-  // fire) on a protected route, cover the screen so gated content never
-  // flashes visibly before the redirect completes.
-  if (!isPublic && (!authChecked || needsRedirect)) {
-    return <View style={styles.guardOverlay} pointerEvents="auto" />;
-  }
   return null;
 }
 
@@ -152,9 +146,6 @@ function NotificationProvider() {
         }
         // Retry token save in case permission was just enabled in OS Settings.
         if (notificationsEnabledRef.current) persistPushToken();
-        // Silently refresh stale question caches in the background so players
-        // rarely hit the offline error screen after days away.
-        openAIService.warmCache();
       }
     });
 
@@ -175,7 +166,7 @@ function RootLayoutNav() {
       screenOptions={{
         headerShown: false,
         animation: 'fade',
-        contentStyle: { backgroundColor: GameColors.backgroundPrimary },
+        contentStyle: { flex: 1, backgroundColor: GameColors.backgroundPrimary },
       }}
     >
       <Stack.Screen name="index" />
@@ -186,12 +177,14 @@ function RootLayoutNav() {
       <Stack.Screen name="level-select" />
       <Stack.Screen name="category-select" />
       <Stack.Screen name="game" />
+      <Stack.Screen name="speed-card" />
       <Stack.Screen name="result" />
       <Stack.Screen name="shop" />
       <Stack.Screen name="leaderboard" />
       <Stack.Screen name="profile" />
       <Stack.Screen name="daily-reward" />
       <Stack.Screen name="settings" />
+      <Stack.Screen name="legal" />
       <Stack.Screen name="achievements" />
       <Stack.Screen name="collections" />
       <Stack.Screen name="collection-detail" />
@@ -201,14 +194,6 @@ function RootLayoutNav() {
   );
 }
 
-const styles = StyleSheet.create({
-  guardOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: GameColors.backgroundPrimary,
-    zIndex: 9999,
-  },
-});
-
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
@@ -217,6 +202,7 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
               <FirestoreSyncProvider />
               <AudioProvider />
+              <AdsProvider />
               <NotificationProvider />
               <AuthGuard />
               <RootLayoutNav />

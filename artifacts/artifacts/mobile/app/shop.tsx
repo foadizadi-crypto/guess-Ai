@@ -1,5 +1,5 @@
 /**
- * shop.tsx — 3-tab shop: Play · Gems · Cosmetics
+ * shop.tsx — Offers home + catalog pages (Play · Gems · Cosmetics · Wings · Stamina)
  * Strict Expo Router SDK 54 Framework + TypeScript Compilable
  *
  * CRITICAL AUDIT FIXES APPLIED:
@@ -10,6 +10,7 @@
 import React, { useState, useCallback, useEffect } from "react";
 import {
   Alert,
+  BackHandler,
   Image,
   ImageSourcePropType,
   Platform,
@@ -19,6 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Image as ExpoImage } from "expo-image";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -28,9 +30,8 @@ import Animated, {
 import { Ionicons } from "@expo/vector-icons";
 import { hapticsService } from '@/services/HapticsService';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 
-import { AnimatedBackground } from "@/components/AnimatedBackground";
 import { WingsShopTab } from "@/components/WingsShopTab";
 import { AnimatedIcon } from "@/components/AnimatedIcon";
 import { BackButton } from "@/components/BackButton";
@@ -60,34 +61,37 @@ import {
 import type { PowerUpId } from "@/types";
 import type { CosmeticType } from "@/constants/collections";
 import type { ConsumableId } from "@/constants/shopData";
+import { ShopHotspot } from "@/components/ShopHotspot";
+import { ShopNavHitboxes } from "@/components/ShopNavHitboxes";
+import {
+  SHOP_CATALOG_HEIGHT_PCT,
+  SHOP_OFFER_HITBOXES,
+  type ShopHitboxId,
+  type ShopPage,
+} from "@/constants/shopHitboxes";
 
 // ─── Item local image manifest loader mapping ──────────────────────────────
 const SHOP_IMAGES: Record<string, ImageSourcePropType> = {
-  time_boost: require("@/assets/shop/time_boost.png"),
-  combo_shield: require("@/assets/shop/combo_shield.png"),
-  clarity_bomb: require("@/assets/shop/clarity_bomb.png"),
-  error_nullifier: require("@/assets/shop/error_nullifier.png"),
-  multiplier_2x: require("@/assets/shop/x2_multiplier.png"),
-  rare_sticker: require("@/assets/shop/rare_sticker.png"),
+  time_boost: require("@/assets/shop/time_boost.webp"),
+  combo_shield: require("@/assets/shop/combo_shield.webp"),
+  clarity_bomb: require("@/assets/shop/clarity_bomb.webp"),
+  error_nullifier: require("@/assets/shop/error_nullifier.webp"),
+  multiplier_2x: require("@/assets/shop/x2_multiplier.webp"),
+  rare_sticker: require("@/assets/shop/rare_sticker.webp"),
   // Tab local graphics setup from icons folder
   tab_play: require("@/assets/icon/shop.webp"), // Reuse core shop graphics for layout consistency
   tab_gems: require("@/assets/icon/gem_pack.webp"),
   tab_cosmetics: require("@/assets/icon/legendary_pack.webp"),
 };
 
-const TABS = [
-  { label: "Play", icon: "game-controller-outline", imageKey: "tab_play" },
-  { label: "Gems", icon: "diamond-outline", imageKey: "tab_gems" },
-  { label: "Cosmetics", icon: "sparkles-outline", imageKey: "tab_cosmetics" },
-  { label: "Wings", icon: "airplane-outline", imageKey: "tab_cosmetics" },
-] as const;
-
-/** Deep-link keys accepted via ?tab= so other screens can open a specific tab. */
-const TAB_PARAM_INDEX: Record<string, number> = {
-  play: 0,
-  gems: 1,
-  cosmetics: 2,
-  wings: 3,
+/** Deep-link keys accepted via ?tab= so other screens can open a specific shop page. */
+const TAB_PARAM_PAGE: Record<string, ShopPage> = {
+  offers: "offers",
+  play: "play",
+  gems: "gems",
+  cosmetics: "cosmetics",
+  wings: "wings",
+  stamina: "stamina",
 };
 
 const COSM_FILTERS = ["All", "Avatars", "Frames", "Badges", "Effects"] as const;
@@ -114,16 +118,31 @@ export default function ShopScreen() {
   const { playEffect } = useAudio();
 
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
-  const [tab, setTab] = useState<number>(TAB_PARAM_INDEX[tabParam ?? ""] ?? 0);
+  const [page, setPage] = useState<ShopPage>(
+    TAB_PARAM_PAGE[tabParam ?? ""] ?? "offers",
+  );
 
   // Honour ?tab= even when the shop is already mounted (deep link from lobby).
   useEffect(() => {
     if (tabParam === undefined) return;
-    const target = TAB_PARAM_INDEX[tabParam];
+    const target = TAB_PARAM_PAGE[tabParam];
     if (target === undefined) return;
-    setTab(target);
+    setPage(target);
     setCosmFilter("All");
   }, [tabParam]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        if (page !== "offers") {
+          setPage("offers");
+          return true;
+        }
+        return false;
+      });
+      return () => sub.remove();
+    }, [page]),
+  );
   const [cosmFilter, setCosmFilter] = useState<CosmFilter>("All");
   const [floating, setFloating] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
@@ -143,6 +162,7 @@ export default function ShopScreen() {
   const selectAvatar = useUserStore((s) => s.selectAvatar);
   const selectedAvatarId = useUserStore((s) => s.selectedAvatarId);
   const mockPurchaseCoins = useUserStore((s) => s.mockPurchaseCoins);
+  const grantStarterPack = useUserStore((s) => s.grantStarterPack);
   const addGems = useUserStore((s) => s.addGems);
   const buyGemPack = useUserStore((s) => s.buyGemPack);
   const buyCoinGemExchange = useUserStore((s) => s.buyCoinGemExchange);
@@ -186,13 +206,15 @@ export default function ShopScreen() {
     Alert.alert(title, body);
   }, []);
 
-  // ── TAB CHANGE MANAGER PIPELINE ───────────────────────────────────────────
-  const handleTabSelection = (index: number) => {
-    hapticsService.impact(0);
-    playClickSound();
-    setTab(index);
-    setCosmFilter("All");
-  };
+  const goShopPage = useCallback(
+    (next: ShopPage) => {
+      hapticsService.impact(0);
+      playClickSound();
+      setPage(next === page ? "offers" : next);
+      setCosmFilter("All");
+    },
+    [page, playClickSound],
+  );
 
   const handleFilterSelection = (filter: CosmFilter) => {
     hapticsService.impact(0);
@@ -333,6 +355,67 @@ export default function ShopScreen() {
     [loading, addGems, ok],
   );
 
+  const purchaseStarterPack = useCallback(async () => {
+    if (loading) return;
+    setLoading(IAP_SKUS.STARTER_PACK);
+    hapticsService.impact(1);
+    playClickSound();
+    try {
+      const { success, transactionId } = await iapService.purchase(
+        IAP_SKUS.STARTER_PACK,
+      );
+      if (success) {
+        grantStarterPack();
+        ok("Starter Pack!");
+        const uid = getPlayerId();
+        if (uid && transactionId) {
+          savePurchaseHistory(uid, {
+            transactionId,
+            productId: IAP_SKUS.STARTER_PACK,
+            date: new Date().toISOString(),
+            status: "completed",
+            coinsGranted: 500,
+          });
+        }
+      }
+    } catch {
+      /* */
+    } finally {
+      setLoading(null);
+    }
+  }, [loading, grantStarterPack, ok, playClickSound]);
+
+  const handleOfferPress = useCallback(
+    (id: ShopHitboxId) => {
+      const legendary = GEM_PACKS.find((p) => p.id === "gem_pack_legendary");
+      const premium = GEM_PACKS.find((p) => p.id === "gem_pack_premium");
+      switch (id) {
+        case "offer_right":
+        case "offer_left":
+          if (legendary) {
+            handleGemPack(legendary.id, legendary.name, legendary.gemCost);
+          }
+          break;
+        case "offer_center":
+          if (premium) {
+            handleGemPack(premium.id, premium.name, premium.gemCost);
+          }
+          break;
+        case "offer_weekly":
+          hapticsService.impact(0);
+          playClickSound();
+          setPage("wings");
+          break;
+        case "offer_top":
+          void purchaseStarterPack();
+          break;
+        default:
+          break;
+      }
+    },
+    [handleGemPack, playClickSound, purchaseStarterPack],
+  );
+
   // ── COSMETICS EQUIP SWITCH CONTROLLER ─────────────────────────────────────
   const handleAvatar = useCallback(
     (id: string) => {
@@ -406,9 +489,29 @@ export default function ShopScreen() {
   })();
 
   return (
-    <AnimatedBackground>
+    <View style={s.viewport}>
+      <ExpoImage
+        source={require("@/assets/background/shop_offer_BG.webp")}
+        style={s.bg}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        pointerEvents="none"
+      />
+
       {floating ? <Text style={s.toast}>{floating}</Text> : null}
 
+      {page === "offers" ? (
+        <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+          {SHOP_OFFER_HITBOXES.map((box) => (
+            <ShopHotspot
+              key={box.id}
+              box={box}
+              onPress={() => handleOfferPress(box.id)}
+            />
+          ))}
+        </View>
+      ) : (
+      <View style={s.catalogLayer}>
       <ScrollView
         contentContainerStyle={[
           s.scroll,
@@ -418,7 +521,7 @@ export default function ShopScreen() {
       >
         {/* --- HEADERHUD DISPLAY --- */}
         <View style={s.header}>
-          <BackButton />
+          <BackButton onPress={() => setPage("offers")} />
           <Text style={s.title}>Shop</Text>
           <View style={s.headerRight}>
             <Animated.View style={coinStyle}>
@@ -431,49 +534,8 @@ export default function ShopScreen() {
           </View>
         </View>
 
-        {/* --- TABS SYSTEM VIEW --- */}
-        <View style={s.tabs}>
-          {TABS.map(({ label, icon, imageKey }, i) => (
-            <TouchableOpacity
-              key={label}
-              style={[s.tab, tab === i && s.tabActive]}
-              onPress={() => handleTabSelection(i)}
-            >
-              {SHOP_IMAGES[imageKey] ? (
-                <AnimatedIcon
-                  animation="float"
-                  delay={i * 120}
-                  style={s.tabIconMotion}
-                >
-                  <Image
-                    source={SHOP_IMAGES[imageKey]}
-                    style={[
-                      s.tabIconImg,
-                      tab === i && { tintColor: GameColors.backgroundPrimary },
-                    ]}
-                    resizeMode="contain"
-                  />
-                </AnimatedIcon>
-              ) : (
-                <Ionicons
-                  name={icon as React.ComponentProps<typeof Ionicons>["name"]}
-                  size={16}
-                  color={
-                    tab === i
-                      ? GameColors.backgroundPrimary
-                      : GameColors.textSecondary
-                  }
-                />
-              )}
-              <Text style={[s.tabText, tab === i && s.tabTextActive]}>
-                {label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
         {/* ════════════════════════ PLAY TAB LAYOUT ════════════════════════ */}
-        {tab === 0 && (
+        {page === "play" && (
           <>
             <SectionHeader label="Power-ups" icon="flash-outline" />
             <View style={s.grid}>
@@ -582,7 +644,7 @@ export default function ShopScreen() {
         )}
 
         {/* ════════════════════════ GEMS TAB LAYOUT ════════════════════════ */}
-        {tab === 1 && (
+        {page === "gems" && (
           <>
             <SectionHeader label="Buy Gems" icon="card-outline" />
             <Text style={s.sectionHint}>
@@ -605,8 +667,8 @@ export default function ShopScreen() {
                   }
                   activeOpacity={0.8}
                 >
-                  {idx === 2 && <Text style={s.popularBadge}>POPULAR</Text>}
-                  {idx === 4 && <Text style={s.popularBadge}>BEST VALUE</Text>}
+                  {idx === 1 && <Text style={s.popularBadge}>POPULAR</Text>}
+                  {idx === 2 && <Text style={[s.popularBadge, { right: -14 }]}>BEST VALUE</Text>}
                   <Ionicons name="diamond" size={28} color="#CE93D8" />
                   <Text style={s.iapGemAmount}>
                     {pack.amount.toLocaleString()}
@@ -771,33 +833,8 @@ export default function ShopScreen() {
               highlight
               loading={loading === IAP_SKUS.STARTER_PACK}
               disabled={!!loading}
-              onPress={async () => {
-                if (loading) return;
-                setLoading(IAP_SKUS.STARTER_PACK);
-                try {
-                  const { success, transactionId } = await iapService.purchase(
-                    IAP_SKUS.STARTER_PACK,
-                  );
-                  if (success) {
-                    mockPurchaseCoins(500);
-                    addGems(100);
-                    ok("Starter Pack!");
-                    const uid = getPlayerId();
-                    if (uid && transactionId)
-                      savePurchaseHistory(uid, {
-                        transactionId,
-                        productId: IAP_SKUS.STARTER_PACK,
-                        date: new Date().toISOString(),
-                        status: "completed",
-                        coinsGranted: 500,
-                        gemsGranted: 100,
-                      });
-                  }
-                } catch {
-                  /* */
-                } finally {
-                  setLoading(null);
-                }
+              onPress={() => {
+                void purchaseStarterPack();
               }}
             />
 
@@ -837,7 +874,7 @@ export default function ShopScreen() {
         )}
 
         {/* ════════════════════════ COSMETICS TAB LAYOUT ════════════════════════ */}
-        {tab === 2 && (
+        {page === "cosmetics" && (
           <>
             <ScrollView
               horizontal
@@ -978,9 +1015,39 @@ export default function ShopScreen() {
         )}
 
         {/* ════════════════════════ WINGS TAB LAYOUT ════════════════════════ */}
-        {tab === 3 && <WingsShopTab scrollable={false} />}
+        {page === "wings" && <WingsShopTab scrollable={false} />}
+
+        {page === "stamina" && (
+          <>
+            <SectionHeader
+              label="Stamina Packs"
+              icon="battery-charging-outline"
+            />
+            {STAMINA_PACKS.map((pack) => {
+              const rarityColor =
+                RARITY_COLORS[pack.rarity] ?? GameColors.textSecondary;
+              const canAfford = gems >= pack.gemCost;
+              return (
+                <BundleCard
+                  key={pack.id}
+                  pack={pack}
+                  rarityColor={rarityColor}
+                  canAfford={canAfford}
+                  onPress={() =>
+                    handleGemPack(pack.id, pack.name, pack.gemCost)
+                  }
+                  subtitle={`⚡ ${pack.stamina} stamina`}
+                />
+              );
+            })}
+          </>
+        )}
       </ScrollView>
-    </AnimatedBackground>
+      </View>
+      )}
+
+      <ShopNavHitboxes onNavigate={goShopPage} />
+    </View>
   );
 }
 
@@ -1177,6 +1244,21 @@ function OfferCard({
 
 // ─── STYLES ARCHITECTURE SHEET ──────────────────────────────────────────────
 const s = StyleSheet.create({
+  viewport: {
+    flex: 1,
+    backgroundColor: "#0D0221",
+  },
+  bg: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  catalogLayer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: SHOP_CATALOG_HEIGHT_PCT,
+    backgroundColor: "rgba(13, 2, 33, 0.94)",
+  },
   scroll: { paddingHorizontal: 18, gap: 14 },
   header: {
     flexDirection: "row",
@@ -1605,7 +1687,7 @@ const s = StyleSheet.create({
     position: "absolute",
     top: 108,
     alignSelf: "center",
-    zIndex: 10,
+    zIndex: 20000,
     color: GameColors.accentGreen,
     fontFamily: "Inter_700Bold",
     fontSize: 17,

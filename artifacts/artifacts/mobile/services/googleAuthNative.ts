@@ -1,64 +1,107 @@
 /**
- * Native (iOS/Android) Google Sign-In via expo-auth-session.
+ * Native Google Sign-In via Play Services (not a browser OAuth page).
  *
- * This needs a real Google OAuth client per platform:
- *   - Android: an "Android" client with the app's SHA-1 fingerprint
- *     registered in Google Cloud Console for package `com.aiblur.quiz`.
- *   - iOS: an "iOS" client with bundle id `com.aiblur.quiz`.
- * Until those exist, `isNativeGoogleSignInConfigured()` returns false and
- * the login screen shows a clear message instead of attempting a flow that
- * cannot complete (Google rejects the OAuth redirect without a matching
- * native client — there is no working fallback).
- *
- * Configure via env vars (public, non-secret client ids):
- *   EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID
- *   EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
+ * Android OAuth client (package + SHA-1) lives in google-services.json and is
+ * picked up by the native SDK. `webClientId` must be the Web OAuth client so
+ * Google returns an ID token Firebase Auth can exchange via
+ * `signInWithGoogleIdToken` in authService.ts.
  */
-import { useMemo } from 'react';
 import { Platform } from 'react-native';
-import * as AuthSession from 'expo-auth-session';
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  isSuccessResponse,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
+import { GoogleSignInError } from './authService';
 
-WebBrowser.maybeCompleteAuthSession();
+const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim();
+const ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID?.trim();
 
-const ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
-const IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
-const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+let configured = false;
 
-export function isNativeGoogleSignInConfigured(): boolean {
-  if (Platform.OS === 'android') return !!ANDROID_CLIENT_ID;
-  if (Platform.OS === 'ios') return !!IOS_CLIENT_ID;
-  return true; // web doesn't use this module at all
+function isGoogleClientId(value: string | undefined): value is string {
+  return !!value && value.endsWith('.apps.googleusercontent.com');
 }
 
-/**
- * React hook wrapping expo-auth-session's Google provider. Returns a
- * `promptAsync`-style function plus the raw response so the caller (the
- * login screen) can exchange a successful id_token for a Firebase
- * credential via `signInWithGoogleIdToken`.
- */
-export function useGoogleSignIn() {
-  const configured = isNativeGoogleSignInConfigured();
-
-  // The hook is unconditionally mounted (React hook rules), including on
-  // web where this flow is never used — Firebase popup/redirect handles
-  // web sign-in directly. Without a client id the hook throws immediately
-  // on construction, so always give it *some* string; `promptAsync` is
-  // simply never called unless `configured` is true.
-  const fallbackClientId = ANDROID_CLIENT_ID ?? IOS_CLIENT_ID ?? WEB_CLIENT_ID ?? 'not-configured';
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    androidClientId: ANDROID_CLIENT_ID,
-    iosClientId: IOS_CLIENT_ID,
-    // The provider validates a platform-specific client id even when this
-    // hook's result is never used (e.g. on web, where Firebase
-    // popup/redirect handles sign-in directly) — supply a fallback for
-    // every platform key so mounting the hook never throws.
-    clientId: fallbackClientId,
-    webClientId: WEB_CLIENT_ID ?? fallbackClientId,
+function ensureConfigured(): void {
+  if (configured) return;
+  if (!isGoogleClientId(WEB_CLIENT_ID)) {
+    throw new GoogleSignInError(
+      "This build's Google OAuth client hasn't been finished yet.",
+      'native_not_configured',
+    );
+  }
+  GoogleSignin.configure({
+    webClientId: WEB_CLIENT_ID,
+    offlineAccess: false,
   });
+  configured = true;
+}
 
-  const redirectUri = useMemo(() => AuthSession.makeRedirectUri(), []);
+export function isNativeGoogleSignInConfigured(): boolean {
+  if (Platform.OS === 'web') return true;
+  if (!isGoogleClientId(WEB_CLIENT_ID)) return false;
+  if (Platform.OS === 'android') return isGoogleClientId(ANDROID_CLIENT_ID);
+  return true;
+}
 
-  return { configured, request, response, promptAsync, redirectUri };
+/** Interactive Google account picker. Returns a Firebase-ready ID token. */
+export async function promptNativeGoogleIdToken(): Promise<string> {
+  if (!isNativeGoogleSignInConfigured()) {
+    throw new GoogleSignInError(
+      "This build's Google OAuth client hasn't been finished yet.",
+      'native_not_configured',
+    );
+  }
+
+  ensureConfigured();
+
+  try {
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    const response = await GoogleSignin.signIn();
+    if (!isSuccessResponse(response)) {
+      throw new GoogleSignInError('Sign-in was cancelled.', 'cancelled');
+    }
+
+    const idToken = response.data.idToken ?? (await GoogleSignin.getTokens()).idToken;
+    if (!idToken) {
+      throw new GoogleSignInError(
+        'Google did not return a valid credential.',
+        'unknown',
+      );
+    }
+    return idToken;
+  } catch (err) {
+    if (err instanceof GoogleSignInError) throw err;
+    if (isErrorWithCode(err)) {
+      if (err.code === statusCodes.SIGN_IN_CANCELLED) {
+        throw new GoogleSignInError('Sign-in was cancelled.', 'cancelled');
+      }
+      if (err.code === statusCodes.IN_PROGRESS) {
+        throw new GoogleSignInError('Sign-in is already in progress.', 'unknown');
+      }
+      if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        throw new GoogleSignInError(
+          'Google Play Services is missing or outdated.',
+          'unknown',
+        );
+      }
+    }
+    throw new GoogleSignInError(
+      'Could not sign in with Google. Please try again.',
+      'unknown',
+    );
+  }
+}
+
+export async function signOutGooglePlay(): Promise<void> {
+  try {
+    if (isGoogleClientId(WEB_CLIENT_ID)) {
+      ensureConfigured();
+    }
+    await GoogleSignin.signOut();
+  } catch {
+    // Best-effort: Firebase sign-out still proceeds.
+  }
 }

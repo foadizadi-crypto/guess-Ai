@@ -1,12 +1,8 @@
 /**
- * API endpoint used by release and development clients.
- *
- * A release APK must receive EXPO_PUBLIC_API_URL from the EAS environment.
- * Falling back to localhost on a physical device creates an unreachable
- * request and is especially dangerous because it can look like a spinner.
+ * All gameplay (quiz + Speed Card) talks to the live Render API.
+ * Localhost is never used — pre-release testing is online-only.
  */
-const configuredUrl =
-  typeof process !== 'undefined' ? process.env.EXPO_PUBLIC_API_URL?.trim() : undefined;
+const PRODUCTION_API_URL = 'https://guess-ai-4sqt.onrender.com';
 const environment =
   typeof process !== 'undefined' ? process.env.EXPO_PUBLIC_ENV ?? 'development' : 'development';
 
@@ -21,24 +17,18 @@ const isLocalUrl = (value: string): boolean => {
   }
 };
 
-if (!configuredUrl && environment !== 'development') {
-  console.error('[API] Missing EXPO_PUBLIC_API_URL in release configuration');
-}
-if (configuredUrl && environment !== 'development' && isLocalUrl(configuredUrl)) {
-  console.error('[API] Release configuration points to a local URL');
+function resolveApiBase(): string {
+  const raw = typeof process !== 'undefined' ? process.env.EXPO_PUBLIC_API_URL?.trim() : undefined;
+  if (raw && !isLocalUrl(raw)) {
+    return raw.replace(/\/+$/, '');
+  }
+  return PRODUCTION_API_URL;
 }
 
-export const API_BASE_URL =
-  configuredUrl && !(environment !== 'development' && isLocalUrl(configuredUrl))
-    ? configuredUrl.replace(/\/+$/, '')
-    : '';
-
+export const API_BASE_URL = resolveApiBase();
 export const API_ENVIRONMENT = environment;
 
 export function getApiUrl(path: string): string {
-  if (!API_BASE_URL) {
-    throw new Error('API is not configured for this build. Set EXPO_PUBLIC_API_URL and rebuild.');
-  }
   return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 }
 

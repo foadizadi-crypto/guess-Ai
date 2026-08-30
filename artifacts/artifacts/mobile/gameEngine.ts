@@ -41,17 +41,22 @@ export const getAvatarAbility = (avatarId: string): AvatarAbility => {
 export const getStartingClarity = (difficulty: Difficulty, ability: AvatarAbility): number =>
   Math.min(100, 100 - DIFFICULTY_CONFIG[difficulty].blurPercent + (ability === 'blur-buster' ? 20 : 0));
 
-/** How much the reveal % changes per answer.
- *  Correct: always +clarity_correct_increment (default 5) regardless of difficulty.
- *  Wrong:   penalty depends on difficulty (easy 3 / medium 5 / hard 7), negated.
+/** How much the reveal % changes per answer (one-image-per-round model).
+ *  Correct: easy +5 / medium +3 / hard +1 clarity.
+ *  Wrong:   easy −1 / medium −3 / hard −5 clarity.
  *  Values come from GAME_CONFIG so remote config overrides apply automatically.
  */
 export const getRevealDelta = (difficulty: Difficulty, correct: boolean): number => {
-  if (correct) return GAME_CONFIG.clarity_correct_increment;
+  const c = GAME_CONFIG;
+  if (correct) {
+    return difficulty === 'hard'   ? c.clarity_correct_hard   :
+           difficulty === 'medium' ? c.clarity_correct_medium :
+                                     c.clarity_correct_easy;
+  }
   const penalty =
-    difficulty === 'hard'   ? GAME_CONFIG.clarity_wrong_penalty_hard   :
-    difficulty === 'medium' ? GAME_CONFIG.clarity_wrong_penalty_medium :
-                              GAME_CONFIG.clarity_wrong_penalty_easy;
+    difficulty === 'hard'   ? c.clarity_wrong_hard   :
+    difficulty === 'medium' ? c.clarity_wrong_medium :
+                              c.clarity_wrong_easy;
   return -penalty;
 };
 

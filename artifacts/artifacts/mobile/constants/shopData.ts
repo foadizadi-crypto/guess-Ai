@@ -181,23 +181,11 @@ export const AD_REMOVAL_PRODUCTS: AdRemovalProduct[] = [
   },
 ];
 
-// ─── IAP coin packs (kept in sync with economy.ts) ───────────────────────
-
-export const COIN_PACKS = [
-  { id: 'coins_100',  label: '100 Coins',   coins: 100,  price: '$0.99'  },
-  { id: 'coins_600',  label: '600 Coins',   coins: 600,  price: '$4.99'  },
-  { id: 'coins_1500', label: '1,500 Coins', coins: 1500, price: '$9.99'  },
-  { id: 'coins_3500', label: '3,500 Coins', coins: 3500, price: '$19.99' },
-] as const;
-
-// ─── Gem packs ────────────────────────────────────────────────────────────
-
-export const GEM_PACKS = [
-  { id: 'gems_50',   label: '50 Gems',   gems: 50,   price: '$0.99' },
-  { id: 'gems_150',  label: '150 Gems',  gems: 150,  price: '$2.99' },
-  { id: 'gems_500',  label: '500 Gems',  gems: 500,  price: '$7.99' },
-  { id: 'gems_1200', label: '1,200 Gems',gems: 1200, price: '$14.99' },
-] as const;
+// ─── IAP packs ────────────────────────────────────────────────────────────
+// Intentionally NOT defined here. `IAP_COIN_PACKS` and `IAP_GEM_PACKS` in
+// constants/economy.ts are the single source of truth for real-money pricing —
+// duplicate tables previously lived here with different prices and quantities,
+// which is exactly the kind of drift that ships a mispriced storefront.
 
 // ─── Consumable price lookup (for store purchase validation) ─────────────
 

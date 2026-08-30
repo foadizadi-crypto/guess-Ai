@@ -144,13 +144,89 @@ export const COIN_GEM_EXCHANGES = [
 export type CoinGemExchangeId = typeof COIN_GEM_EXCHANGES[number]['id'];
 
 // ─── Energy / Stamina ─────────────────────────────────────────────────────────
-// Spec (v1.0.0):
-//   Max energy: 100 | Cost per game: 5 | Refill: 1 energy / 10 min
-//   Daily reward: +10 energy | Rewarded ad: +5 energy | Max ads/day: 3
-export const MAX_ENERGY                 = 100; // full stamina bar (spec: 100)
-export const STAMINA_PER_GAME          =   5; // cost per game round (spec: 5)
-export const ENERGY_REFILL_INTERVAL_MIN =  10; // 1 stamina every 10 minutes
-export const STAMINA_AD_REWARD         =   5; // stamina per rewarded ad watch (spec: +5)
-export const STAMINA_ADS_PER_DAY       =   3; // max rewarded ads for stamina/day (spec: 3)
-export const ENERGY_DAILY_REWARD       =  10; // energy granted on daily reward claim (spec: +10)
-export const ENERGY_REFILL_GEM_COST    =  30; // gems to instantly refill to max
+// Spec (v2.0 — single upgradable source):
+//   ONE stamina source (the reserve pool was removed). Base cap: 50, cost per
+//   game: 5, base refill: 1 energy / 20 min (72/day ≈ 14 games).
+//   The source is upgradable up to 3 levels — gems only — via the Upgrade
+//   panel on the Customization screen. Each level raises both the cap and the
+//   refill speed. Stamina from ads/packs/daily rewards can OVERFLOW above the
+//   cap (never wasted); timed refill pauses while above the cap.
+export const STAMINA_PER_GAME    = 5; // cost per game round
+export const STAMINA_AD_REWARD   = 5; // stamina per rewarded ad watch
+export const STAMINA_ADS_PER_DAY = 3; // max rewarded ads for stamina/day
+export const ENERGY_DAILY_REWARD = 10; // energy granted on daily reward claim
+export const ENERGY_REFILL_GEM_COST = 10; // gems to instantly refill to cap
+
+export interface StaminaUpgradeLevel {
+  level: number;
+  /** Gems required to unlock this level (0 = base, free). */
+  gemCost: number;
+  /** Max stamina the source holds via timed refill. */
+  cap: number;
+  /** Minutes per +1 stamina from the timed refill. */
+  refillIntervalMin: number;
+}
+
+export const STAMINA_UPGRADE_LEVELS: readonly StaminaUpgradeLevel[] = [
+  { level: 0, gemCost: 0,   cap: 50,  refillIntervalMin: 20 }, // base: 72/day
+  { level: 1, gemCost: 50,  cap: 60,  refillIntervalMin: 18 }, // 80/day
+  { level: 2, gemCost: 100, cap: 75,  refillIntervalMin: 15 }, // 96/day
+  { level: 3, gemCost: 200, cap: 100, refillIntervalMin: 12 }, // 120/day
+] as const;
+
+export const MAX_STAMINA_UPGRADE_LEVEL = STAMINA_UPGRADE_LEVELS.length - 1;
+
+// ─── First-upgrade launch offer ───────────────────────────────────────────────
+// Level 1 is half price for the first 48 hours after the account is created —
+// a cheap first taste of the gem economy converts far better than full price.
+export const FIRST_UPGRADE_OFFER_HOURS     = 48;
+export const FIRST_UPGRADE_OFFER_GEM_COST  = 25;
+
+/** True while the level-1 launch discount is still valid for this account. */
+export function isFirstUpgradeOfferActive(
+  accountCreatedAt: string | number | null | undefined,
+  staminaSourceLevel: number,
+  now: number = Date.now(),
+): boolean {
+  if (staminaSourceLevel !== 0) return false;
+  if (!accountCreatedAt) return false;
+  const created = typeof accountCreatedAt === 'number'
+    ? accountCreatedAt
+    : Date.parse(accountCreatedAt);
+  if (!Number.isFinite(created)) return false;
+  return now - created < FIRST_UPGRADE_OFFER_HOURS * 60 * 60 * 1000;
+}
+
+/** Gem cost to reach `targetLevel`, accounting for the launch discount. */
+export function getUpgradeGemCost(
+  targetLevel: number,
+  accountCreatedAt: string | number | null | undefined,
+  currentLevel: number,
+  now: number = Date.now(),
+): number {
+  const level = clampUpgradeLevel(targetLevel);
+  if (level === 1 && isFirstUpgradeOfferActive(accountCreatedAt, currentLevel, now)) {
+    return FIRST_UPGRADE_OFFER_GEM_COST;
+  }
+  return STAMINA_UPGRADE_LEVELS[level].gemCost;
+}
+
+function clampUpgradeLevel(level: number): number {
+  if (!Number.isFinite(level)) return 0;
+  return Math.min(MAX_STAMINA_UPGRADE_LEVEL, Math.max(0, Math.floor(level)));
+}
+
+/** Stamina cap for the given upgrade level (0–3). */
+export function getEnergyCap(level: number): number {
+  return STAMINA_UPGRADE_LEVELS[clampUpgradeLevel(level)].cap;
+}
+
+/** Minutes per +1 stamina for the given upgrade level (0–3). */
+export function getRefillIntervalMin(level: number): number {
+  return STAMINA_UPGRADE_LEVELS[clampUpgradeLevel(level)].refillIntervalMin;
+}
+
+/** Base stamina cap (upgrade level 0). Kept for existing imports. */
+export const MAX_ENERGY = STAMINA_UPGRADE_LEVELS[0].cap;
+/** Base refill interval (upgrade level 0). Kept for existing imports. */
+export const ENERGY_REFILL_INTERVAL_MIN = STAMINA_UPGRADE_LEVELS[0].refillIntervalMin;

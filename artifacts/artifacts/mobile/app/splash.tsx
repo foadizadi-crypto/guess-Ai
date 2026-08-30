@@ -17,7 +17,7 @@ import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { storageService } from '@/services/StorageService';
 import { ROUTES } from '@/navigation/routes';
-import { waitForAuthReady, completeRedirectSignIn } from '@/services/authService';
+import { completeRedirectSignIn, isGoogleUser, signOutIfNotGoogle, waitForAuthReady } from '@/services/authService';
 import { fetchRegisteredNickname } from '@/services/nicknameService';
 import { useUserStore } from '@/store/userStore';
 
@@ -117,50 +117,48 @@ export default function SplashScreen() {
       ),
     );
 
-    // ── Navigate after 3s ─────────────────────────────────────────────────
-    const timer = setTimeout(async () => {
-      if (navigated.current) return;
-      navigated.current = true;
-      try {
-        // Complete a pending web redirect sign-in (if the player just came
-        // back from Google) before deciding where to route.
-        await completeRedirectSignIn();
+    // Show the mark briefly, then route. Do not wait on the nickname API —
+    // that call can stall for seconds while Render wakes up.
+    let cancelled = false;
+    const minShow = new Promise<void>((resolve) => setTimeout(resolve, 900));
 
+    const decide = async (): Promise<string> => {
+      try {
+        await completeRedirectSignIn();
+        await signOutIfNotGoogle();
         const [done, user] = await Promise.all([
           storageService.isOnboardingDone(),
           waitForAuthReady(),
         ]);
-
-        if (!done) {
-          router.replace(ROUTES.ONBOARDING);
-          return;
+        if (!done) return ROUTES.ONBOARDING;
+        if (!isGoogleUser(user)) return ROUTES.LOGIN;
+        const uid = user.uid;
+        if (!useUserStore.getState().isNicknameVerifiedFor(uid)) {
+          void fetchRegisteredNickname().then((nickname) => {
+            if (nickname) useUserStore.getState().setVerifiedNickname(uid, nickname);
+          });
         }
-        if (!user) {
-          // No Google session — Google Sign-In is mandatory, there is no
-          // guest path.
-          router.replace(ROUTES.LOGIN);
-          return;
-        }
-
-        // Signed in: restore this account's registered nickname (if any)
-        // so a returning player never sees the nickname modal again.
-        // Never trust a leftover local `username` from a previous account on
-        // this device — only a nickname verified for THIS uid counts.
-        if (!useUserStore.getState().isNicknameVerifiedFor(user.uid)) {
-          const nickname = await fetchRegisteredNickname();
-          if (nickname) useUserStore.getState().setVerifiedNickname(user.uid, nickname);
-        }
-        router.replace(ROUTES.LOBBY);
+        return ROUTES.LOBBY;
       } catch (err) {
-        // Never strand the player on the splash screen: if the startup
-        // check fails we cannot tell where they belong, so send them
-        // through onboarding rather than leaving the logo spinning forever.
         console.warn('[Splash] startup check failed', err);
-        router.replace(ROUTES.ONBOARDING);
+        try {
+          const done = await storageService.isOnboardingDone();
+          return done ? ROUTES.LOGIN : ROUTES.ONBOARDING;
+        } catch {
+          return ROUTES.LOGIN;
+        }
       }
-    }, 3000);
+    };
 
-    return () => clearTimeout(timer);
+    void Promise.all([minShow, decide()]).then(([, dest]) => {
+      if (cancelled || navigated.current) return;
+      navigated.current = true;
+      router.replace(dest as Parameters<typeof router.replace>[0]);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const logoStyle = useAnimatedStyle(() => ({

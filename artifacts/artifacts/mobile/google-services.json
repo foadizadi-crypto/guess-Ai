@@ -1,26 +1,44 @@
 {
   "project_info": {
-    "project_number": "415580358646",
-    "project_id": "blurquiz-554ea",
-    "storage_bucket": "blurquiz-554ea.firebasestorage.app"
+    "project_number": "593305587333",
+    "project_id": "guess-ai-ai",
+    "storage_bucket": "guess-ai-ai.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:415580358646:android:c8fb4ff2423755cfc4a9d7",
+        "mobilesdk_app_id": "1:593305587333:android:6b48d5ec9d54622269e3ec",
         "android_client_info": {
           "package_name": "com.aiblur.quiz"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "593305587333-3ths0ajkbvnafscim6igcuki56sesvlh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aiblur.quiz",
+            "certificate_hash": "ae08de15c69739898a47a1b72f21882ae5bc9435"
+          }
+        },
+        {
+          "client_id": "593305587333-250mi4l6t3terntac2e9imen18it8mpt.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyDZdpmXwDlv8Ber4mwkMzJ-8Z5TlKspQZY"
+          "current_key": "AIzaSyADHkHJ0xCWoLc0fKoHlJXFttdJqZPCq7U"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "593305587333-250mi4l6t3terntac2e9imen18it8mpt.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

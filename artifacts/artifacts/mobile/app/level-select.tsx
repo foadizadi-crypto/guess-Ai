@@ -65,6 +65,7 @@ export default function LevelSelectScreen() {
   const handleSelect = (difficulty: Difficulty) => {
     hapticsService.impact(1);
     setDifficulty(difficulty);
+    router.push(ROUTES.CATEGORY_SELECT);
   };
 
   const handleNext = () => {

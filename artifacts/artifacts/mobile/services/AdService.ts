@@ -15,8 +15,9 @@ export const AD_UNIT_IDS = {
 };
 
 class AdService {
-  /** Ads are never rendered on web. */
   readonly isSupported = false;
+
+  async initialize(): Promise<void> {}
 
   get bannerAdUnitId(): string {
     return AD_UNIT_IDS.banner;
@@ -26,9 +27,13 @@ class AdService {
     if (__DEV__) console.log('[AdService/web] showInterstitial() skipped — ads are native-only.');
   }
 
-  /** Always false on web: no ad ran, so no reward may be granted. */
+  /** Always false on web production. In __DEV__, mock a successful watch so lobby/revive can be tested. */
   async showRewarded(): Promise<boolean> {
-    if (__DEV__) console.log('[AdService/web] showRewarded() skipped — ads are native-only.');
+    if (__DEV__) {
+      console.log('[AdService/web] showRewarded() mocked in development.');
+      await new Promise((r) => setTimeout(r, 400));
+      return true;
+    }
     return false;
   }
 }

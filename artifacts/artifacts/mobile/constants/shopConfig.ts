@@ -184,7 +184,7 @@ export interface GemPackItem {
   icon: string;
   rarity: 'common' | 'rare' | 'epic' | 'legendary';
   gemCost: number;
-  /** Stamina/energy units granted (capped at MAX_ENERGY by addStamina). */
+  /** Stamina/energy units granted (added to the main source; may overflow above the cap). */
   stamina: number;
   coins: number;
   /** cosmetic IDs to auto-grant on purchase (via ownedCosmetics). */
@@ -261,7 +261,7 @@ export const STAMINA_PACKS: GemPackItem[] = [
   {
     id:          'stamina_standard',
     name:        'Full Refill',
-    description: 'Adds 50 stamina to your reserve',
+    description: 'Adds 50 stamina to your bar instantly',
     icon:        'battery-full-outline',
     rarity:      'rare',
     gemCost:     8,
@@ -271,8 +271,8 @@ export const STAMINA_PACKS: GemPackItem[] = [
   },
   {
     id:          'stamina_mega',
-    name:        'Mega Reserve',
-    description: 'Stock 200 stamina in your reserve — play 20 rounds anytime',
+    name:        'Mega Refill',
+    description: 'Adds 200 stamina — play 20 rounds anytime, no waiting',
     icon:        'server-outline',
     rarity:      'epic',
     gemCost:     20,

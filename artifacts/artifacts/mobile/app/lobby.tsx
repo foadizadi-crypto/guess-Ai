@@ -20,7 +20,7 @@ import { AvatarFrame } from "@/components/AvatarFrame";
 import { AnimatedIcon } from "@/components/AnimatedIcon";
 import { DailyRewardModal } from "@/components/DailyRewardModal";
 import { PlayerNameModal } from "@/components/PlayerNameModal";
-import { registerNickname } from "@/services/nicknameService";
+import { registerNickname, fetchRegisteredNickname } from "@/services/nicknameService";
 import { getPlayerId } from "@/services/authService";
 import { FullBodyAvatarStage } from "@/components/FullBodyAvatarStage";
 
@@ -72,7 +72,7 @@ const buttonIcons: Record<string, any> = {
   play: require("../assets/icon/play.webp"),
   legendary_pack: require("../assets/icon/legendary_pack.webp"),
   gem_pack: require("../assets/icon/gem_pack.webp"),
-  admob: require("../assets/icon/AdMob_BG.png"),
+  admob: require("../assets/icon/AdMob_BG.webp"),
   leaderboard: require("../assets/icon/leaderboard.webp"),
   dailyreward: require("../assets/icon/daily-reward.webp"),
   shop: require("../assets/icon/shop.webp"),
@@ -164,11 +164,21 @@ export default function LobbyScreen() {
 
   const addStamina = useUserStore((s) => s.addStamina);
   const showRewarded = useAdStore((s) => s.showRewarded);
+  const isAdFreePassActive = useAdStore((s) => s.isAdFreePassActive);
   const reserveStaminaAd = useAdStore((s) => s.reserveStaminaAd);
   const releaseStaminaAd = useAdStore((s) => s.releaseStaminaAd);
+  const staminaAdsToday = useAdStore((s) => s.staminaAdsToday);
+  const lastStaminaAdDate = useAdStore((s) => s.lastStaminaAdDate);
   const adInFlight = useRef<boolean>(false);
+  const [adLoading, setAdLoading] = useState(false);
 
-  const { playMusic, stopMusic, playEffect } = useAudio();
+  const staminaAdsRemaining = (() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const used = lastStaminaAdDate === today ? staminaAdsToday : 0;
+    return Math.max(0, STAMINA_ADS_PER_DAY - used);
+  })();
+
+  const { playEffect } = useAudio();
   const isNicknameVerifiedFor = useUserStore((s) => s.isNicknameVerifiedFor);
 
   // A signed-in player must register a name before they can continue. Show
@@ -233,21 +243,18 @@ export default function LobbyScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      playMusic("menu_music");
       tickEnergy();
 
       const claimed = isToday(dailyReward?.lastClaimed);
-      if (!claimed) {
+      const uid = getPlayerId();
+      const hasNickname = uid && isNicknameVerifiedFor(uid);
+      if (!claimed && hasNickname) {
         // Held back until the one-shot entry animation (splash.json, ~1.2s)
         // has finished, so the modal does not cover the flourish.
         const t = setTimeout(() => setDailyModal(true), 2000);
         return () => clearTimeout(t);
       }
-
-      return () => {
-        stopMusic();
-      };
-    }, [dailyReward?.lastClaimed, playMusic, stopMusic, tickEnergy]),
+    }, [dailyReward?.lastClaimed, isNicknameVerifiedFor, tickEnergy]),
   );
 
   // ===================================================
@@ -336,7 +343,7 @@ export default function LobbyScreen() {
         router.push({ pathname: ROUTES.SHOP, params: { tab: "gems" } });
         break;
       case "legendary_pack":
-        router.push({ pathname: ROUTES.SHOP, params: { tab: "cosmetics" } });
+        router.push(ROUTES.SHOP);
         break;
       case "coin":
         router.push({ pathname: ROUTES.SHOP, params: { tab: "play" } });
@@ -376,6 +383,17 @@ export default function LobbyScreen() {
 
       const result = await registerNickname(name);
       if (!result.ok) {
+        if (result.reason === "already_registered") {
+          const existing = await fetchRegisteredNickname();
+          if (existing) {
+            setVerifiedNickname(playerId, existing);
+            setNameModalVisible(false);
+            const action = pendingActionRef.current;
+            pendingActionRef.current = null;
+            if (action) performAction(action);
+            return { ok: true };
+          }
+        }
         const message =
           result.reason === "taken"
             ? "This name is already taken. Please choose another name."

@@ -51,14 +51,14 @@ export const SPIN_CONFIG: SpinWheelConfig = {
   jackpotMultiplier:     5,
   jackpotMaxReward:      10_000,
 
-  // Total probability = 100%
+  // Total probability = 100% (validated below)
   rewards: [
     {
       id:          'coins_50',
       label:       '50 Coins',
       type:        'coins',
       amount:      50,
-      probability: 30,
+      probability: 27,
       color:       '#F9A825',
       icon:        'logo-bitcoin',
     },
@@ -67,7 +67,7 @@ export const SPIN_CONFIG: SpinWheelConfig = {
       label:       '100 Coins',
       type:        'coins',
       amount:      100,
-      probability: 25,
+      probability: 22,
       color:       '#FFD740',
       icon:        'logo-bitcoin',
     },
@@ -77,7 +77,7 @@ export const SPIN_CONFIG: SpinWheelConfig = {
       type:        'consumable',
       amount:      1,
       itemId:      'error_nullifier',
-      probability: 15,
+      probability: 14,
       color:       '#EF5350',
       icon:        'shield-checkmark-outline',
     },
@@ -90,6 +90,17 @@ export const SPIN_CONFIG: SpinWheelConfig = {
       probability: 10,
       color:       '#42A5F5',
       icon:        'timer-outline',
+    },
+    // Economy v2: small gem faucet so free players can taste the gem economy
+    // (stamina source upgrades) and are more likely to convert to buyers.
+    {
+      id:          'gems_2',
+      label:       '2 Gems',
+      type:        'gems',
+      amount:      2,
+      probability: 9,
+      color:       '#B39DDB',
+      icon:        'diamond-outline',
     },
     {
       id:          'gems_5',
@@ -105,6 +116,7 @@ export const SPIN_CONFIG: SpinWheelConfig = {
       label:       'Rare Sticker',
       type:        'cosmetic',
       amount:      1,
+      itemId:      'spin_rare_sticker',
       probability: 5,
       color:       '#FF7043',
       icon:        'star-outline',
@@ -114,7 +126,7 @@ export const SPIN_CONFIG: SpinWheelConfig = {
       label:       '500 Coins',
       type:        'coins',
       amount:      500,
-      probability: 5,
+      probability: 3,
       color:       '#FFA000',
       icon:        'logo-bitcoin',
     },
@@ -122,7 +134,8 @@ export const SPIN_CONFIG: SpinWheelConfig = {
       id:          'jackpot',
       label:       'JACKPOT!',
       type:        'jackpot',
-      amount:      10_000,
+      // Base coin value; the store pays min(amount × jackpotMultiplier, jackpotMaxReward).
+      amount:      500,
       probability: 2,
       color:       '#FF1744',
       icon:        'flash',
@@ -130,6 +143,20 @@ export const SPIN_CONFIG: SpinWheelConfig = {
     },
   ],
 } as const;
+
+// Fail loudly in development if the wheel probabilities ever stop summing to 100 —
+// a silent drift here quietly changes the whole reward economy.
+if (typeof __DEV__ !== 'undefined' && __DEV__) {
+  const total = SPIN_CONFIG.rewards.reduce((sum, r) => sum + r.probability, 0);
+  if (total !== 100) {
+    console.warn(`[spinConfig] probabilities sum to ${total}, expected 100`);
+  }
+}
+
+/** Coins paid out for a jackpot landing, with the economy safety cap applied. */
+export function jackpotPayout(baseAmount: number): number {
+  return Math.min(baseAmount * SPIN_CONFIG.jackpotMultiplier, SPIN_CONFIG.jackpotMaxReward);
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

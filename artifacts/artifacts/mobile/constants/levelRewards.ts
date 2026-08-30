@@ -23,7 +23,9 @@
 //   L500:  Crown + Legendary Title + Golden Skin + Particle Effect + MAX LEVEL Badge
 //          (plus the recurring 401–500 reward)
 //
-// Gems are NOT awarded through level rewards (spec: gems via IAP / special events only).
+// Gems (economy v2): every 10-level milestone also grants gems so free players
+// can slowly access the gem economy (stamina source upgrades etc.). The amount
+// scales with the level band — 2 / 5 / 8 / 12 — see majorLevelGems().
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type RewardItemType =
@@ -59,6 +61,8 @@ export type PackageTier = 'bronze' | 'silver' | 'gold' | 'legendary';
 export interface LevelReward {
   level: number;
   coins: number;
+  /** Gems granted at this level (every 10-level milestone: +5). */
+  gems: number;
   /** Bonus XP granted at this level (only at major special levels 300/400). */
   bonusXP?: number;
   items: RewardItem[];
@@ -88,19 +92,19 @@ interface SpecialReward {
 const SPECIAL: Readonly<Record<number, SpecialReward>> = {
   10: {
     coins: 200,
-    items: [{ type: 'avatar', id: 'avatar_fox', label: 'Fox Avatar' }],
+    items: [{ type: 'avatar', id: 'avatar_3', label: 'Daveigh Avatar' }],
   },
   50: {
     coins: 500,
-    items: [{ type: 'avatar', id: 'avatar_astronaut', label: 'Astronaut Avatar' }],
+    items: [{ type: 'avatar', id: 'avatar_7', label: 'Linda Avatar' }],
   },
   100: {
     coins: 1_000,
-    items: [{ type: 'avatar', id: 'avatar_dragon', label: 'Dragon Avatar' }],
+    items: [{ type: 'avatar', id: 'avatar_9', label: 'Patty Avatar' }],
   },
   200: {
     coins: 2_000,
-    items: [{ type: 'avatar', id: 'avatar_legend', label: 'Legend Avatar' }],
+    items: [{ type: 'avatar', id: 'avatar_10', label: 'Sissy Avatar' }],
   },
   300: {
     coins: 3_000,
@@ -148,6 +152,21 @@ function majorExtraCoins(level: number): number {
   return 700;
 }
 
+/**
+ * Gems granted at every 10-level milestone (free-player gem faucet).
+ *
+ * Deliberately progressive: the XP curve makes early milestones fire within
+ * the first days of play, so a flat rate flooded new accounts with enough gems
+ * to buy a stamina upgrade on day one and killed the aspiration. Small early,
+ * generous late — the reward grows as the account does.
+ */
+function majorLevelGems(level: number): number {
+  if (level <= 100) return 2;
+  if (level <= 250) return 5;
+  if (level <= 400) return 8;
+  return 12;
+}
+
 function minorItems(level: number): RewardItem[] {
   if (level <= 100) return [];  // no item on minor levels in 1-100 range
   if (level <= 250) {
@@ -170,7 +189,7 @@ function minorItems(level: number): RewardItem[] {
 
 function majorItems(level: number): RewardItem[] {
   if (level <= 100) {
-    return [{ type: 'error_nullifier', id: `error_nullifier_l${level}`, label: 'Error Nullifier', quantity: 1 }];
+    return [{ type: 'error_nullifier', id: 'error_nullifier', label: 'Error Nullifier', quantity: 1 }];
   }
   if (level <= 250) {
     const n = Math.floor(level / 10) - 10;
@@ -197,6 +216,7 @@ function buildLevelRewards(): LevelReward[] {
     const isSpecial = !!special;
 
     let coins = 0;
+    let gems = 0;
     const items: RewardItem[] = [];
     let bonusXP: number | undefined;
 
@@ -206,6 +226,7 @@ function buildLevelRewards(): LevelReward[] {
     }
     if (isMajor) {
       coins += majorExtraCoins(level);
+      gems += majorLevelGems(level);
       items.push(...majorItems(level));
     }
     if (isSpecial) {
@@ -214,10 +235,11 @@ function buildLevelRewards(): LevelReward[] {
       if (special.bonusXP) bonusXP = special.bonusXP;
     }
 
-    if (coins > 0 || items.length > 0 || isSpecial) {
+    if (coins > 0 || gems > 0 || items.length > 0 || isSpecial) {
       rewards.push({
         level,
         coins,
+        gems,
         ...(bonusXP !== undefined ? { bonusXP } : {}),
         items,
         packageTier: tier(level),

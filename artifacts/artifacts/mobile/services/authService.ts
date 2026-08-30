@@ -9,12 +9,9 @@
  * provider being enabled in the Firebase console.
  *
  * Native (iOS/Android): exchanges a Google ID token (obtained via
- * expo-auth-session, see services/googleAuthNative.ts) for a Firebase
- * credential with `signInWithCredential`. This requires a real Google
- * OAuth client (Android needs its SHA-1 fingerprint registered, iOS needs
- * its bundle id registered) configured in Google Cloud Console — until
- * that is finished, native sign-in surfaces a clear, non-crashing error
- * instead of pretending to succeed.
+ * Play Services in services/googleAuthNative.ts) for a Firebase
+ * credential with `signInWithCredential`. Android needs the EAS SHA-1
+ * registered on the Android OAuth client.
  *
  * Call getPlayerId() anywhere to retrieve the current signed-in UID.
  */
@@ -34,7 +31,7 @@ import { auth } from './firebase';
 
 let _playerId: string | null = null;
 let _authReady: Promise<User | null> | null = null;
-const AUTH_READY_TIMEOUT_MS = 10_000;
+const AUTH_READY_TIMEOUT_MS = 4_000;
 
 /**
  * Resolves once Firebase has restored (or confirmed the absence of) a
@@ -43,30 +40,37 @@ const AUTH_READY_TIMEOUT_MS = 10_000;
  * `auth.currentUser` synchronously, since persistence restoration is async.
  */
 export function waitForAuthReady(): Promise<User | null> {
-  if (_authReady) return _authReady;
-  _authReady = new Promise((resolve) => {
-    let settled = false;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    const finish = (user: User | null, reason: string) => {
-      if (settled) return;
-      settled = true;
-      if (timeout) clearTimeout(timeout);
-      _playerId = user?.uid ?? null;
-      console.log('[Auth] startup state resolved', { signedIn: !!user, reason });
-      unsub();
-      resolve(user);
-    };
-    const unsub = onAuthStateChanged(auth, (user) => {
-      finish(user, 'firebase');
+  if (!_authReady) {
+    _authReady = new Promise((resolve) => {
+      let settled = false;
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      const finish = (user: User | null, reason: string) => {
+        if (settled) return;
+        settled = true;
+        if (timeout) clearTimeout(timeout);
+        _playerId = user?.uid ?? null;
+        console.log('[Auth] startup state resolved', { signedIn: !!user, reason });
+        unsub();
+        resolve(user);
+      };
+      const unsub = onAuthStateChanged(auth, (user) => {
+        finish(user, 'firebase');
+      });
+      timeout = setTimeout(() => finish(null, 'timeout'), AUTH_READY_TIMEOUT_MS);
     });
-    timeout = setTimeout(() => finish(null, 'timeout'), AUTH_READY_TIMEOUT_MS);
-  });
-  return _authReady;
+  }
+  return _authReady.then(() => auth.currentUser);
 }
 
 /** Returns the current player UID, or null if nobody is signed in. */
 export function getPlayerId(): string | null {
   return _playerId ?? auth.currentUser?.uid ?? null;
+}
+
+/** True only for a Google credential — anonymous/guest sessions are not enough. */
+export function isGoogleUser(user: User | null = auth.currentUser): user is User {
+  if (!user) return false;
+  return user.providerData.some((p) => p.providerId === 'google.com');
 }
 
 /**
@@ -149,8 +153,8 @@ export async function completeRedirectSignIn(): Promise<string | null> {
 
 /**
  * Native: exchange a Google ID token for a Firebase credential.
- * The ID token itself is obtained via expo-auth-session
- * (see services/googleAuthNative.ts) since that requires React hooks.
+ * The ID token itself is obtained via Play Services
+ * (see services/googleAuthNative.ts).
  */
 export async function signInWithGoogleIdToken(idToken: string): Promise<string> {
   const credential = GoogleAuthProvider.credential(idToken);
@@ -160,21 +164,36 @@ export async function signInWithGoogleIdToken(idToken: string): Promise<string> 
 }
 
 /**
- * Entry point used by the login screen on web. Native platforms drive the
- * flow through the `useGoogleSignIn` hook (services/googleAuthNative.ts)
- * because obtaining the ID token requires a React hook (useAuthRequest).
+ * Entry point used by the login screen on web. Native platforms obtain an
+ * ID token via `promptNativeGoogleIdToken()` then call `signInWithGoogleIdToken`.
  */
 export async function signInWithGoogle(): Promise<string> {
   if (Platform.OS === 'web') {
     return signInWithGoogleWeb();
   }
   throw new GoogleSignInError(
-    'Use the useGoogleSignIn() hook on native platforms.',
+    'Use promptNativeGoogleIdToken() on native platforms.',
     'native_not_configured',
   );
 }
 
+/** Drop leftover anonymous sessions so they cannot bypass Google Sign-In. */
+export async function signOutIfNotGoogle(): Promise<void> {
+  const user = auth.currentUser ?? (await waitForAuthReady());
+  if (user && !isGoogleUser(user)) {
+    await signOut();
+  }
+}
+
 export async function signOut(): Promise<void> {
+  if (Platform.OS !== 'web') {
+    try {
+      const { signOutGooglePlay } = await import('./googleAuthNative');
+      await signOutGooglePlay();
+    } catch {
+      // Firebase sign-out still proceeds.
+    }
+  }
   await firebaseSignOut(auth);
   _playerId = null;
 }

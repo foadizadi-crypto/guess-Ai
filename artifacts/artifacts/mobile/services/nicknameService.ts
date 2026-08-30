@@ -12,7 +12,7 @@
 
 import { getIdToken, getPlayerId } from './authService';
 import { getApiUrl } from './apiConfig';
-const REQUEST_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 6_000;
 
 async function fetchNickname(input: string, init: RequestInit): Promise<Response> {
   const controller = new AbortController();

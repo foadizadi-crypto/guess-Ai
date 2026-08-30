@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Category, Difficulty, Question } from '@/types';
 import { generateId } from '@/utils';
-import { getApiUrl, safeApiTarget } from '@/services/apiConfig';
+import { API_BASE_URL, getApiUrl, safeApiTarget } from '@/services/apiConfig';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,10 +15,11 @@ export interface GenerateQuestionsResult {
   fromCache: boolean;
 }
 
+export const MAINTENANCE_MESSAGE =
+  'The quiz service is temporarily unavailable. Please try again.';
+
 // ─── Cache helpers ─────────────────────────────────────────────────────────────
 
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-/** Refresh the cache when less than 12 h of TTL remains (i.e. it's > 12 h old). */
 const CACHE_REFRESH_THRESHOLD_MS = 12 * 60 * 60 * 1000;
 
 /** AsyncStorage key that holds the list of recently played category+difficulty pairs. */
@@ -37,23 +38,8 @@ interface RecentPlay {
 }
 
 function cacheKey(category: Category, difficulty: Difficulty): string {
-  return `question_cache_${category}_${difficulty}`;
-}
-
-async function readCache(
-  category: Category,
-  difficulty: Difficulty,
-): Promise<Question[] | null> {
-  try {
-    const raw = await AsyncStorage.getItem(cacheKey(category, difficulty));
-    if (!raw) return null;
-    const entry = JSON.parse(raw) as CacheEntry;
-    if (Date.now() - entry.savedAt > CACHE_TTL_MS) return null; // expired
-    if (!Array.isArray(entry.questions) || entry.questions.length === 0) return null;
-    return entry.questions;
-  } catch {
-    return null;
-  }
+  // v2: one-image-per-round format — old multi-image cached rounds are ignored.
+  return `question_cache_v2_${category}_${difficulty}`;
 }
 
 async function writeCache(
@@ -105,17 +91,15 @@ async function persistRecentPlay(category: Category, difficulty: Difficulty): Pr
 }
 
 // ─── API base URL ─────────────────────────────────────────────────────────────
-// On Replit: EXPO_PUBLIC_API_URL is injected by the dev script as the public
-// HTTPS domain (the API server is routed through the domain, not :8080).
-// For local development outside Replit: falls back to localhost:8080.
+// Always the live Render origin (see apiConfig). No localhost fallback.
 
-const REQUEST_TIMEOUT_MS = 20_000;
+const REQUEST_TIMEOUT_MS = 120_000;
 
 async function fetchWithTimeout(input: string, init: RequestInit): Promise<Response> {
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timeout = setTimeout(() => controller?.abort(), REQUEST_TIMEOUT_MS);
   try {
-    console.log('[API] request', { target: safeApiTarget(), path: new URL(input).pathname });
+    if (__DEV__) console.log('[API] request', { target: safeApiTarget(), path: new URL(input).pathname });
     return await fetch(input, controller ? { ...init, signal: controller.signal } : init);
   } catch (error) {
     if (controller?.signal.aborted) {
@@ -160,61 +144,47 @@ class OpenAIService {
   }
 
   /**
-   * Generate a set of quiz questions via the API server.
-   *
-   * On success: persists the result to AsyncStorage (keyed by category+difficulty)
-   * and returns { questions, fromCache: false }.
-   *
-   * On API failure: loads the cached set if one exists and returns
-   * { questions, fromCache: true }. Throws only when the cache is also empty.
+   * Generate a set of quiz questions via the live OpenAI API.
+   * Never substitutes cache, mock, or placeholder content.
    */
   async generateQuestions(
     category: Category,
     difficulty: Difficulty,
     count = 20,
   ): Promise<GenerateQuestionsResult> {
-    try {
-      const response = await fetchWithTimeout(getApiUrl('/api/questions'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category, difficulty, count }),
-      });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({})) as { error?: string };
-        throw new Error(body.error ?? `Questions API responded with ${response.status}`);
-      }
-
-      const data = (await response.json()) as { questions: Question[] };
-
-      if (!Array.isArray(data.questions) || data.questions.length === 0) {
-        throw new Error('API returned no questions');
-      }
-
-      // Ensure every question has a local ID (server already sets one, but be defensive)
-      const questions = data.questions.map((q) => ({
-        ...q,
-        id: q.id ?? generateId(),
-      }));
-
-      // Persist to cache for offline use and record this as a recent play
-      void writeCache(category, difficulty, questions);
-      void persistRecentPlay(category, difficulty);
-
-      return { questions, fromCache: false };
-    } catch (networkErr) {
-      console.warn('[API] questions failed; checking local cache', {
-        message: networkErr instanceof Error ? networkErr.message : 'unknown error',
-        target: safeApiTarget(),
-      });
-      // API unreachable or returned an error — try the local cache
-      const cached = await readCache(category, difficulty);
-      if (cached && cached.length > 0) {
-        return { questions: cached, fromCache: true };
-      }
-      // No cache available — re-throw so the UI can show an error
-      throw networkErr;
+    if (!API_BASE_URL) {
+      throw new Error('API is not configured');
     }
+    const response = await fetchWithTimeout(getApiUrl('/api/questions'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category, difficulty, count }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      throw new Error(body.error ?? `Questions API responded with ${response.status}`);
+    }
+
+    const data = (await response.json()) as { questions: Question[] };
+
+    if (!Array.isArray(data.questions) || data.questions.length === 0) {
+      throw new Error('API returned no questions');
+    }
+
+    const questions = data.questions.map((q) => ({
+      ...q,
+      id: q.id ?? generateId(),
+    }));
+
+    if (questions.some((q) => !q.imageUrl)) {
+      throw new Error('API returned questions without a live image');
+    }
+
+    void writeCache(category, difficulty, questions);
+    void persistRecentPlay(category, difficulty);
+
+    return { questions, fromCache: false };
   }
 
   /**

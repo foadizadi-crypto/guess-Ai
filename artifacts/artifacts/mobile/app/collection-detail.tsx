@@ -21,11 +21,11 @@ import {
 
 // ─── Badge PNG images ──────────────────────────────────────────────────────────
 const BADGE_IMAGES: Record<string, ImageSourcePropType> = {
-  badge_bronze:   require('@/assets/badges/badge_first_win.png'),
-  badge_silver:   require('@/assets/badges/badge_quiz_veteran.png'),
-  badge_gold:     require('@/assets/badges/badge_perfect_game.png'),
-  badge_platinum: require('@/assets/badges/badge_combo_king.png'),
-  badge_diamond:  require('@/assets/badges/badge_legend.png'),
+  badge_bronze:   require('@/assets/badges/badge_first_win.webp'),
+  badge_silver:   require('@/assets/badges/badge_quiz_veteran.webp'),
+  badge_gold:     require('@/assets/badges/badge_perfect_game.webp'),
+  badge_platinum: require('@/assets/badges/badge_combo_king.webp'),
+  badge_diamond:  require('@/assets/badges/badge_legend.webp'),
 };
 
 // ─── Avatar PNG images (for avatar collection cards) ──────────────────────────
@@ -264,6 +264,8 @@ export default function CollectionDetailScreen() {
   const ownedCosmetics  = useUserStore((s) => s.ownedCosmetics);
   const equippedCosmetics = useUserStore((s) => s.equippedCosmetics);
   const buyCosmetic     = useUserStore((s) => s.buyCosmetic);
+  const buyGemCosmetic  = useUserStore((s) => s.buyGemCosmetic);
+  const gemCosmetics    = useUserStore((s) => s.gemCosmetics);
   const equipCosmetic   = useUserStore((s) => s.equipCosmetic);
   const avatars         = useUserStore((s) => s.avatars);
   const selectAvatar    = useUserStore((s) => s.selectAvatar);
@@ -282,12 +284,12 @@ export default function CollectionDetailScreen() {
         owned   = av?.unlocked ?? ownedCosmetics[item.id] ?? false;
         equipped = selectedAvatarId === item.id;
       } else {
-        owned   = ownedCosmetics[item.id] ?? item.currency === 'free';
+        owned   = ownedCosmetics[item.id] ?? gemCosmetics[item.id]?.owned ?? item.currency === 'free';
         equipped = equippedCosmetics[cosmeticType] === item.id;
       }
       return { ...item, owned, equipped };
     });
-  }, [cosmeticType, avatars, ownedCosmetics, equippedCosmetics, selectedAvatarId]);
+  }, [cosmeticType, avatars, ownedCosmetics, gemCosmetics, equippedCosmetics, selectedAvatarId]);
 
   const displayItems = useMemo(() => {
     const key = filter.toLowerCase();
@@ -351,8 +353,10 @@ export default function CollectionDetailScreen() {
       return;
     }
 
-    // Generic buyCosmetic
-    const ok = buyCosmetic(item.id, item.price);
+    // Generic buy — coins vs gems must hit the matching sink
+    const ok = item.currency === 'gems'
+      ? buyGemCosmetic(item.id, item.price)
+      : buyCosmetic(item.id, item.price);
     hapticsService.notification(ok ? 1 : 0);
     if (ok) { playEffect('purchase'); showToast(`−${item.price} ${item.currency === 'gems' ? '💎' : '🪙'}`); }
     else Alert.alert('Purchase failed', 'Something went wrong. Please try again.');

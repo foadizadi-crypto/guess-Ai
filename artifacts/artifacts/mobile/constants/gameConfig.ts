@@ -46,13 +46,16 @@ export const GAME_CONFIG = {
   xp_session_complete_bonus:  30,  // Easy base — kept for backward compat
   xp_perfect_game_bonus:      50,  // Easy base — kept for backward compat
 
-  // ── Clarity / Blur Mechanics ────────────────────────────────────────────────
-  // clarity_correct_increment: how much blur is removed on a correct answer
-  // clarity_wrong_penalty_*  : how much extra blur is added on a wrong answer
-  clarity_correct_increment:      5,
-  clarity_wrong_penalty_easy:     3,
-  clarity_wrong_penalty_medium:   5,
-  clarity_wrong_penalty_hard:     7,
+  // ── Clarity / Blur Mechanics (one-image-per-round reveal) ──────────────────
+  // Each round shows ONE image; answers only change its blur.
+  // clarity_correct_* : clarity gained on a correct answer, per difficulty
+  // clarity_wrong_*   : clarity lost on a wrong answer, per difficulty
+  clarity_correct_easy:    5,
+  clarity_correct_medium:  3,
+  clarity_correct_hard:    1,
+  clarity_wrong_easy:      1,
+  clarity_wrong_medium:    3,
+  clarity_wrong_hard:      5,
 
   // Initial blur amount per difficulty (0 = clear, 100 = fully blurred)
   initial_blur_easy:   50,
@@ -78,10 +81,22 @@ export const GAME_CONFIG = {
   combo_tier_4_min:   12,  // Ultra Combo: 12–14 streak
   combo_tier_4_bonus: 30,
 
-  // Super Combo activates at streak ≥ super_combo_threshold:
-  // total XP for that answer = (base + tier_4_bonus) × super_combo_multiplier
-  super_combo_threshold:   15,
-  super_combo_multiplier:  2.5,
+  // Super Combo activates at streak ≥ super_combo_threshold (spec: 10-in-a-row).
+  // total XP for that answer = (base + combo bonus) × super_combo_multiplier
+  super_combo_threshold:   10,
+  super_combo_multiplier:  2.0,
+
+  // ── Coins per correct answer (difficulty multiplier) ───────────────────────
+  coins_correct_easy:    2,
+  coins_correct_medium:  4,
+  coins_correct_hard:    6,
+  coins_combo_bonus:     3,   // extra coins at 3+ streak
+  coins_super_combo:    10,   // extra coins at Super Combo
+  snap_correct_coins:    8,   // extra coins for a successful early-guess
+  snap_correct_xp:      12,   // extra XP for a successful early-guess
+  revive_bonus_seconds: 30,   // time granted after a rewarded-ad revive
+  interstitial_every_n_sessions: 3,
+  max_revives_per_round: 1,
 
   // ── Progression ─────────────────────────────────────────────────────────────
   // max_level: 500 (per Final Implementation Prompt).
@@ -89,7 +104,7 @@ export const GAME_CONFIG = {
   max_level: 500,
 
   // ── Session Settings ────────────────────────────────────────────────────────
-  session_timer_seconds:  120,  // countdown timer per question
+  session_timer_seconds:  120,  // countdown timer per round
   questions_per_session:   20,  // questions in a single game session
 
 };
@@ -120,14 +135,17 @@ export function applyRemoteConfig(remote: Record<string, unknown>): void {
   const fields: Array<keyof typeof GAME_CONFIG> = [
     'xp_correct_easy', 'xp_correct_medium', 'xp_correct_hard', 'xp_wrong',
     'xp_session_complete_bonus', 'xp_perfect_game_bonus',
-    'clarity_correct_increment',
-    'clarity_wrong_penalty_easy', 'clarity_wrong_penalty_medium', 'clarity_wrong_penalty_hard',
+    'clarity_correct_easy', 'clarity_correct_medium', 'clarity_correct_hard',
+    'clarity_wrong_easy', 'clarity_wrong_medium', 'clarity_wrong_hard',
     'initial_blur_easy', 'initial_blur_medium', 'initial_blur_hard',
     'combo_tier_1_min', 'combo_tier_1_bonus',
     'combo_tier_2_min', 'combo_tier_2_bonus',
     'combo_tier_3_min', 'combo_tier_3_bonus',
     'combo_tier_4_min', 'combo_tier_4_bonus',
     'super_combo_threshold', 'super_combo_multiplier',
+    'coins_correct_easy', 'coins_correct_medium', 'coins_correct_hard',
+    'coins_combo_bonus', 'coins_super_combo', 'snap_correct_coins', 'snap_correct_xp',
+    'revive_bonus_seconds', 'interstitial_every_n_sessions',
     'max_level',
   ];
 
@@ -214,6 +232,23 @@ export function computeAnswerXP(
   return raw;
 }
 
+/** Coins for one correct answer, including combo / super-combo / snap bonuses. */
+export function coinsForCorrect(
+  difficulty: 'easy' | 'medium' | 'hard',
+  streak: number,
+  snap = false,
+): number {
+  const c = GAME_CONFIG;
+  let coins =
+    difficulty === 'hard' ? c.coins_correct_hard :
+    difficulty === 'medium' ? c.coins_correct_medium :
+    c.coins_correct_easy;
+  if (streak >= c.combo_tier_1_min) coins += c.coins_combo_bonus;
+  if (streak >= c.super_combo_threshold) coins += c.coins_super_combo;
+  if (snap) coins += c.snap_correct_coins;
+  return coins;
+}
+
 /** Coins awarded for completing a session (20 questions), by difficulty. */
 export function sessionCompleteCoins(difficulty: 'easy' | 'medium' | 'hard'): number {
   const c = GAME_CONFIG;
@@ -255,8 +290,16 @@ export function initialBlur(difficulty: 'easy' | 'medium' | 'hard'): number {
 }
 
 /** New blur amount after a correct answer (blur decreases = image clears). */
-export function blurAfterCorrect(currentBlur: number): number {
-  return Math.max(0, currentBlur - GAME_CONFIG.clarity_correct_increment);
+export function blurAfterCorrect(
+  currentBlur: number,
+  difficulty: 'easy' | 'medium' | 'hard',
+): number {
+  const c = GAME_CONFIG;
+  const gain =
+    difficulty === 'hard'   ? c.clarity_correct_hard   :
+    difficulty === 'medium' ? c.clarity_correct_medium :
+                              c.clarity_correct_easy;
+  return Math.max(0, currentBlur - gain);
 }
 
 /** New blur amount after a wrong answer (blur increases = image obscures more). */
@@ -266,8 +309,8 @@ export function blurAfterWrong(
 ): number {
   const c = GAME_CONFIG;
   const penalty =
-    difficulty === 'hard'   ? c.clarity_wrong_penalty_hard   :
-    difficulty === 'medium' ? c.clarity_wrong_penalty_medium  :
-                              c.clarity_wrong_penalty_easy;
+    difficulty === 'hard'   ? c.clarity_wrong_hard   :
+    difficulty === 'medium' ? c.clarity_wrong_medium :
+                              c.clarity_wrong_easy;
   return Math.min(100, currentBlur + penalty);
 }

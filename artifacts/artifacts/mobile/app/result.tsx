@@ -17,6 +17,7 @@ import { useAudio } from '@/hooks/useAudio';
 import { ROUTES } from '@/navigation/routes';
 import { useRTL } from '@/hooks/useRTL';
 import {
+  GAME_CONFIG,
   sessionCompleteCoins,
   sessionCompleteXP,
   perfectGameCoins,
@@ -29,6 +30,7 @@ import { AchievementToast } from '@/components/AchievementToast';
 import type { AchievementDef } from '@/constants/achievements';
 
 const CONFETTI = ['#FFD700', '#00E676', '#FF6B35', '#CE93D8', '#64B5F6', '#FF1744'];
+const grantedResultSessions = new Set<string>();
 
 export default function ResultScreen() {
   const router = useRouter();
@@ -58,6 +60,8 @@ export default function ResultScreen() {
     updateMissionProgress,
     refreshDailyMissions,
     checkAndUnlockAchievements,
+    claimMissionReward,
+    claimLevelReward,
   } = useUserStore();
   const {
     canShowDoubleReward,
@@ -81,7 +85,7 @@ export default function ResultScreen() {
   const accuracy    = totalQuestions ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
 
   // ── Economy calculation — spec v1.0.0 ────────────────────────────────────
-  // Coins: 1 per correct answer (tracked in gameStore.coinsEarned)
+  // Coins: per-correct (easy 2 / med 4 / hard 6, plus streak/snap) tracked in gameStore.coinsEarned
   //        + session completion bonus (per difficulty: Easy 50 | Med 63 | Hard 75)
   //        + perfect game bonus if 20/20 (per difficulty: Easy 100 | Med 125 | Hard 150)
   const completionCoins = sessionCompleteCoins(selectedDifficulty);
@@ -106,6 +110,10 @@ export default function ResultScreen() {
 
   // ── Record result + entrance animation ────────────────────────────────────
   useEffect(() => {
+    const sessionId = gameSession?.id;
+    if (!sessionId || grantedResultSessions.has(sessionId)) return;
+    grantedResultSessions.add(sessionId);
+
     // Refresh missions before updating progress (ensures today's missions are loaded)
     refreshDailyMissions();
 
@@ -117,8 +125,10 @@ export default function ResultScreen() {
       totalGamesPlayed: statistics.totalGamesPlayed + 1,
       totalWins:        statistics.totalWins + (isVictory ? 1 : 0),
       totalCorrectAnswers: statistics.totalCorrectAnswers + correctAnswers,
+      totalCoinsEarned: statistics.totalCoinsEarned + totalCoins,
       favoriteCategory:  selectedCategory,
       longestStreak: Math.max(statistics.longestStreak, maxStreakThisGame),
+      hardGamesPlayed: statistics.hardGamesPlayed + (selectedDifficulty === 'hard' ? 1 : 0),
     });
 
     // ── Mission progress ─────────────────────────────────────────────────
@@ -133,6 +143,10 @@ export default function ResultScreen() {
     // Every completed session increments the counter, enabling the double-
     // reward button once it reaches the threshold.
     incrementSessionCounter();
+    const rounds = useAdStore.getState().sessionCounter;
+    if (rounds > 0 && rounds % GAME_CONFIG.interstitial_every_n_sessions === 0) {
+      void useAdStore.getState().showInterstitial();
+    }
 
     // ── Record session to Firestore (Task 6) ─────────────────────────────
     // Fire-and-forget: errors are logged but never block the UI.
@@ -171,6 +185,15 @@ export default function ResultScreen() {
         const updatedAchievements = useUserStore.getState().achievements;
         saveAchievements(uidForAchievements, updatedAchievements).catch(() => {});
       }
+    }
+
+    // Missions and level packages are paid here so they cannot sit unclaimed forever.
+    const userAfter = useUserStore.getState();
+    for (const mission of userAfter.missions) {
+      if (mission.completed && !mission.rewardClaimed) claimMissionReward(mission.id);
+    }
+    for (const level of [...userAfter.unclaimedLevelRewards]) {
+      claimLevelReward(level);
     }
 
     hapticsService.notification(isVictory ? 1 : 2);

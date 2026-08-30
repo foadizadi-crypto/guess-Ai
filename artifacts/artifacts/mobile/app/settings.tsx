@@ -57,8 +57,16 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const openConfiguredLink = async (label: string, value: string | undefined) => {
+  const openLegal = (doc: 'privacy' | 'terms') => {
+    router.push({ pathname: ROUTES.LEGAL, params: { doc } });
+  };
+
+  const openConfiguredLink = async (label: string, value: string | undefined, fallbackDoc?: 'privacy' | 'terms') => {
     if (!value) {
+      if (fallbackDoc) {
+        openLegal(fallbackDoc);
+        return;
+      }
       Alert.alert(`${label} unavailable`, `A ${label} has not been configured for this build yet.`);
       return;
     }
@@ -104,7 +112,7 @@ export default function SettingsScreen() {
               ]);
             } catch (err) {
               console.warn('[Account] local cleanup failed after server deletion:', err);
-              Alert.alert('Account deleted', 'Your game data was deleted. Please sign in again.', [
+              Alert.alert('Account deleted', 'Your game data was deleted.', [
                 { text: 'OK', onPress: () => router.replace(ROUTES.LOGIN) },
               ]);
             } finally {
@@ -246,11 +254,11 @@ export default function SettingsScreen() {
         {/* Support & Legal */}
         <Text style={[styles.sectionLabel, { textAlign }]}>Support & Legal</Text>
         <GlassCard style={styles.card} padding={0}>
-          <TouchableOpacity onPress={() => openConfiguredLink('Privacy Policy', appLinks.privacyPolicyUrl)}>
+          <TouchableOpacity onPress={() => openConfiguredLink('Privacy Policy', appLinks.privacyPolicyUrl, 'privacy')}>
             <SettingRow icon="shield-checkmark-outline" label="Privacy Policy" right={<Text style={styles.linkText}>Open</Text>} />
           </TouchableOpacity>
           <Separator />
-          <TouchableOpacity onPress={() => openConfiguredLink('Terms of Service', appLinks.termsOfServiceUrl)}>
+          <TouchableOpacity onPress={() => openConfiguredLink('Terms of Service', appLinks.termsOfServiceUrl, 'terms')}>
             <SettingRow icon="document-text-outline" label="Terms of Service" right={<Text style={styles.linkText}>Open</Text>} />
           </TouchableOpacity>
           <Separator />

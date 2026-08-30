@@ -43,6 +43,7 @@ class AudioService {
   private effectCache: Partial<Record<EffectName, Audio.Sound>> = {};
   private currentMusic: Audio.Sound | null = null;
   private currentMusicName: MusicName | null = null;
+  private musicGeneration = 0;
 
   // Current playback configuration (synced from audio store via useAudio hook)
   private _volume = 0.7;
@@ -68,6 +69,7 @@ class AudioService {
         shouldDuckAndroid: true,
       });
       this.initialized = true;
+      await this.stopMusic();
     } catch (err) {
       if (__DEV__) console.warn('[AudioService] init failed:', err);
     }
@@ -137,8 +139,9 @@ class AudioService {
       return;
     }
 
-    // Stop and unload previous track
-    await this.stopMusic();
+    const generation = ++this.musicGeneration;
+    await this.unloadCurrentMusic();
+    if (generation !== this.musicGeneration) return;
 
     if (!this._musicEnabled || this._muted) return;
 
@@ -151,6 +154,16 @@ class AudioService {
           volume: this._volume * 0.45, // music quieter than effects
         },
       );
+
+      if (generation !== this.musicGeneration) {
+        try {
+          await sound.stopAsync();
+          await sound.unloadAsync();
+        } catch {
+          // discarded in-flight player
+        }
+        return;
+      }
 
       sound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
         if (!status.isLoaded && (status as any).error) {
@@ -166,6 +179,11 @@ class AudioService {
   }
 
   async stopMusic(): Promise<void> {
+    this.musicGeneration += 1;
+    await this.unloadCurrentMusic();
+  }
+
+  private async unloadCurrentMusic(): Promise<void> {
     if (!this.currentMusic) return;
     try {
       await this.currentMusic.stopAsync();

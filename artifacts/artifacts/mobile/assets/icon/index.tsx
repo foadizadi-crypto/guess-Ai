@@ -44,15 +44,15 @@ export function CoinIcon({ size = 20 }: IconProps) {
 
 const UI_ICONS = {
   achievement: require("@/assets/icon/achievement.webp"),
-  combo: require("@/assets/icon/combo.png"),
-  correct: require("@/assets/icon/correct.png"),
+  combo: require("@/assets/icon/combo.webp"),
+  correct: require("@/assets/icon/correct.webp"),
   friends: require("@/assets/icon/friends.webp"),
   leaderboard: require("@/assets/icon/leaderboard.webp"),
-  profile: require("@/assets/icon/profile.png"),
-  score: require("@/assets/icon/score.png"),
+  profile: require("@/assets/icon/profile.webp"),
+  score: require("@/assets/icon/score.webp"),
   settings: require("@/assets/icon/settings.webp"),
   shop: require("@/assets/icon/shop.webp"),
-  wrong: require("@/assets/icon/wrong.png"),
+  wrong: require("@/assets/icon/wrong.webp"),
 } as const;
 
 export type UiIconName = keyof typeof UI_ICONS;

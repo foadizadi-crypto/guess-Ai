@@ -1,36 +1,42 @@
 /**
- * stamina.tsx — Stamina screen (placeholder).
+ * stamina.tsx — Stamina screen.
  *
- * Reachable from the lobby stamina pill. Shows the real values from the user
- * store (active bar, reserve, refill rate) and offers the one refill action
- * that already exists: spending gems. Watching an ad for stamina stays on the
- * lobby AdMob button, which owns the daily-cap logic.
+ * Reachable from the lobby stamina pill. One upgradable stamina source: the
+ * bar shows the level-dependent cap (energy may overflow above it from ads,
+ * packs and rewards). Refill action spends gems; the source upgrade lives on
+ * the Customization screen's Upgrade tab. Watching an ad for stamina stays on
+ * the lobby AdMob button, which owns the daily-cap logic.
  */
 import React, { useCallback } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { hapticsService } from '@/services/HapticsService';
 import { PlaceholderScreen } from '@/components/PlaceholderScreen';
 import { ProgressBar } from '@/components/ProgressBar';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
+import { ROUTES } from '@/navigation/routes';
 import {
-  MAX_ENERGY,
   STAMINA_PER_GAME,
-  ENERGY_REFILL_INTERVAL_MIN,
   ENERGY_REFILL_GEM_COST,
+  MAX_STAMINA_UPGRADE_LEVEL,
+  getEnergyCap,
+  getRefillIntervalMin,
 } from '@/constants/economy';
 
 export default function StaminaScreen() {
   // Records persisted before these fields existed hydrate as undefined, which
   // would render "undefined" and poison the progress maths — default them here.
   const energy = useUserStore((s) => s.energy ?? 0);
-  const staminaReserve = useUserStore((s) => s.staminaReserve ?? 0);
+  const sourceLevel = useUserStore((s) => s.staminaSourceLevel ?? 0);
   const gems = useUserStore((s) => s.gems ?? 0);
   const refillEnergyWithGems = useUserStore((s) => s.refillEnergyWithGems);
 
-  const isFull = energy >= MAX_ENERGY;
+  const cap = getEnergyCap(sourceLevel);
+  const refillMin = getRefillIntervalMin(sourceLevel);
+  const isFull = energy >= cap;
 
   const handleRefill = useCallback(() => {
     // The store re-checks both conditions inside its transaction, so a double
@@ -38,7 +44,7 @@ export default function StaminaScreen() {
     const ok = refillEnergyWithGems(ENERGY_REFILL_GEM_COST);
     if (!ok) {
       const current = useUserStore.getState();
-      if (current.energy >= MAX_ENERGY) {
+      if (current.energy >= getEnergyCap(current.staminaSourceLevel ?? 0)) {
         Alert.alert('Already full', 'Your stamina bar is already at maximum.');
       } else {
         Alert.alert('Not enough gems', `A full refill costs ${ENERGY_REFILL_GEM_COST} gems.`);
@@ -48,11 +54,16 @@ export default function StaminaScreen() {
     hapticsService.notification(1);
   }, [refillEnergyWithGems]);
 
+  const goToUpgrade = useCallback(() => {
+    hapticsService.impact(0);
+    router.push(ROUTES.CUSTOMIZATION);
+  }, []);
+
   return (
     <PlaceholderScreen
       title="Stamina"
       icon="flash"
-      subtitle={`Each round costs ${STAMINA_PER_GAME} stamina. You regain 1 every ${ENERGY_REFILL_INTERVAL_MIN} minutes.`}
+      subtitle={`Each round costs ${STAMINA_PER_GAME} stamina. You regain 1 every ${refillMin} minutes.`}
       testID="stamina-screen"
       headerRight={
         <View style={styles.gemPill}>
@@ -63,24 +74,30 @@ export default function StaminaScreen() {
     >
       <View style={styles.card}>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Active</Text>
-          <Text style={styles.rowValue}>{energy} / {MAX_ENERGY}</Text>
+          <Text style={styles.rowLabel}>Stamina</Text>
+          <Text style={styles.rowValue}>{energy} / {cap}</Text>
         </View>
-        <ProgressBar progress={MAX_ENERGY > 0 ? energy / MAX_ENERGY : 0} color={GameColors.accentGreen} />
+        <ProgressBar progress={cap > 0 ? Math.min(1, energy / cap) : 0} color={GameColors.accentGreen} />
         <Text style={styles.hint}>
-          {isFull ? 'Your bar is full.' : 'Refills over time while you are away.'}
+          {energy > cap
+            ? 'Bonus stamina from ads and packs — refill resumes below the cap.'
+            : isFull
+              ? 'Your bar is full.'
+              : 'Refills over time while you are away.'}
         </Text>
       </View>
 
-      <View style={styles.card}>
+      <TouchableOpacity style={styles.card} onPress={goToUpgrade} activeOpacity={0.85}>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Reserve</Text>
-          <Text style={styles.rowValue}>{staminaReserve}</Text>
+          <Text style={styles.rowLabel}>Source Level</Text>
+          <Text style={styles.rowValue}>{sourceLevel} / {MAX_STAMINA_UPGRADE_LEVEL}</Text>
         </View>
         <Text style={styles.hint}>
-          Earned from ads and rewards. Used automatically once the active bar runs out.
+          {sourceLevel < MAX_STAMINA_UPGRADE_LEVEL
+            ? 'Upgrade your source in Customize → Upgrade to raise the cap and refill speed.'
+            : 'Your stamina source is fully upgraded.'}
         </Text>
-      </View>
+      </TouchableOpacity>
 
       <TouchableOpacity
         style={[styles.refillBtn, isFull && styles.refillBtnDisabled]}

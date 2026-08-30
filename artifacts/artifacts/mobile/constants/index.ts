@@ -43,6 +43,7 @@ export const CATEGORIES = [
   'space',
   'music',
   'science',
+  'speed_card',
 ] as const;
 
 // ─── Default avatars ───────────────────────────────────────────────────────

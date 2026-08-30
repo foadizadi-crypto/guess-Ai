@@ -1,13 +1,11 @@
 /**
- * onboarding.tsx — Welcome / intro sequence
+ * onboarding.tsx — Welcome / intro sequence (3 screens)
  *
- * Displays the 3 full-screen onboarding images (assets/onboarding/).
- * Swipe horizontally or tap Next to advance; Skip jumps straight to login.
+ * Welcome → Game introduction → Tutorial
  */
 import React, { useRef, useCallback, useState } from 'react';
 import {
   Dimensions,
-  Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -24,6 +22,8 @@ import Animated, {
   Extrapolation,
   useAnimatedScrollHandler,
 } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { hapticsService } from '@/services/HapticsService';
@@ -31,18 +31,34 @@ import { GradientButton } from '@/components/GradientButton';
 import { storageService } from '@/services/StorageService';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
-import { useUserStore } from '@/store/userStore';
+import { ROUTES } from '@/navigation/routes';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
-// ─── Slide data ───────────────────────────────────────────────────────────────
 const SLIDES = [
-  { id: '1', image: require('@/assets/onboarding/1_onboarding-screen.webp') },
-  { id: '2', image: require('@/assets/onboarding/2_onboarding-screen.webp') },
-  { id: '3', image: require('@/assets/onboarding/3_onboarding-screen.webp') },
+  {
+    id: '1',
+    icon: 'sparkles' as const,
+    title: 'Welcome to GUESSAi',
+    body: 'Train your eye, beat the blur, and climb the global ranks.',
+    colors: ['#1a0533', '#3d0f6b', '#0D0221'] as const,
+  },
+  {
+    id: '2',
+    icon: 'eye' as const,
+    title: 'Guess What You See',
+    body: 'Images start heavily blurred. Answer fast to earn coins, XP, and combo bonuses.',
+    colors: ['#0f2847', '#1e4a7a', '#0D0221'] as const,
+  },
+  {
+    id: '3',
+    icon: 'school' as const,
+    title: 'Quick Tutorial',
+    body: 'Pick a category and difficulty, use power-ups wisely, and claim daily rewards from the lobby.',
+    colors: ['#2a1030', '#5c1a4a', '#0D0221'] as const,
+  },
 ] as const;
 
-// ─── Pagination dot ───────────────────────────────────────────────────────────
 const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 
 interface DotProps {
@@ -61,7 +77,6 @@ const Dot: React.FC<DotProps> = ({ index, scrollX }) => {
   return <Animated.View style={[styles.dot, style]} />;
 };
 
-// ─── Screen ───────────────────────────────────────────────────────────────────
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -85,20 +100,14 @@ export default function OnboardingScreen() {
     hapticsService.impact(0);
   }, []);
 
-  // --- CRITICAL FLOW FIX: Connect finishing step directly to Global State App Flow Checkpoints ---
-  // Reached by both "Next" on the last slide and by "Skip".
   const finish = useCallback(async () => {
     try {
       hapticsService.impact(1);
-
-      // Record completion BEFORE navigating. app/splash.tsx reads this flag on
-      // every cold start to decide where to send the player; without it the
-      // intro replays on every single launch.
       await storageService.setOnboardingDone();
     } catch (error) {
       console.error('[Onboarding] could not persist completion flag:', error);
     } finally {
-      router.replace('/login');
+      router.replace(ROUTES.LOGIN);
     }
   }, [router]);
 
@@ -114,9 +123,8 @@ export default function OnboardingScreen() {
 
   return (
     <View style={styles.root}>
-      {/* ── Full-screen swipeable slides ─────────────────────────────────── */}
       <AnimatedScrollView
-        ref={scrollRef as React.RefObject<any>}
+        ref={scrollRef as React.RefObject<ScrollView>}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
@@ -128,19 +136,20 @@ export default function OnboardingScreen() {
         style={StyleSheet.absoluteFill}
       >
         {SLIDES.map((slide) => (
-          <Image
+          <LinearGradient
             key={slide.id}
-            source={slide.image}
-            style={{ width: SW, height: SH }}
-            resizeMode="cover"
-          />
+            colors={[...slide.colors]}
+            style={{ width: SW, height: SH, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 36 }}
+          >
+            <View style={styles.iconRing}>
+              <Ionicons name={slide.icon} size={56} color={GameColors.accentGold} />
+            </View>
+            <Text style={styles.slideTitle}>{slide.title}</Text>
+            <Text style={styles.slideBody}>{slide.body}</Text>
+          </LinearGradient>
         ))}
       </AnimatedScrollView>
 
-      {/* ── Dark gradient overlay (bottom 40% for readability) ───────────── */}
-      <View style={styles.gradient} pointerEvents="none" />
-
-      {/* ── Skip button (top-right) ──────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: topPad + 8 }]}>
         <View style={{ flex: 1 }} />
         {!isLast && (
@@ -150,9 +159,7 @@ export default function OnboardingScreen() {
         )}
       </View>
 
-      {/* ── Bottom controls ──────────────────────────────────────────────── */}
       <View style={[styles.footer, { paddingBottom: botPad }]}>
-        {/* Pagination dots */}
         <View style={styles.dots}>
           {SLIDES.map((slide, i) => (
             <TouchableOpacity key={slide.id} onPress={() => goTo(i)} hitSlop={10}>
@@ -160,10 +167,8 @@ export default function OnboardingScreen() {
             </TouchableOpacity>
           ))}
         </View>
-
-        {/* CTA button */}
         <GradientButton
-          title={isLast ? 'Get Started 🎮' : 'Next'}
+          title={isLast ? 'Get Started' : 'Next'}
           onPress={handleNext}
           colors={[GameColors.accentGold, GameColors.accentOrange] as unknown as readonly [string, string]}
           style={styles.cta}
@@ -174,18 +179,12 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000' },
-  gradient: {
-    position: 'absolute',
-    left: 0, 
-    right: 0, 
-    bottom: 0,
-    height: SH * 0.38,
-    backgroundColor: 'transparent',
-  } as never,
+  root: { flex: 1, backgroundColor: '#0D0221' },
   header: {
     position: 'absolute',
-    top: 0, left: 0, right: 0,
+    top: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     paddingHorizontal: 20,
   },
@@ -202,9 +201,36 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: 'Inter_500Medium',
   },
+  iconRing: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 2,
+    borderColor: 'rgba(255,215,0,0.45)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 28,
+  },
+  slideTitle: {
+    ...Typography.header,
+    color: GameColors.textWhite,
+    fontSize: 28,
+    textAlign: 'center',
+    marginBottom: 14,
+  },
+  slideBody: {
+    ...Typography.bodyMedium,
+    color: 'rgba(255,255,255,0.82)',
+    textAlign: 'center',
+    lineHeight: 24,
+    fontSize: 16,
+  },
   footer: {
     position: 'absolute',
-    left: 0, right: 0, bottom: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     paddingHorizontal: 28,
     gap: 20,
     alignItems: 'center',

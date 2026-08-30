@@ -1,6 +1,7 @@
 import React from 'react';
 import { Image, ImageSourcePropType, StyleSheet, View, Text, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { AVATAR_SOURCES } from '@/constants/characterSources';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 
@@ -20,31 +21,7 @@ interface AvatarFrameProps {
   heroMode?: boolean;
 }
 
-// ─── Avatar PNG map ────────────────────────────────────────────────────────────
-const AVATAR_IMAGES: Record<string, ImageSourcePropType> = {
-  // by imageKey
-  abigail: require('@/assets/avatar/Abigail.webp'),
-  chloe:   require('@/assets/avatar/chloe.webp'),
-  daveigh: require('@/assets/avatar/Daveigh.webp'),
-  haley:   require('@/assets/avatar/Haley.webp'),
-  heather: require('@/assets/avatar/Heather.webp'),
-  kirsten: require('@/assets/avatar/kirsten.webp'),
-  linda:   require('@/assets/avatar/Linda.webp'),
-  marilyn: require('@/assets/avatar/Marilyn.webp'),
-  patty:   require('@/assets/avatar/Patty.webp'),
-  sissy:   require('@/assets/avatar/Sissy.webp'),
-  // by avatar id (selectedAvatarId)
-  avatar_1:  require('@/assets/avatar/Abigail.webp'),
-  avatar_2:  require('@/assets/avatar/chloe.webp'),
-  avatar_3:  require('@/assets/avatar/Daveigh.webp'),
-  avatar_4:  require('@/assets/avatar/Haley.webp'),
-  avatar_5:  require('@/assets/avatar/Heather.webp'),
-  avatar_6:  require('@/assets/avatar/kirsten.webp'),
-  avatar_7:  require('@/assets/avatar/Linda.webp'),
-  avatar_8:  require('@/assets/avatar/Marilyn.webp'),
-  avatar_9:  require('@/assets/avatar/Patty.webp'),
-  avatar_10: require('@/assets/avatar/Sissy.webp'),
-};
+const AVATAR_IMAGES = AVATAR_SOURCES;
 
 // ─── Frame PNG map ─────────────────────────────────────────────────────────────
 const FRAME_IMAGES: Record<string, ImageSourcePropType> = {
