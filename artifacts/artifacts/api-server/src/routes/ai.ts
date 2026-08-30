@@ -1,6 +1,7 @@
 import { Router } from "express";
-import { logger } from "../lib/logger";
+import { HttpError } from "../services/ai/errors";
 import { generateImageWithFallback, generateQuestionsWithFallback, getProviderStatus } from "../services/ai/manager";
+import { generateSpeedCardRound } from "../services/ai/speedCardRound";
 import type { Difficulty } from "../services/ai/types";
 
 const router: Router = Router();
@@ -11,9 +12,15 @@ const BLUR_LEVEL: Record<string, number> = {
   hard: 20,
 };
 
-// ─── POST /api/questions ────────────────────────────────────────────────────
-// Generates quiz questions via the AI Manager (Gemini → Groq → OpenAI → …).
-// Returns 503 if every configured text provider fails — no mock fallback.
+function shuffleArray<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 router.post("/questions", async (req, res, next) => {
   try {
     const { category = "nature", difficulty = "medium", count = 10 } = req.body as {
@@ -24,46 +31,62 @@ router.post("/questions", async (req, res, next) => {
 
     const safeCount = Math.min(Math.max(1, Number(count) || 10), 20);
     const blurLevel = BLUR_LEVEL[difficulty] ?? 14;
+    const subjectCount = 8;
 
     const { questions: aiQuestions, providerUsed: textProvider } = await generateQuestionsWithFallback({
       category,
       difficulty: difficulty as Difficulty,
-      count: safeCount,
+      count: subjectCount,
     });
 
-    if (aiQuestions.length === 0) {
-      logger.error({ category, difficulty }, "Question generation: all providers failed — no questions generated");
-      res.status(503).json({ error: "AI question generation is currently unavailable. Please check your API keys and try again." });
-      return;
+    const subject = aiQuestions[0];
+    if (!subject) {
+      throw new HttpError(502, "OpenAI returned no questions");
     }
 
-    const questions = await Promise.all(
-      aiQuestions.map(async (q, index) => {
-        const { url } = await generateImageWithFallback(q.imagePrompt);
-        return {
-          id: `q_${Date.now()}_${index}`,
-          imageUrl: url ?? null,
-          answer: q.answer,
-          options: q.options,
-          correctIndex: q.correctIndex,
-          funFact: q.funFact,
-          hints: q.hints,
-          category,
-          difficulty,
-          blurLevel,
-        };
-      }),
-    );
+    const decoySet = new Set<string>();
+    subject.options.forEach((o) => { if (o !== subject.answer) decoySet.add(o); });
+    aiQuestions.slice(1).forEach((q) => {
+      if (q.answer !== subject.answer) decoySet.add(q.answer);
+      q.options.forEach((o) => { if (o !== subject.answer) decoySet.add(o); });
+    });
+    const decoys = shuffleArray([...decoySet]);
 
-    res.json({ questions, meta: { textProvider } });
+    const { url: imageUrl, providerUsed: imageProvider } = await generateImageWithFallback(subject.imagePrompt);
+    if (!imageUrl) {
+      throw new HttpError(502, "OpenAI returned no image");
+    }
+
+    const questions = Array.from({ length: safeCount }, (_, index) => {
+      const picked: string[] = [];
+      for (let k = 0; picked.length < 3 && k < decoys.length * 2; k += 1) {
+        const candidate = decoys[(index * 3 + k) % decoys.length];
+        if (candidate && !picked.includes(candidate)) picked.push(candidate);
+      }
+      const options = shuffleArray([subject.answer, ...picked]);
+      return {
+        id: `q_${Date.now()}_${index}`,
+        imageUrl,
+        answer: subject.answer,
+        options,
+        correctIndex: Math.max(0, options.indexOf(subject.answer)),
+        funFact: subject.funFact,
+        hints: subject.hints,
+        category,
+        difficulty,
+        blurLevel,
+      };
+    });
+
+    res.json({
+      questions,
+      meta: { textProvider, imageProvider, roundSubject: subject.answer },
+    });
   } catch (err) {
     next(err);
   }
 });
 
-// ─── POST /api/images ───────────────────────────────────────────────────────
-// Generates a single image from a text prompt via the AI Manager.
-// Returns 503 if every configured image provider fails — no picsum fallback.
 router.post("/images", async (req, res, next) => {
   try {
     const { prompt } = req.body as { prompt?: string };
@@ -73,13 +96,9 @@ router.post("/images", async (req, res, next) => {
       return;
     }
 
-    const trimmedPrompt = prompt.trim();
-    const { url, providerUsed } = await generateImageWithFallback(trimmedPrompt);
-
+    const { url, providerUsed } = await generateImageWithFallback(prompt.trim());
     if (!url) {
-      logger.warn({ prompt: trimmedPrompt }, "Image generation: all providers failed — no image generated");
-      res.status(503).json({ error: "AI image generation is currently unavailable. Please check your API keys and try again." });
-      return;
+      throw new HttpError(502, "OpenAI returned no image");
     }
 
     res.json({ url, provider: providerUsed });
@@ -88,9 +107,17 @@ router.post("/images", async (req, res, next) => {
   }
 });
 
-// ─── GET /api/ai-status ─────────────────────────────────────────────────────
 router.get("/ai-status", (_req, res) => {
   res.json(getProviderStatus());
+});
+
+router.post("/speed-card/round", async (_req, res, next) => {
+  try {
+    const round = await generateSpeedCardRound();
+    res.json(round);
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;

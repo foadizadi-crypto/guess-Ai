@@ -1,46 +1,18 @@
 import { logger } from "../../lib/logger";
-import { classifyError, type ProviderError } from "./errors";
+import { classifyError, HttpError, type ProviderError } from "./errors";
 import { getHealthSnapshot, isOnCooldown, recordFailure, recordSuccess } from "./health";
 import { buildQuestionUserPrompt, extractJson, QUESTION_SYSTEM_PROMPT, QuestionsResponseSchema } from "./prompts";
-import { createAnthropicTextProvider } from "./providers/text/anthropic";
-import { createGeminiTextProvider } from "./providers/text/gemini";
-import { createGroqTextProvider } from "./providers/text/groq";
 import { createOpenAiTextProvider } from "./providers/text/openai";
-import { createZhipuTextProvider } from "./providers/text/zhipu";
 import { createOpenAiImageProvider } from "./providers/image/openai-image";
-import { createStableDiffusionImageProvider } from "./providers/image/stable-diffusion";
 import type { ImageProvider, QuestionGenParams, RawQuestion, TextProvider } from "./types";
 
-// ── AI_MODE ──────────────────────────────────────────────────────────────
-// "auto" (default): try providers in priority order below, falling back
-// automatically when one is unavailable, out of quota, or errors out.
-// Set AI_MODE to a specific provider id (e.g. "gemini", "groq", "openai",
-// "anthropic", "zhipu", "openai-image", "stable-diffusion") to pin
-// generation to that single provider — useful for testing one provider in
-// isolation. It still falls back to the built-in mock generator if the
-// pinned provider fails, since the game must never hard-fail.
-const AI_MODE = process.env["AI_MODE"]?.trim().toLowerCase() || "auto";
+const AI_MODE = process.env["AI_MODE"]?.trim().toLowerCase() || "openai";
 
-// Priority order: prefer free/fast providers first, OpenAI as the proven
-// reliable middle option, Claude last (highest quality, priciest). Zhipu
-// (GLM) is appended as an extra low-cost option beyond the requested chain.
-const TEXT_PROVIDERS: TextProvider[] = [
-  createGeminiTextProvider(),
-  createGroqTextProvider(),
-  createOpenAiTextProvider(),
-  createAnthropicTextProvider(),
-  createZhipuTextProvider(),
-];
-
-// Highest quality first; Stable Diffusion (Hugging Face) is the free/open
-// fallback when OpenAI Image is unavailable or out of quota.
-const IMAGE_PROVIDERS: ImageProvider[] = [
-  createOpenAiImageProvider(),
-  createStableDiffusionImageProvider(),
-];
+const TEXT_PROVIDERS: TextProvider[] = [createOpenAiTextProvider()];
+const IMAGE_PROVIDERS: ImageProvider[] = [createOpenAiImageProvider()];
 
 function orderedProviders<T extends { id: string }>(providers: T[]): T[] {
-  if (AI_MODE === "auto") return providers;
+  if (AI_MODE === "auto" || AI_MODE === "openai") return providers;
   const forced = providers.find((p) => p.id === AI_MODE);
   return forced ? [forced] : providers;
 }
@@ -54,18 +26,11 @@ export interface QuestionGenResult {
   providerUsed: string | null;
 }
 
-/**
- * Tries each configured text provider in priority order until one returns a
- * valid question set. Returns an empty result (providerUsed: null) if every
- * provider is unconfigured, on cooldown, or fails — callers are expected to
- * fall back to a local mock at that point so the game never hard-fails.
- */
 export async function generateQuestionsWithFallback(params: QuestionGenParams): Promise<QuestionGenResult> {
   const candidates = availableProviders(orderedProviders(TEXT_PROVIDERS));
 
   if (candidates.length === 0) {
-    logger.warn({ aiMode: AI_MODE }, "Question generation: no text providers configured — using mock fallback");
-    return { questions: [], providerUsed: null };
+    throw new HttpError(503, "OPENAI_API_KEY is not configured on the API server");
   }
 
   const user = buildQuestionUserPrompt(params);
@@ -100,16 +65,15 @@ export async function generateQuestionsWithFallback(params: QuestionGenParams): 
       recordFailure(provider.id, classified.kind, classified.message);
       logger.warn(
         { provider: provider.id, kind: classified.kind },
-        `Question generation: "${provider.label}" failed (${classified.kind}) — trying next provider`,
+        `Question generation: "${provider.label}" failed (${classified.kind})`,
       );
     }
   }
 
-  logger.error(
-    { lastError: lastError?.message },
-    "Question generation: all configured text providers failed — using mock fallback",
+  throw new HttpError(
+    502,
+    lastError?.message ?? "OpenAI question generation failed",
   );
-  return { questions: [], providerUsed: null };
 }
 
 export interface ImageGenResult {
@@ -117,18 +81,14 @@ export interface ImageGenResult {
   providerUsed: string | null;
 }
 
-/**
- * Tries each configured image provider in priority order. Returns
- * (url: null, providerUsed: null) if none succeed — callers fall back to a
- * picsum.photos placeholder so a question never ships without an image.
- */
 export async function generateImageWithFallback(prompt: string): Promise<ImageGenResult> {
   const candidates = availableProviders(orderedProviders(IMAGE_PROVIDERS));
 
   if (candidates.length === 0) {
-    logger.warn({ aiMode: AI_MODE }, "Image generation: no image providers configured — using mock fallback");
-    return { url: null, providerUsed: null };
+    throw new HttpError(503, "OPENAI_API_KEY is not configured on the API server");
   }
+
+  let lastMessage: string | null = null;
 
   for (const provider of candidates) {
     if (isOnCooldown(provider.id)) {
@@ -145,22 +105,22 @@ export async function generateImageWithFallback(prompt: string): Promise<ImageGe
       return { url, providerUsed: provider.id };
     } catch (err) {
       const classified = classifyError(provider.id, err);
+      lastMessage = classified.message;
       recordFailure(provider.id, classified.kind, classified.message);
       logger.warn(
         { provider: provider.id, kind: classified.kind },
-        `Image generation: "${provider.label}" failed (${classified.kind}) — trying next provider`,
+        `Image generation: "${provider.label}" failed (${classified.kind})`,
       );
     }
   }
 
-  logger.warn("Image generation: all configured image providers failed — using mock fallback");
-  return { url: null, providerUsed: null };
+  throw new HttpError(502, lastMessage ?? "OpenAI image generation failed");
 }
 
-/** Snapshot of provider configuration + cooldown state, used by GET /api/ai-status. */
 export function getProviderStatus() {
   return {
     aiMode: AI_MODE,
+    openaiConfigured: Boolean(process.env["OPENAI_API_KEY"]),
     text: TEXT_PROVIDERS.map((p) => ({
       id: p.id,
       label: p.label,
