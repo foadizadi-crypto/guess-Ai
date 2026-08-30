@@ -1,0 +1,29 @@
+diff --git a/lib/module/index.js b/lib/module/index.js
+index 8a453daeee6085f571537314c10acf1dbfe1db1f..2ae971460b2ace6c3c87b0b478c2c6ac14579153 100644
+--- a/lib/module/index.js
++++ b/lib/module/index.js
+@@ -1,8 +1,8 @@
+ "use strict";
+ 
+-export { GoogleSignin } from './signIn/GoogleSignin';
+-export { statusCodes } from './errors/errorCodes';
+-export { GoogleSigninButton } from './buttons/GoogleSigninButton';
++export { GoogleSignin } from './signIn/GoogleSignin.js';
++export { statusCodes } from './errors/errorCodes.js';
++export { GoogleSigninButton } from './buttons/GoogleSigninButton.js';
+ export * from "./types.js";
+ export * from "./functions.js";
+ //# sourceMappingURL=index.js.map
+diff --git a/lib/module/translateNativeRejection.js b/lib/module/translateNativeRejection.js
+index 08f9cd5efc84d283474dd3f771380988e404db36..9bae82540a8ca21cf93e639d3bb3827525c2b60c 100644
+--- a/lib/module/translateNativeRejection.js
++++ b/lib/module/translateNativeRejection.js
+@@ -2,7 +2,7 @@
+ 
+ import { isErrorWithCode } from "./functions.js";
+ import { cancelledResult } from "./constants.js";
+-import { SIGN_IN_CANCELLED_CODE } from './errors/errorCodes';
++import { SIGN_IN_CANCELLED_CODE } from './errors/errorCodes.js';
+ 
+ /**
+  * Since the introduction of a new JS api, the native rejections need to be processed in JS layer.
