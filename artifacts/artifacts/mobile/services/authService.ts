@@ -1,24 +1,20 @@
 /**
- * Google Sign-In — the only sign-in method. There is no anonymous/guest
- * fallback: every player resolves to exactly one canonical `playerId`,
- * the Firebase Auth UID produced by a Google credential.
+ * Player identity: Google Sign-In or Guest (Firebase Anonymous).
  *
- * Web: uses Firebase's built-in `signInWithPopup` (falls back to
- * `signInWithRedirect` when the popup is blocked, e.g. inside an iframe
- * preview) — this needs no extra client-id wiring beyond the Google
- * provider being enabled in the Firebase console.
+ * Player id is always the Firebase Auth UID. Guest play creates an anonymous
+ * UID. Connecting Google *links* that same UID — progress is not copied onto
+ * a different account. If that Google already owns another GUESSAi save,
+ * linking is rejected and the guest stays a guest.
  *
- * Native (iOS/Android): exchanges a Google ID token (obtained via
- * Play Services in services/googleAuthNative.ts) for a Firebase
- * credential with `signInWithCredential`. Android needs the EAS SHA-1
- * registered on the Android OAuth client.
- *
- * Call getPlayerId() anywhere to retrieve the current signed-in UID.
+ * Real-money purchases require a linked Google account.
  */
 
 import {
   GoogleAuthProvider,
+  linkWithCredential,
+  linkWithPopup,
   onAuthStateChanged,
+  signInAnonymously,
   signInWithCredential,
   signInWithPopup,
   signInWithRedirect,
@@ -32,6 +28,9 @@ import { auth } from './firebase';
 let _playerId: string | null = null;
 let _authReady: Promise<User | null> | null = null;
 const AUTH_READY_TIMEOUT_MS = 4_000;
+
+export const GOOGLE_SAVE_IN_USE_MESSAGE =
+  'This Google account already has a GUESSAi save. Choose a different Google account. You can keep playing as a guest.';
 
 /**
  * Resolves once Firebase has restored (or confirmed the absence of) a
@@ -67,10 +66,23 @@ export function getPlayerId(): string | null {
   return _playerId ?? auth.currentUser?.uid ?? null;
 }
 
-/** True only for a Google credential — anonymous/guest sessions are not enough. */
+/** True only for a Google credential. */
 export function isGoogleUser(user: User | null = auth.currentUser): user is User {
   if (!user) return false;
   return user.providerData.some((p) => p.providerId === 'google.com');
+}
+
+/** True for an anonymous guest session that has not linked Google. */
+export function isGuestUser(user: User | null = auth.currentUser): boolean {
+  if (!user) return false;
+  if (isGoogleUser(user)) return false;
+  return user.isAnonymous;
+}
+
+/** Google or guest — the two supported ways to hold a player id. */
+export function isSignedInPlayer(user: User | null = auth.currentUser): user is User {
+  if (!user) return false;
+  return isGoogleUser(user) || user.isAnonymous;
 }
 
 /**
@@ -102,10 +114,44 @@ export function onPlayerIdChange(cb: (uid: string | null) => void): () => void {
 export class GoogleSignInError extends Error {
   constructor(
     message: string,
-    public readonly code: 'popup_blocked' | 'cancelled' | 'native_not_configured' | 'unknown',
+    public readonly code:
+      | 'popup_blocked'
+      | 'cancelled'
+      | 'native_not_configured'
+      | 'already_in_use'
+      | 'guest_unavailable'
+      | 'unknown',
   ) {
     super(message);
     this.name = 'GoogleSignInError';
+  }
+}
+
+function firebaseErrorCode(err: unknown): string {
+  return (err as { code?: string })?.code ?? '';
+}
+
+function throwIfDuplicateGoogle(err: unknown): never {
+  const code = firebaseErrorCode(err);
+  if (
+    code === 'auth/credential-already-in-use' ||
+    code === 'auth/email-already-in-use' ||
+    code === 'auth/account-exists-with-different-credential'
+  ) {
+    throw new GoogleSignInError(GOOGLE_SAVE_IN_USE_MESSAGE, 'already_in_use');
+  }
+  throw err instanceof GoogleSignInError
+    ? err
+    : new GoogleSignInError('Could not connect Google. Please try again.', 'unknown');
+}
+
+async function signOutGooglePlayQuietly(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const { signOutGooglePlay } = await import('./googleAuthNative');
+    await signOutGooglePlay();
+  } catch {
+    // Best-effort so the next picker is not stuck on the rejected account.
   }
 }
 
@@ -121,7 +167,7 @@ async function signInWithGoogleWeb(): Promise<string> {
     _playerId = user.uid;
     return user.uid;
   } catch (err) {
-    const code = (err as { code?: string })?.code ?? '';
+    const code = firebaseErrorCode(err);
     if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
       throw new GoogleSignInError('Sign-in was cancelled.', 'cancelled');
     }
@@ -177,23 +223,127 @@ export async function signInWithGoogle(): Promise<string> {
   );
 }
 
-/** Drop leftover anonymous sessions so they cannot bypass Google Sign-In. */
-export async function signOutIfNotGoogle(): Promise<void> {
+/** Create a guest player id (Firebase Anonymous Auth). Same nickname path as Google. */
+export async function signInAsGuest(): Promise<string> {
+  try {
+    const { user } = await signInAnonymously(auth);
+    _playerId = user.uid;
+    return user.uid;
+  } catch (err) {
+    const code = firebaseErrorCode(err);
+    if (code === 'auth/operation-not-allowed' || code === 'auth/admin-restricted-operation') {
+      throw new GoogleSignInError(
+        'Guest play is not enabled yet. Use Google, or turn on Anonymous sign-in in Firebase Authentication.',
+        'guest_unavailable',
+      );
+    }
+    throw new GoogleSignInError('Could not start as a guest. Please try again.', 'unknown');
+  }
+}
+
+async function linkGoogleWeb(): Promise<string> {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new GoogleSignInError('Not signed in.', 'unknown');
+  }
+  const provider = new GoogleAuthProvider();
+  try {
+    const result = await linkWithPopup(user, provider);
+    _playerId = result.user.uid;
+    return result.user.uid;
+  } catch (err) {
+    const code = firebaseErrorCode(err);
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+      throw new GoogleSignInError('Sign-in was cancelled.', 'cancelled');
+    }
+    return throwIfDuplicateGoogle(err);
+  }
+}
+
+export async function linkGoogleWithIdToken(idToken: string): Promise<string> {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new GoogleSignInError('Not signed in.', 'unknown');
+  }
+  if (isGoogleUser(user)) return user.uid;
+  const credential = GoogleAuthProvider.credential(idToken);
+  try {
+    const result = await linkWithCredential(user, credential);
+    _playerId = result.user.uid;
+    return result.user.uid;
+  } catch (err) {
+    await signOutGooglePlayQuietly();
+    return throwIfDuplicateGoogle(err);
+  }
+}
+
+/**
+ * Attach Google to the *current* player id (guest stays the same UID).
+ * Rejects if that Google already has another GUESSAi save.
+ */
+export async function linkCurrentUserWithGoogle(): Promise<string> {
   const user = auth.currentUser ?? (await waitForAuthReady());
-  if (user && !isGoogleUser(user)) {
+  if (!user) {
+    throw new GoogleSignInError('Not signed in.', 'unknown');
+  }
+  if (isGoogleUser(user)) return user.uid;
+
+  try {
+    if (Platform.OS === 'web') {
+      return await linkGoogleWeb();
+    }
+    const { promptNativeGoogleIdToken, isNativeGoogleSignInConfigured } = await import(
+      './googleAuthNative'
+    );
+    if (!isNativeGoogleSignInConfigured()) {
+      throw new GoogleSignInError(
+        "This build's Google OAuth client hasn't been finished yet.",
+        'native_not_configured',
+      );
+    }
+    const idToken = await promptNativeGoogleIdToken();
+    return await linkGoogleWithIdToken(idToken);
+  } catch (err) {
+    if (err instanceof GoogleSignInError) throw err;
+    return throwIfDuplicateGoogle(err);
+  }
+}
+
+/**
+ * Login Google button: restore/create that Google's save when signed out.
+ * If already a guest, link instead so progress stays on this player id.
+ */
+export async function connectOrSignInWithGoogle(): Promise<string> {
+  const user = auth.currentUser ?? (await waitForAuthReady());
+  if (user && isGuestUser(user)) {
+    return linkCurrentUserWithGoogle();
+  }
+  if (Platform.OS === 'web') {
+    return signInWithGoogle();
+  }
+  const { promptNativeGoogleIdToken, isNativeGoogleSignInConfigured } = await import(
+    './googleAuthNative'
+  );
+  if (!isNativeGoogleSignInConfigured()) {
+    throw new GoogleSignInError(
+      "This build's Google OAuth client hasn't been finished yet.",
+      'native_not_configured',
+    );
+  }
+  const idToken = await promptNativeGoogleIdToken();
+  return signInWithGoogleIdToken(idToken);
+}
+
+/** Drop leftover sessions from unsupported Firebase providers. */
+export async function signOutIfUnsupportedAuth(): Promise<void> {
+  const user = auth.currentUser ?? (await waitForAuthReady());
+  if (user && !isSignedInPlayer(user)) {
     await signOut();
   }
 }
 
 export async function signOut(): Promise<void> {
-  if (Platform.OS !== 'web') {
-    try {
-      const { signOutGooglePlay } = await import('./googleAuthNative');
-      await signOutGooglePlay();
-    } catch {
-      // Firebase sign-out still proceeds.
-    }
-  }
+  await signOutGooglePlayQuietly();
   await firebaseSignOut(auth);
   _playerId = null;
 }

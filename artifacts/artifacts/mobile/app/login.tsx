@@ -26,16 +26,13 @@ import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
 import { ROUTES } from '@/navigation/routes';
-import { signInWithGoogle, signInWithGoogleIdToken, GoogleSignInError, getPlayerId } from '@/services/authService';
-import { promptNativeGoogleIdToken, isNativeGoogleSignInConfigured } from '@/services/googleAuthNative';
+import { signInAsGuest, connectOrSignInWithGoogle, GoogleSignInError, getPlayerId, GOOGLE_SAVE_IN_USE_MESSAGE, isGuestUser, isGoogleUser } from '@/services/authService';
 import { fetchRegisteredNickname } from '@/services/nicknameService';
 
 /**
- * Mandatory Google Sign-In — the only way into the game. There is no
- * "Play as Guest" path: every player must resolve to a Firebase Auth UID
- * before reaching the lobby, since that UID is the canonical playerId
- * every backend feature (nickname, leaderboard, sessions, push tokens…)
- * keys off of.
+ * Google or Guest sign-in. Guest gets a player id immediately (anonymous UID),
+ * then the same nickname registration as Google. Connecting Google later
+ * links that same player id.
  */
 export default function LoginScreen() {
   const router = useRouter();
@@ -43,6 +40,8 @@ export default function LoginScreen() {
   const setVerifiedNickname = useUserStore((s) => s.setVerifiedNickname);
 
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
+  const busy = googleLoading || guestLoading;
 
   const cardY = useSharedValue(60);
   const cardOpacity = useSharedValue(0);
@@ -71,31 +70,25 @@ export default function LoginScreen() {
   }, []);
 
   const finishSignIn = useCallback(async () => {
-    const existing = await fetchRegisteredNickname();
     const uid = getPlayerId();
-    if (existing && uid) setVerifiedNickname(uid, existing);
+    if (!uid) return;
+    const store = useUserStore.getState();
+    if (store.nicknameUid && store.nicknameUid !== uid) {
+      store.resetUser();
+    }
+    const existing = await fetchRegisteredNickname();
+    if (existing) setVerifiedNickname(uid, existing);
     hapticsService.notification(1);
     router.replace(ROUTES.LOBBY);
   }, [setVerifiedNickname, router]);
 
   const handleGoogle = useCallback(async () => {
+    if (busy) return;
     hapticsService.impact(0);
     setGoogleLoading(true);
 
     try {
-      if (Platform.OS === 'web') {
-        await signInWithGoogle();
-      } else {
-        if (!isNativeGoogleSignInConfigured()) {
-          Alert.alert(
-            'Google Sign-In Not Ready',
-            "This build's Google OAuth client hasn't been finished yet in Google Cloud Console.",
-          );
-          return;
-        }
-        const idToken = await promptNativeGoogleIdToken();
-        await signInWithGoogleIdToken(idToken);
-      }
+      await connectOrSignInWithGoogle();
       await finishSignIn();
     } catch (err) {
       if (err instanceof GoogleSignInError && err.code === 'popup_blocked') {
@@ -104,12 +97,45 @@ export default function LoginScreen() {
       if (err instanceof GoogleSignInError && err.code === 'cancelled') {
         return;
       }
+      if (err instanceof GoogleSignInError && err.code === 'already_in_use') {
+        Alert.alert('Google already in use', GOOGLE_SAVE_IN_USE_MESSAGE);
+        return;
+      }
+      if (err instanceof GoogleSignInError && err.code === 'native_not_configured') {
+        Alert.alert(
+          'Google Sign-In Not Ready',
+          "This build's Google OAuth client hasn't been finished yet in Google Cloud Console.",
+        );
+        return;
+      }
       console.warn('[Login] Google sign-in failed:', err);
       Alert.alert('Sign-In Failed', 'Could not sign in with Google. Please try again.');
     } finally {
       setGoogleLoading(false);
     }
-  }, [finishSignIn]);
+  }, [busy, finishSignIn]);
+
+  const handleGuest = useCallback(async () => {
+    if (busy) return;
+    hapticsService.impact(0);
+    if (isGoogleUser() || isGuestUser()) {
+      router.replace(ROUTES.LOBBY);
+      return;
+    }
+    setGuestLoading(true);
+    try {
+      await signInAsGuest();
+      await finishSignIn();
+    } catch (err) {
+      console.warn('[Login] Guest sign-in failed:', err);
+      const message = err instanceof GoogleSignInError
+        ? err.message
+        : 'Could not start as a guest. Please try again.';
+      Alert.alert('Guest play unavailable', message);
+    } finally {
+      setGuestLoading(false);
+    }
+  }, [busy, finishSignIn, router]);
 
   const topPad = Platform.OS === 'web' ? 60 : insets.top;
   const botPad = Platform.OS === 'web' ? 40 : insets.bottom;
@@ -132,14 +158,14 @@ export default function LoginScreen() {
           <GlassCard intensity={22} padding={28} style={styles.card}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>Welcome!</Text>
-              <Text style={styles.cardSub}>Sign in to start playing</Text>
+              <Text style={styles.cardSub}>Choose how to play</Text>
             </View>
 
             <TouchableOpacity
-              style={[styles.googleBtn, googleLoading && styles.googleBtnLoading]}
+              style={[styles.googleBtn, busy && styles.googleBtnLoading]}
               onPress={handleGoogle}
               activeOpacity={0.8}
-              disabled={googleLoading}
+              disabled={busy}
               testID="google-button"
             >
               <View style={styles.googleIcon}>
@@ -153,6 +179,29 @@ export default function LoginScreen() {
                 {googleLoading ? 'Signing in…' : 'Continue with Google'}
               </Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.guestBtn, busy && styles.googleBtnLoading]}
+              onPress={handleGuest}
+              activeOpacity={0.8}
+              disabled={busy}
+              testID="guest-button"
+            >
+              <View style={styles.googleIcon}>
+                <Ionicons
+                  name={guestLoading ? 'hourglass-outline' : 'person-outline'}
+                  size={20}
+                  color={GameColors.accentGold}
+                />
+              </View>
+              <Text style={styles.googleText}>
+                {guestLoading ? 'Starting…' : 'Continue as Guest'}
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={styles.guestNote}>
+              Guest progress stays on this player id. If you uninstall without connecting Google, that save is gone. Purchases require Google.
+            </Text>
 
             <Text style={styles.finePrint}>
               By continuing you agree to our Terms of Service and Privacy Policy.
@@ -237,6 +286,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
     gap: 12,
   },
+  guestBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: GameColors.accentGold,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    gap: 12,
+    marginTop: 12,
+  },
   googleBtnLoading: { opacity: 0.65 },
   googleIcon: {
     width: 32,
@@ -252,6 +313,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontWeight: '600',
     flex: 1,
+  },
+  guestNote: {
+    ...Typography.small,
+    color: 'rgba(176,176,176,0.75)',
+    textAlign: 'center',
+    lineHeight: 16,
+    marginTop: 14,
+    fontSize: 11,
   },
   finePrint: {
     ...Typography.small,

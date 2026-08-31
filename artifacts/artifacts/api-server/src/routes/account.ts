@@ -1,17 +1,24 @@
 /**
  * DELETE /api/account
  *
- * Permanently removes the authenticated player's application data. This uses
- * the verified Firebase UID from requireAuth and never accepts an account ID
- * from the request body or query string. The Firebase/Google Auth user itself
- * is intentionally untouched so the same Google account can sign in again.
+ * Wipes gameplay progress for the authenticated player id (sessions,
+ * nickname reservation, players/{uid} progress tree). The player then
+ * signs in again as a new empty player.
+ *
+ * Dollar IAP records in `purchase_ledger` are NEVER deleted — they are
+ * financial history required for store/tax/legal accountability.
+ * Legacy `players/{uid}/purchases` docs are copied into the ledger first,
+ * then the progress tree is removed.
+ *
+ * The Firebase Auth user is left in place so the same Google account still
+ * maps to this player id (empty progress, retained purchases).
  */
 
 import { Router, type Request, type Response } from "express";
+import { FieldValue, type DocumentReference } from "firebase-admin/firestore";
 import { getFirestore } from "../lib/firebaseAdmin";
 import { requireAuth } from "../lib/verifyAuth";
 import { logger } from "../lib/logger";
-import type { DocumentReference } from "firebase-admin/firestore";
 
 const router = Router();
 
@@ -39,7 +46,6 @@ async function deleteMatchingDocuments(
   for (const document of snapshot.docs) {
     batch.delete(document.ref);
     count += 1;
-    // Keep batches below Firestore's 500-operation limit.
     if (count === 400) {
       await batch.commit();
       batch = db.batch();
@@ -49,24 +55,40 @@ async function deleteMatchingDocuments(
   if (count > 0) await batch.commit();
 }
 
+/** Copy legacy player purchase docs into purchase_ledger. Never overwrite an existing ledger row. */
+async function retainPurchaseRecords(uid: string): Promise<void> {
+  const db = getFirestore();
+  const legacy = await db.collection("players").doc(uid).collection("purchases").get();
+  for (const document of legacy.docs) {
+    const ledgerRef = db.collection("purchase_ledger").doc(document.id);
+    const existing = await ledgerRef.get();
+    if (existing.exists) continue;
+    const data = document.data();
+    await ledgerRef.set({
+      ...data,
+      transactionId: data.transactionId ?? document.id,
+      playerId: uid,
+      retainedAt: FieldValue.serverTimestamp(),
+      retainedReason: "account_deletion",
+    });
+  }
+}
+
 router.delete("/account", requireAuth, async (req: Request, res: Response) => {
   const uid = req.uid!;
   const db = getFirestore();
 
   try {
-    // Delete every application-owned game session, regardless of which
-    // device created it. Shared configuration and other players are untouched.
+    await retainPurchaseRecords(uid);
+
     await deleteMatchingDocuments("game_sessions", "playerId", uid);
 
-    // Delete the player profile and every owned subcollection (purchases,
-    // spin history, private push token, and any future player subcollections).
+    // Progress only. purchase_ledger is intentionally not queried or deleted.
     await deletePlayerTree(db.collection("players").doc(uid));
 
-    // Nickname reservations are server-owned and may outlive a profile if an
-    // earlier operation was interrupted. Delete only reservations owned by uid.
     await deleteMatchingDocuments("nicknames", "playerId", uid);
 
-    res.json({ ok: true });
+    res.json({ ok: true, purchasesRetained: true });
   } catch (err) {
     logger.error({ err, uid }, "Application account deletion failed");
     res.status(500).json({

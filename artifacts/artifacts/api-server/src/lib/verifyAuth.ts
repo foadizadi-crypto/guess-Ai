@@ -39,13 +39,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
   try {
     const decoded = await auth().verifyIdToken(match[1]!);
-    // Google Sign-In is the only supported sign-in method — reject tokens
-    // issued by any other Firebase Auth provider (e.g. if one is ever
-    // enabled in the console) so identity always maps to a real Google
-    // account, matching the mandatory-Google-Sign-In product requirement.
+    // Google and guest (anonymous) are the only supported sign-in methods.
+    // Guest tokens can register a nickname and save progress. Real-money
+    // purchase records are written only by Google-linked clients and are
+    // never deleted with the game account.
     const provider = (decoded.firebase as { sign_in_provider?: string } | undefined)?.sign_in_provider;
-    if (provider !== "google.com") {
-      res.status(403).json({ error: "provider_not_allowed", message: "Only Google Sign-In is supported." });
+    if (provider !== "google.com" && provider !== "anonymous") {
+      res.status(403).json({ error: "provider_not_allowed", message: "Only Google Sign-In or guest play is supported." });
       return;
     }
     req.uid = decoded.uid;

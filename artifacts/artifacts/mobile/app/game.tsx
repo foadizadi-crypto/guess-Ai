@@ -136,9 +136,12 @@ export default function GameScreen() {
     if (endedRef.current) return;
     endedRef.current = true;
     setReviveOpen(false);
+    setPaused(false);
     setIsTimerRunning(false);
     endSession();
-    router.replace(ROUTES.RESULT);
+    setTimeout(() => {
+      router.replace(ROUTES.RESULT);
+    }, 50);
   }, [endSession, router, setIsTimerRunning]);
 
   const offerLoss = useCallback((reason: 'timer' | 'snap' | 'strikes') => {
@@ -222,8 +225,12 @@ export default function GameScreen() {
   }, []);
 
   const exitToLobby = useCallback(() => {
-    resetGame();
-    router.replace(ROUTES.LOBBY);
+    setPaused(false);
+    setReviveOpen(false);
+    setTimeout(() => {
+      resetGame();
+      router.replace(ROUTES.LOBBY);
+    }, 50);
   }, [resetGame, router]);
 
   // Load fresh questions from the online AI backend only.

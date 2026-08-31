@@ -76,9 +76,9 @@ export default function ResultScreen() {
   const [doubleLoading, setDoubleLoading] = useState(false);
   const [achievementQueue, setAchievementQueue] = useState<AchievementDef[]>([]);
 
-  const trophyScale = useSharedValue(0);
-  const contentOpacity = useSharedValue(0);
-  const contentY = useSharedValue(28);
+  const trophyScale = useSharedValue(1);
+  const contentOpacity = useSharedValue(1);
+  const contentY = useSharedValue(0);
 
   const isPerfect   = correctAnswers === totalQuestions;
   const isVictory   = !lastGameWasTimedOut && isPerfect;
@@ -110,6 +110,10 @@ export default function ResultScreen() {
 
   // ── Record result + entrance animation ────────────────────────────────────
   useEffect(() => {
+    trophyScale.value = 1;
+    contentOpacity.value = 1;
+    contentY.value = 0;
+
     const sessionId = gameSession?.id;
     if (!sessionId || grantedResultSessions.has(sessionId)) return;
     grantedResultSessions.add(sessionId);
@@ -203,7 +207,7 @@ export default function ResultScreen() {
     if (isVictory) playEffect('level_up');
     else playEffect('coin');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [gameSession?.id]);
 
   // ── Double Rewards handler (spec §7.2) ────────────────────────────────────
   // Doubles both coins AND XP earned this session.

@@ -1,37 +1,72 @@
 /**
- * useFirestoreSync — mirrors the local Zustand economy state to Firestore
- * under `players/{uid}`, where `uid` is the canonical playerId (the
- * Firebase Auth UID from Google Sign-In). Backend sync is only meaningful
- * once a player is signed in, so every effect here is a no-op until
- * `getPlayerId()` resolves to a real UID.
- *
- * Add <FirestoreSyncProvider /> near the root of the app (see _layout.tsx).
+ * useFirestoreSync — mirrors gameplay progress to Firestore under
+ * `players/{uid}` (the progress branch). Dollar purchases are written
+ * separately to `purchase_ledger` and are never synced from this hook.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { useUserStore } from '@/store/userStore';
 import { getPlayerId, onPlayerIdChange } from '@/services/authService';
-import { loadPlayerProfile } from '@/services/firestoreService';
+import { loadPlayerProfile, savePlayerProfile } from '@/services/firestoreService';
+
+function progressPayloadFromStore() {
+  const s = useUserStore.getState();
+  return {
+    coins: s.coins,
+    gems: s.gems,
+    xp: s.xp,
+    level: s.level,
+    isPremium: s.isPremium,
+    selectedAvatarId: s.selectedAvatarId,
+    totalGamesPlayed: s.statistics.totalGamesPlayed,
+    totalWins: s.statistics.totalWins,
+    statistics: s.statistics,
+    achievements: s.achievements.map(({ id, unlocked, unlockedAt }) => ({
+      id,
+      unlocked: unlocked ?? false,
+      unlockedAt: unlockedAt ?? null,
+    })),
+    avatars: s.avatars.map(({ id, unlocked }) => ({ id, unlocked })),
+    powerUps: s.powerUps,
+    consumables: s.consumables,
+    multiplierSessionsLeft: s.multiplierSessionsLeft,
+    avatarFragments: s.avatarFragments,
+    bestScore: s.bestScore,
+    dailyReward: s.dailyReward,
+    gemCosmetics: s.gemCosmetics,
+    ownedCosmetics: s.ownedCosmetics,
+    equippedCosmetics: s.equippedCosmetics as Record<string, string>,
+    coinGemExchanges: s.coinGemExchanges,
+    lastSpinDate: s.lastSpinDate,
+    extraSpinsToday: s.extraSpinsToday,
+    lastExtraSpinDate: s.lastExtraSpinDate,
+    energy: s.energy,
+    staminaSourceLevel: s.staminaSourceLevel,
+    lastEnergyRefillTime: s.lastEnergyRefillTime,
+    ownedWings: s.ownedWings,
+    equippedWing: s.equippedWing,
+    dailyXPEarned: s.dailyXPEarned,
+    dailyXPDate: s.dailyXPDate,
+    unclaimedLevelRewards: s.unclaimedLevelRewards,
+    missions: s.missions,
+    missionsDate: s.missionsDate,
+    accountCreatedAt: s.accountCreatedAt,
+  };
+}
 
 export function useFirestoreSync(): void {
-  // Subscribe to the economy fields we want to mirror
-  const { username, coins, gems, xp, level, isPremium, selectedAvatarId, statistics } =
-    useUserStore();
-
-  // ── Track sign-in / sign-out so a fresh sign-in immediately syncs ───────
   const uidRef = useRef<string | null>(getPlayerId());
   const [uid, setUid] = useState<string | null>(getPlayerId());
   const hydrateFromBackend = useUserStore((s) => s.hydrateFromBackend);
+
   useEffect(() => {
-    const unsub = onPlayerIdChange((uid) => {
-      uidRef.current = uid;
-      setUid(uid);
+    const unsub = onPlayerIdChange((next) => {
+      uidRef.current = next;
+      setUid(next);
     });
     return unsub;
   }, []);
 
-  // Load the one existing players/{uid} record after auth restoration/sign-in.
-  // This never creates a second record and is scoped to the active UID.
   useEffect(() => {
     if (!uid) return;
     let active = true;
@@ -41,38 +76,26 @@ export function useFirestoreSync(): void {
     return () => { active = false; };
   }, [uid, hydrateFromBackend]);
 
-  // ── Sync on economy state change ─────────────────────────────────────────
-  // We debounce with a ref so rapid consecutive changes don't flood Firestore.
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Don't sync until the player is signed in and has a registered nickname.
-    if (!username) return;
-    const uid = getPlayerId();
-    if (!uid) return;
+    const schedule = () => {
+      const state = useUserStore.getState();
+      if (!state.username) return;
+      const playerId = getPlayerId();
+      if (!playerId) return;
 
-    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-    syncTimerRef.current = setTimeout(async () => {
-      const { savePlayerProfile } = await import('@/services/firestoreService');
-      // Note: `username` is deliberately NOT included here — it's an
-      // identity field the server alone controls via nickname registration,
-      // and Firestore rules reject any client write that touches it.
-      await savePlayerProfile(uid, {
-        coins,
-        gems,
-        xp,
-        level,
-        isPremium,
-        selectedAvatarId,
-        totalGamesPlayed:    statistics.totalGamesPlayed,
-        totalWins:           statistics.totalWins,
-      });
-    }, 2000); // 2-second debounce
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = setTimeout(() => {
+        void savePlayerProfile(playerId, progressPayloadFromStore());
+      }, 2000);
+    };
 
+    const unsub = useUserStore.subscribe(schedule);
+    schedule();
     return () => {
+      unsub();
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [username, coins, gems, xp, level, isPremium, selectedAvatarId,
-      statistics.totalGamesPlayed, statistics.totalWins]);
+  }, [uid]);
 }

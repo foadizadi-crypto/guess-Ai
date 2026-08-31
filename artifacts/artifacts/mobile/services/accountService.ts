@@ -7,7 +7,7 @@ export type DeleteAccountResult =
   | { ok: true }
   | { ok: false; reason: 'unauthenticated' | 'network' | 'server' };
 
-/** Deletes game-owned data only; Firebase/Google authentication remains intact. */
+/** Deletes gameplay progress only. Dollar purchase ledger records are retained. */
 export async function deleteApplicationAccount(): Promise<DeleteAccountResult> {
   const token = await getIdToken();
   if (!token) return { ok: false, reason: 'unauthenticated' };

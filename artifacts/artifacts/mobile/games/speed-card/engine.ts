@@ -19,17 +19,14 @@ export function revealDurationMs(difficulty: Difficulty): number {
 export interface CardRect {
   x: number;
   y: number;
+  width: number;
+  height: number;
 }
 
-function overlaps(a: CardRect, b: CardRect, width: number, height: number, gap: number): boolean {
-  return !(
-    a.x + width + gap < b.x
-    || b.x + width + gap < a.x
-    || a.y + height + gap < b.y
-    || b.y + height + gap < a.y
-  );
-}
-
+/**
+ * Place cards in a centered 3+2 grid. Positions never overlap.
+ * If the board is too small, every card is scaled down by the same factor.
+ */
 export function layoutCardPositions(
   count: number,
   boardWidth: number,
@@ -37,24 +34,36 @@ export function layoutCardPositions(
   cardWidth: number,
   cardHeight: number,
 ): CardRect[] {
-  const pad = 10;
-  const gap = 8;
-  const maxX = Math.max(pad, boardWidth - cardWidth - pad);
-  const maxY = Math.max(pad, boardHeight - cardHeight - pad);
-  const placed: CardRect[] = [];
+  const pad = 12;
+  const gap = 12;
+  const innerW = Math.max(1, boardWidth - pad * 2);
+  const innerH = Math.max(1, boardHeight - pad * 2);
+  const rowPattern = count === 5 ? [3, 2] : [count];
+  const rows = rowPattern.length;
+  const maxCols = Math.max(...rowPattern);
+  const scale = Math.min(
+    1,
+    innerW / (maxCols * cardWidth + Math.max(0, maxCols - 1) * gap),
+    innerH / (rows * cardHeight + Math.max(0, rows - 1) * gap),
+  );
+  const width = Math.max(36, Math.floor(cardWidth * scale));
+  const height = Math.max(48, Math.floor(cardHeight * scale));
 
-  for (let i = 0; i < count; i += 1) {
-    let next: CardRect = { x: pad, y: pad };
-    for (let attempt = 0; attempt < 60; attempt += 1) {
-      next = {
-        x: pad + Math.random() * Math.max(0, maxX - pad),
-        y: pad + Math.random() * Math.max(0, maxY - pad),
-      };
-      if (!placed.some((rect) => overlaps(rect, next, cardWidth, cardHeight, gap))) {
-        break;
-      }
+  const totalH = rows * height + Math.max(0, rows - 1) * gap;
+  let y = pad + (innerH - totalH) / 2;
+  const placed: CardRect[] = [];
+  let remaining = count;
+
+  for (const cols of rowPattern) {
+    const n = Math.min(cols, remaining);
+    const rowW = n * width + Math.max(0, n - 1) * gap;
+    let x = pad + (innerW - rowW) / 2;
+    for (let i = 0; i < n; i += 1) {
+      placed.push({ x, y, width, height });
+      x += width + gap;
     }
-    placed.push(next);
+    y += height + gap;
+    remaining -= n;
   }
 
   return placed;

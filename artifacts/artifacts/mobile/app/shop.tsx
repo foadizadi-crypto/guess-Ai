@@ -42,7 +42,13 @@ import { useUserStore } from "@/store/userStore";
 import { useAdStore } from "@/store/adStore";
 import { iapService, IAP_SKUS } from "@/services/IAPService";
 import { savePurchaseHistory } from "@/services/firestoreService";
-import { getPlayerId } from "@/services/authService";
+import {
+  getPlayerId,
+  isGoogleUser,
+  linkCurrentUserWithGoogle,
+  GoogleSignInError,
+  GOOGLE_SAVE_IN_USE_MESSAGE,
+} from "@/services/authService";
 import { useAudio } from "@/hooks/useAudio";
 import {
   CONSUMABLE_SHOP_ITEMS,
@@ -206,6 +212,33 @@ export default function ShopScreen() {
     Alert.alert(title, body);
   }, []);
 
+  const connectGoogleForPurchase = useCallback(async () => {
+    try {
+      await linkCurrentUserWithGoogle();
+      Alert.alert('Google connected', 'You can buy with this Google account now.');
+    } catch (err) {
+      if (err instanceof GoogleSignInError && err.code === 'cancelled') return;
+      if (err instanceof GoogleSignInError && err.code === 'already_in_use') {
+        Alert.alert('Google already in use', GOOGLE_SAVE_IN_USE_MESSAGE);
+        return;
+      }
+      Alert.alert('Could not connect Google', err instanceof Error ? err.message : 'Please try again.');
+    }
+  }, []);
+
+  const ensureGoogleForIap = useCallback((): boolean => {
+    if (isGoogleUser()) return true;
+    Alert.alert(
+      'Connect Google to purchase',
+      'Real-money purchases need a Google account. You can keep playing as a guest without buying.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Connect Google', onPress: () => { void connectGoogleForPurchase(); } },
+      ],
+    );
+    return false;
+  }, [connectGoogleForPurchase]);
+
   const goShopPage = useCallback(
     (next: ShopPage) => {
       hapticsService.impact(0);
@@ -319,6 +352,7 @@ export default function ShopScreen() {
   const handleIAPGem = useCallback(
     async (sku: string, price: string, gemAmount: number) => {
       if (loading) return;
+      if (!ensureGoogleForIap()) return;
       setLoading(sku);
       hapticsService.impact(1);
       playClickSound();
@@ -352,11 +386,12 @@ export default function ShopScreen() {
         setLoading(null);
       }
     },
-    [loading, addGems, ok],
+    [loading, addGems, ok, ensureGoogleForIap],
   );
 
   const purchaseStarterPack = useCallback(async () => {
     if (loading) return;
+    if (!ensureGoogleForIap()) return;
     setLoading(IAP_SKUS.STARTER_PACK);
     hapticsService.impact(1);
     playClickSound();
@@ -383,7 +418,7 @@ export default function ShopScreen() {
     } finally {
       setLoading(null);
     }
-  }, [loading, grantStarterPack, ok, playClickSound]);
+  }, [loading, grantStarterPack, ok, playClickSound, ensureGoogleForIap]);
 
   const handleOfferPress = useCallback(
     (id: ShopHitboxId) => {
@@ -753,6 +788,7 @@ export default function ShopScreen() {
               disabled={!!loading || adFreeActive}
               onPress={async () => {
                 if (adFreeActive || loading) return;
+                if (!ensureGoogleForIap()) return;
                 setLoading(IAP_SKUS.ADFREE_7DAY);
                 try {
                   const { success, transactionId } = await iapService.purchase(
@@ -799,6 +835,7 @@ export default function ShopScreen() {
               disabled={!!loading || adFreeActive}
               onPress={async () => {
                 if (adFreeActive || loading) return;
+                if (!ensureGoogleForIap()) return;
                 setLoading(IAP_SKUS.ADFREE_LIFETIME);
                 try {
                   const { success, transactionId } = await iapService.purchase(
@@ -843,6 +880,7 @@ export default function ShopScreen() {
               disabled={!!loading}
               onPress={async () => {
                 if (loading) return;
+                if (!ensureGoogleForIap()) return;
                 setLoading("restore");
                 try {
                   const restored = await iapService.restoreAdsRemoved();

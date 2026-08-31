@@ -14,28 +14,59 @@ import {
   serverTimestamp,
   collection,
 } from 'firebase/firestore';
+import { Platform } from 'react-native';
 import { db } from './firebase';
-import type { Achievement } from '@/types';
+import type { Achievement, DailyReward, PowerUpInventory, UserStatistics, ActiveMission } from '@/types';
 import { getApiUrl } from './apiConfig';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface FirestorePlayer {
+/** Gameplay progress stored on players/{uid}. Dollar IAP is NOT stored here. */
+export interface PlayerProgressSnapshot {
+  coins: number;
+  gems: number;
+  xp: number;
+  level: number;
+  isPremium: boolean;
+  selectedAvatarId: string;
+  totalGamesPlayed: number;
+  totalWins: number;
+  statistics?: UserStatistics;
+  achievements?: Array<{ id: string; unlocked?: boolean; unlockedAt?: string | null }>;
+  avatars?: Array<{ id: string; unlocked: boolean }>;
+  powerUps?: PowerUpInventory;
+  consumables?: Record<string, number>;
+  multiplierSessionsLeft?: number;
+  avatarFragments?: number;
+  bestScore?: number;
+  dailyReward?: DailyReward;
+  gemCosmetics?: Record<string, { owned: boolean; equipped: boolean }>;
+  ownedCosmetics?: Record<string, boolean>;
+  equippedCosmetics?: Record<string, string>;
+  coinGemExchanges?: Record<string, number>;
+  lastSpinDate?: string | null;
+  extraSpinsToday?: number;
+  lastExtraSpinDate?: string | null;
+  energy?: number;
+  staminaSourceLevel?: number;
+  lastEnergyRefillTime?: number | null;
+  ownedWings?: string[];
+  equippedWing?: string | null;
+  dailyXPEarned?: number;
+  dailyXPDate?: string | null;
+  unclaimedLevelRewards?: number[];
+  missions?: ActiveMission[];
+  missionsDate?: string | null;
+  accountCreatedAt?: string | null;
+}
+
+export interface FirestorePlayer extends PlayerProgressSnapshot {
   // `username` is an identity field set only by the server during nickname
   // registration (see api-server/src/routes/nickname.ts) — Firestore rules
   // reject any client write that touches it, so the client-side sync payload
   // (see hooks/useFirestoreSync.ts) never includes it.
-  username?:       string;
-  coins:           number;
-  gems:            number;
-  xp:              number;
-  level:           number;
-  isPremium:       boolean;
-  selectedAvatarId: string;
-  totalGamesPlayed: number;
-  totalWins:       number;
-  achievements?:   Array<{ id: string; unlocked?: boolean; unlockedAt?: string | null }>;
-  updatedAt:       unknown; // serverTimestamp
+  username?: string;
+  updatedAt: unknown; // serverTimestamp
 }
 
 export interface FirestoreGameSession {
@@ -60,14 +91,18 @@ export interface FirestoreGameSession {
  * Write (or overwrite) the player's profile snapshot to Firestore.
  * Safe to call after any significant state change.
  */
+function stripUndefined<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 export async function savePlayerProfile(
   uid: string,
-  data: Omit<FirestorePlayer, 'updatedAt'>,
+  data: Omit<FirestorePlayer, 'updatedAt' | 'username'>,
 ): Promise<void> {
   try {
     await setDoc(
       doc(db, 'players', uid),
-      { ...data, updatedAt: serverTimestamp() },
+      { ...stripUndefined(data), updatedAt: serverTimestamp() },
       { merge: true },
     );
   } catch (err) {
@@ -128,8 +163,8 @@ export interface PurchaseRecord {
 }
 
 /**
- * Save a completed purchase to Firestore.
- * Path: `players/{uid}/purchases/{transactionId}`
+ * Save a completed dollar purchase to the financial ledger.
+ * Path: `purchase_ledger/{transactionId}` — never deleted on account deletion.
  * Fire-and-forget — never throws to the UI.
  */
 export async function savePurchaseHistory(
@@ -138,8 +173,13 @@ export async function savePurchaseHistory(
 ): Promise<void> {
   try {
     await setDoc(
-      doc(collection(db, 'players', uid, 'purchases'), record.transactionId),
-      record,
+      doc(db, 'purchase_ledger', record.transactionId),
+      {
+        ...record,
+        playerId: uid,
+        platform: Platform.OS,
+        createdAt: serverTimestamp(),
+      },
       { merge: false },
     );
   } catch (err) {
@@ -154,10 +194,12 @@ export async function savePurchaseHistory(
  */
 export async function hasPurchase(uid: string, transactionId: string): Promise<boolean> {
   try {
-    const snap = await getDoc(
+    const ledger = await getDoc(doc(db, 'purchase_ledger', transactionId));
+    if (ledger.exists()) return true;
+    const legacy = await getDoc(
       doc(collection(db, 'players', uid, 'purchases'), transactionId),
     );
-    return snap.exists();
+    return legacy.exists();
   } catch (err) {
     console.warn('[Firestore] hasPurchase failed:', err);
     return false;

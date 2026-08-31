@@ -17,7 +17,14 @@ import { iapService } from '@/services/IAPService';
 import { useRTL } from '@/hooks/useRTL';
 import { auth } from '@/services/firebase';
 import { deleteApplicationAccount } from '@/services/accountService';
-import { signOut } from '@/services/authService';
+import {
+  signOut,
+  isGuestUser,
+  isGoogleUser,
+  linkCurrentUserWithGoogle,
+  GoogleSignInError,
+  GOOGLE_SAVE_IN_USE_MESSAGE,
+} from '@/services/authService';
 import { useGameStore } from '@/store/gameStore';
 import { ROUTES } from '@/navigation/routes';
 import { router } from 'expo-router';
@@ -33,10 +40,13 @@ export default function SettingsScreen() {
   const { removeAds } = useAdStore();
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [googleEmail, setGoogleEmail] = useState<string | null>(auth.currentUser?.email ?? null);
+  const [isGuest, setIsGuest] = useState(isGuestUser());
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [linkLoading, setLinkLoading] = useState(false);
 
   useEffect(() => onAuthStateChanged(auth, (user) => {
     setGoogleEmail(user?.email ?? null);
+    setIsGuest(isGuestUser(user));
   }), []);
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
@@ -86,11 +96,30 @@ export default function SettingsScreen() {
     void openConfiguredLink('Contact Support', `mailto:${appLinks.supportEmail}`);
   };
 
+  const handleConnectGoogle = async () => {
+    if (linkLoading || isGoogleUser()) return;
+    setLinkLoading(true);
+    try {
+      await linkCurrentUserWithGoogle();
+      hapticsService.notification(1);
+      Alert.alert('Google connected', 'This save is now linked to Google. You can make purchases.');
+    } catch (err) {
+      if (err instanceof GoogleSignInError && err.code === 'cancelled') return;
+      if (err instanceof GoogleSignInError && err.code === 'already_in_use') {
+        Alert.alert('Google already in use', GOOGLE_SAVE_IN_USE_MESSAGE);
+        return;
+      }
+      Alert.alert('Could not connect Google', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
   const handleDeleteAccount = () => {
     if (deleteLoading) return;
     Alert.alert(
-      'Are you sure?',
-      'This permanently deletes your GUESSAi profile, progress, economy, inventory, achievements, and game history. Your Google account will not be deleted.',
+      'Delete all progress?',
+      'This permanently deletes your nickname, level, coins, items, and game history. You will start as a new player with no progress.\n\nReal-money purchase records are kept as financial history and are never deleted.\n\nThis cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -107,12 +136,16 @@ export default function SettingsScreen() {
             try {
               await clearLocalPlayerData();
               await signOut();
-              Alert.alert('Account deleted', 'Your GUESSAi game data has been deleted.', [
-                { text: 'OK', onPress: () => router.replace(ROUTES.LOGIN) },
-              ]);
+              Alert.alert(
+                'Account deleted',
+                'Your progress was deleted. You are a new player. Purchase records were kept.',
+                [
+                  { text: 'OK', onPress: () => router.replace(ROUTES.LOGIN) },
+                ],
+              );
             } catch (err) {
               console.warn('[Account] local cleanup failed after server deletion:', err);
-              Alert.alert('Account deleted', 'Your game data was deleted.', [
+              Alert.alert('Account deleted', 'Your progress was deleted.', [
                 { text: 'OK', onPress: () => router.replace(ROUTES.LOGIN) },
               ]);
             } finally {
@@ -155,8 +188,27 @@ export default function SettingsScreen() {
           <SettingRow
             icon="mail-outline"
             label="Google Account / Email"
-            right={<Text style={styles.valueText} numberOfLines={1}>{googleEmail || '—'}</Text>}
+            right={<Text style={styles.valueText} numberOfLines={1}>{isGuest ? 'Guest' : (googleEmail || '—')}</Text>}
           />
+          {isGuest ? (
+            <>
+              <Separator />
+              <SettingRow
+                icon="logo-google"
+                label="Connect Google"
+                right={
+                  <TouchableOpacity
+                    onPress={() => { void handleConnectGoogle(); }}
+                    disabled={linkLoading}
+                    style={linkLoading && { opacity: 0.5 }}
+                    testID="connect-google"
+                  >
+                    <Text style={styles.linkText}>{linkLoading ? 'Connecting…' : 'Connect'}</Text>
+                  </TouchableOpacity>
+                }
+              />
+            </>
+          ) : null}
           <Separator />
           <SettingRow
             icon="trash-outline"
@@ -227,6 +279,17 @@ export default function SettingsScreen() {
           style={[styles.restoreBtn, restoreLoading && { opacity: 0.5 }]}
           disabled={restoreLoading}
           onPress={async () => {
+            if (isGuestUser()) {
+              Alert.alert(
+                'Connect Google to restore',
+                'Purchases are tied to a Google account. Connect Google first, or keep playing as a guest without purchases.',
+                [
+                  { text: 'Not now', style: 'cancel' },
+                  { text: 'Connect Google', onPress: () => { void handleConnectGoogle(); } },
+                ],
+              );
+              return;
+            }
             setRestoreLoading(true);
             try {
               const restored = await iapService.restoreAdsRemoved();

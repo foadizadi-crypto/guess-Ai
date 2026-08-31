@@ -141,6 +141,10 @@ class IAPService {
   }
 
   async purchase(sku: string): Promise<PurchaseResult> {
+    const { isGoogleUser } = await import('./authService');
+    if (!isGoogleUser()) {
+      return { success: false, transactionId: null };
+    }
     if (this.isMockMode) {
       await new Promise<void>((r) => setTimeout(r, 900));
       if (sku === IAP_SKUS.REMOVE_ADS || sku === IAP_SKUS.ADFREE_LIFETIME || sku === IAP_SKUS.ADFREE_7DAY) {
@@ -177,6 +181,8 @@ class IAPService {
   }
 
   async restoreAdsRemoved(): Promise<boolean> {
+    const { isGoogleUser } = await import('./authService');
+    if (!isGoogleUser()) return false;
     if (this.isMockMode) return false;
     try {
       const purchases = await _iap!.getAvailablePurchases();

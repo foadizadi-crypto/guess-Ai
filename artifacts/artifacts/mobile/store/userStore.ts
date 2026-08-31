@@ -153,7 +153,33 @@ interface UserState {
     selectedAvatarId?: string;
     totalGamesPlayed?: number;
     totalWins?: number;
+    statistics?: Partial<UserStatistics>;
     achievements?: Array<{ id: string; unlocked?: boolean; unlockedAt?: string | null }>;
+    avatars?: Array<{ id: string; unlocked: boolean }>;
+    powerUps?: PowerUpInventory;
+    consumables?: Record<string, number>;
+    multiplierSessionsLeft?: number;
+    avatarFragments?: number;
+    bestScore?: number;
+    dailyReward?: DailyReward;
+    gemCosmetics?: Record<string, { owned: boolean; equipped: boolean }>;
+    ownedCosmetics?: Record<string, boolean>;
+    equippedCosmetics?: Partial<Record<CosmeticType, string>>;
+    coinGemExchanges?: Record<string, number>;
+    lastSpinDate?: string | null;
+    extraSpinsToday?: number;
+    lastExtraSpinDate?: string | null;
+    energy?: number;
+    staminaSourceLevel?: number;
+    lastEnergyRefillTime?: number | null;
+    ownedWings?: string[];
+    equippedWing?: string | null;
+    dailyXPEarned?: number;
+    dailyXPDate?: string | null;
+    unclaimedLevelRewards?: number[];
+    missions?: ActiveMission[];
+    missionsDate?: string | null;
+    accountCreatedAt?: string | null;
   }) => void;
   addCoins: (amount: number) => void;
   spendCoins: (amount: number) => boolean;
@@ -299,6 +325,13 @@ export const useUserStore = create<UserState>()(
             })
           : state.achievements;
 
+        const mergedAvatars = Array.isArray(profile.avatars)
+          ? state.avatars.map((local) => {
+              const remote = profile.avatars?.find((a) => a.id === local.id);
+              return remote ? { ...local, unlocked: !!remote.unlocked } : local;
+            })
+          : state.avatars;
+
         return {
           username: profile.username?.trim() || state.username,
           nicknameUid: profile.username?.trim() ? uid : state.nicknameUid,
@@ -309,12 +342,52 @@ export const useUserStore = create<UserState>()(
           isPremium: typeof profile.isPremium === 'boolean' ? profile.isPremium : state.isPremium,
           selectedAvatarId: profile.selectedAvatarId || state.selectedAvatarId,
           achievements: mergedAchievements,
+          avatars: mergedAvatars,
+          powerUps: profile.powerUps ?? state.powerUps,
+          consumables: profile.consumables
+            ? { ...state.consumables, ...profile.consumables }
+            : state.consumables,
+          multiplierSessionsLeft: typeof profile.multiplierSessionsLeft === 'number'
+            ? profile.multiplierSessionsLeft : state.multiplierSessionsLeft,
+          avatarFragments: typeof profile.avatarFragments === 'number'
+            ? profile.avatarFragments : state.avatarFragments,
+          bestScore: typeof profile.bestScore === 'number' ? profile.bestScore : state.bestScore,
+          dailyReward: profile.dailyReward ?? state.dailyReward,
+          gemCosmetics: profile.gemCosmetics ?? state.gemCosmetics,
+          ownedCosmetics: profile.ownedCosmetics ?? state.ownedCosmetics,
+          equippedCosmetics: profile.equippedCosmetics ?? state.equippedCosmetics,
+          coinGemExchanges: profile.coinGemExchanges
+            ? { ...defaultCoinGemExchanges, ...profile.coinGemExchanges }
+            : state.coinGemExchanges,
+          lastSpinDate: profile.lastSpinDate !== undefined ? profile.lastSpinDate : state.lastSpinDate,
+          extraSpinsToday: typeof profile.extraSpinsToday === 'number'
+            ? profile.extraSpinsToday : state.extraSpinsToday,
+          lastExtraSpinDate: profile.lastExtraSpinDate !== undefined
+            ? profile.lastExtraSpinDate : state.lastExtraSpinDate,
+          energy: typeof profile.energy === 'number' ? profile.energy : state.energy,
+          staminaSourceLevel: typeof profile.staminaSourceLevel === 'number'
+            ? profile.staminaSourceLevel : state.staminaSourceLevel,
+          lastEnergyRefillTime: profile.lastEnergyRefillTime !== undefined
+            ? profile.lastEnergyRefillTime : state.lastEnergyRefillTime,
+          ownedWings: Array.isArray(profile.ownedWings) ? profile.ownedWings : state.ownedWings,
+          equippedWing: profile.equippedWing !== undefined ? profile.equippedWing : state.equippedWing,
+          dailyXPEarned: typeof profile.dailyXPEarned === 'number'
+            ? profile.dailyXPEarned : state.dailyXPEarned,
+          dailyXPDate: profile.dailyXPDate !== undefined ? profile.dailyXPDate : state.dailyXPDate,
+          unclaimedLevelRewards: Array.isArray(profile.unclaimedLevelRewards)
+            ? profile.unclaimedLevelRewards : state.unclaimedLevelRewards,
+          missions: Array.isArray(profile.missions) ? profile.missions : state.missions,
+          missionsDate: profile.missionsDate !== undefined ? profile.missionsDate : state.missionsDate,
+          accountCreatedAt: profile.accountCreatedAt ?? state.accountCreatedAt,
           statistics: {
             ...state.statistics,
+            ...(profile.statistics ?? {}),
             totalGamesPlayed: typeof profile.totalGamesPlayed === 'number'
-              ? profile.totalGamesPlayed : state.statistics.totalGamesPlayed,
+              ? profile.totalGamesPlayed
+              : (profile.statistics?.totalGamesPlayed ?? state.statistics.totalGamesPlayed),
             totalWins: typeof profile.totalWins === 'number'
-              ? profile.totalWins : state.statistics.totalWins,
+              ? profile.totalWins
+              : (profile.statistics?.totalWins ?? state.statistics.totalWins),
           },
         };
       }),
@@ -717,6 +790,10 @@ export const useUserStore = create<UserState>()(
         avatars: DEFAULT_AVATARS.map((a) => ({ ...a })),
         powerUps: { ...DEFAULT_POWER_UPS },
         consumables: { ...DEFAULT_CONSUMABLES },
+        multiplierSessionsLeft: 0,
+        avatarFragments: 0,
+        bestScore: 0,
+        dailyReward: { ...defaultDailyReward },
         achievements: ACHIEVEMENTS.map((a) => ({ ...a, unlocked: false, unlockedAt: null })),
         hasNewAchievement: false,
         unclaimedLevelRewards: [],
@@ -726,11 +803,18 @@ export const useUserStore = create<UserState>()(
         ownedCosmetics: {},
         equippedCosmetics: {},
         coinGemExchanges: { ...defaultCoinGemExchanges },
+        lastSpinDate: null,
+        extraSpinsToday: 0,
+        lastExtraSpinDate: null,
         energy: MAX_ENERGY,
         staminaSourceLevel: 0,
+        lastEnergyRefillTime: null,
+        accountCreatedAt: new Date().toISOString(),
         ownedWings: [],
         equippedWing: null,
-        statistics: { ...defaultStatistics }
+        statistics: { ...defaultStatistics },
+        dailyXPEarned: 0,
+        dailyXPDate: null,
       }),
 
       // --- CRITICAL AUDIT EVALUATOR ---

@@ -9,7 +9,7 @@ import { GameColors } from '@/theme/colors';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { notificationService } from '@/services/NotificationService';
 import { savePushToken } from '@/services/firestoreService';
-import { waitForAuthReady, getPlayerId, onPlayerIdChange, isGoogleUser, signOutIfNotGoogle } from '@/services/authService';
+import { waitForAuthReady, getPlayerId, onPlayerIdChange, isSignedInPlayer, signOutIfUnsupportedAuth } from '@/services/authService';
 import { useUserStore } from '@/store/userStore';
 import { ROUTES } from '@/navigation/routes';
 import { adService } from '@/services/AdService';
@@ -35,32 +35,32 @@ function AudioProvider() {
   return null;
 }
 
-// Routes reachable with no Google session and/or no registered nickname yet.
+// Routes reachable with no signed-in session and/or no registered nickname yet.
 // Every other route — including deep links opened directly — is guarded below.
 const PUBLIC_ROUTES: readonly string[] = ['/', ROUTES.SPLASH, ROUTES.ONBOARDING, ROUTES.LOGIN, ROUTES.LEGAL];
 
 /**
- * Gameplay routes require a Google session. Nickname is still gated on lobby.
+ * Gameplay routes require a Google or guest session. Nickname is still gated on lobby.
  */
 function AuthGuard() {
   const pathname = usePathname();
   const [uid, setUid] = useState<string | null>(getPlayerId());
-  const [googleOk, setGoogleOk] = useState(isGoogleUser());
+  const [signedIn, setSignedIn] = useState(isSignedInPlayer());
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
     const unsub = onPlayerIdChange((next) => {
       setUid(next);
-      setGoogleOk(isGoogleUser());
+      setSignedIn(isSignedInPlayer());
     });
     waitForAuthReady().then(async (user) => {
-      if (user && !isGoogleUser(user)) {
-        await signOutIfNotGoogle();
+      if (user && !isSignedInPlayer(user)) {
+        await signOutIfUnsupportedAuth();
         setUid(null);
-        setGoogleOk(false);
+        setSignedIn(false);
       } else {
         setUid((prev) => prev ?? user?.uid ?? getPlayerId());
-        setGoogleOk(isGoogleUser(user));
+        setSignedIn(isSignedInPlayer(user));
       }
       setAuthChecked(true);
     });
@@ -71,21 +71,18 @@ function AuthGuard() {
 
   useEffect(() => {
     if (!authChecked || isPublic) return;
-    if (googleOk && uid) return;
+    if (signedIn && uid) return;
     router.replace(ROUTES.LOGIN);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authChecked, uid, googleOk, pathname, isPublic]);
+  }, [authChecked, uid, signedIn, pathname, isPublic]);
 
   return null;
 }
 
 /**
  * Fetch the Expo push token (if permission is granted) and persist it to
- * Firestore. Google Sign-In is mandatory but happens on the login screen,
- * not at app boot, so a UID may not exist yet here (e.g. first launch,
- * before the player has signed in) — in that case this is a no-op and the
- * retry on the next AppState resume (or the next app launch, once signed
- * in) picks it up instead of silently pretending to succeed with no UID.
+ * Firestore. Sign-in happens on the login screen, not at app boot, so a UID
+ * may not exist yet here — in that case this is a no-op.
  */
 async function persistPushToken(): Promise<void> {
   try {

@@ -2,22 +2,25 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Mandatory Google Sign-In is a product requirement, not just an app UX
-    // choice — every rule that grants a player access to their own data must
-    // also check the token came from the google.com provider, or another
-    // Firebase Auth provider (if ever enabled in the console) could create
-    // player data outside that guarantee.
+    // Guest (anonymous) and Google may own a player id. Dollar purchases are
+    // Google-only and live in purchase_ledger, which clients can never delete.
     function isGoogleUser(uid) {
       return request.auth != null
         && request.auth.uid == uid
         && request.auth.token.firebase.sign_in_provider == 'google.com';
     }
 
-    // ─── 1. PLAYERS PROFILE COLLECTION ───────────────────────────────────────
+    function isSignedInPlayer(uid) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && (request.auth.token.firebase.sign_in_provider == 'google.com'
+            || request.auth.token.firebase.sign_in_provider == 'anonymous');
+    }
+
+    // ─── 1. PLAYERS PROFILE = gameplay progress ──────────────────────────────
     // Path: players/{uid}
     match /players/{uid} {
-      // Only the authenticated user can read their own core profile data.
-      allow read: if isGoogleUser(uid);
+      allow read: if isSignedInPlayer(uid);
 
       // Clients may create/update their own profile, but `nickname`,
       // `nicknameNormalized`, and `username` are identity fields that only
@@ -25,59 +28,53 @@ service cloud.firestore {
       // bypasses these rules) is allowed to set. This stops a client from
       // writing an unregistered/duplicate display name straight into
       // Firestore and bypassing the uniqueness reservation entirely.
-      allow create: if isGoogleUser(uid)
+      allow create: if isSignedInPlayer(uid)
         && !('nickname' in request.resource.data)
         && !('nicknameNormalized' in request.resource.data)
         && !('username' in request.resource.data);
 
-      allow update: if isGoogleUser(uid)
+      allow update: if isSignedInPlayer(uid)
         && request.resource.data.get('nickname', null) == resource.data.get('nickname', null)
         && request.resource.data.get('nicknameNormalized', null) == resource.data.get('nicknameNormalized', null)
         && request.resource.data.get('username', null) == resource.data.get('username', null);
-      
-      // ─── Subcollection: Purchases (Phase 2 §2) ────────────────────────────
-      // Path: players/{uid}/purchases/{transactionId}
+
+      // Legacy purchase subcollection — new dollar records go to purchase_ledger.
       match /purchases/{transactionId} {
         allow read, write: if isGoogleUser(uid);
       }
-      
-      // ─── Subcollection: Spin Wheel History (Phase 3) ──────────────────────
-      // Path: players/{uid}/spinHistory/{autoId}
+
       match /spinHistory/{spinId} {
-        allow read, write: if isGoogleUser(uid);
+        allow read, write: if isSignedInPlayer(uid);
       }
-      
-      // ─── Subcollection: Private Data Secure Vault ─────────────────────────
-      // Path: players/{uid}/private/pushToken
+
       match /private/pushToken {
-        // Only the authenticated device owner can write/update their own token.
-        // Client reads are strictly forbidden (Deny-All) to protect user privacy.
-        // The server-side cloud function Admin SDK retains full backend access.
-        allow write: if isGoogleUser(uid);
+        allow write: if isSignedInPlayer(uid);
         allow read: if false;
       }
     }
 
     // ─── 1b. NICKNAMES COLLECTION ─────────────────────────────────────────────
-    // Path: nicknames/{normalizedNickname}
-    // Server-only: uniqueness is enforced by an atomic transaction in the
-    // API server (using the Admin SDK, which bypasses these rules). Clients
-    // must never read or write this collection directly, or two devices
-    // could race past the uniqueness check.
     match /nicknames/{normalizedNickname} {
       allow read, write: if false;
     }
 
-    // ─── 2. GAME SESSIONS COLLECTION ─────────────────────────────────────────
-    // Path: game_sessions/{sessionId}
-    match /game_sessions/{sessionId} {
-      // Allow creation of a session only if the logged-in Google user matches
-      // the playerId field.
-      allow create: if isGoogleUser(request.resource.data.playerId);
+    // ─── 1c. DOLLAR PURCHASE LEDGER (never deleted by account deletion) ──────
+    // Path: purchase_ledger/{transactionId}
+    match /purchase_ledger/{transactionId} {
+      allow read: if request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && resource.data.playerId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.resource.data.playerId == request.auth.uid
+        && request.resource.data.transactionId == transactionId;
+      allow update, delete: if false;
+    }
 
-      // Allow reading or updating only if the existing document belongs to
-      // the active Google-signed-in user.
-      allow read, update, delete: if isGoogleUser(resource.data.playerId);
+    // ─── 2. GAME SESSIONS COLLECTION ─────────────────────────────────────────
+    match /game_sessions/{sessionId} {
+      allow create: if isSignedInPlayer(request.resource.data.playerId);
+      allow read, update, delete: if isSignedInPlayer(resource.data.playerId);
     }
 
   }

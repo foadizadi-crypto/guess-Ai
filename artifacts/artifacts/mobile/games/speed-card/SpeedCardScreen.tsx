@@ -4,6 +4,7 @@ import {
   LayoutChangeEvent,
   Modal,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -46,6 +47,8 @@ type Phase = 'countdown' | 'ready' | 'loading' | 'reveal' | 'question' | 'flash'
 interface PlacedCard extends SpeedCardColor {
   x: number;
   y: number;
+  width: number;
+  height: number;
 }
 
 const CARD_WIDTH = 72;
@@ -102,14 +105,20 @@ const SpeedCardScreen = () => {
     if (endedRef.current) return;
     endedRef.current = true;
     clearTimers();
+    setPaused(false);
     endSession();
-    router.replace(ROUTES.RESULT);
+    setTimeout(() => {
+      router.replace(ROUTES.RESULT);
+    }, 50);
   }, [endSession, router]);
 
   const exitToLobby = useCallback(() => {
     clearTimers();
-    resetGame();
-    router.replace(ROUTES.LOBBY);
+    setPaused(false);
+    setTimeout(() => {
+      resetGame();
+      router.replace(ROUTES.LOBBY);
+    }, 50);
   }, [resetGame, router]);
 
   const dealRound = useCallback(async () => {
@@ -132,8 +141,10 @@ const SpeedCardScreen = () => {
       );
       setCards(round.colors.map((color, index) => ({
         ...color,
-        x: positions[index]?.x ?? 10,
-        y: positions[index]?.y ?? 10,
+        x: positions[index]?.x ?? 12,
+        y: positions[index]?.y ?? 12,
+        width: positions[index]?.width ?? CARD_WIDTH,
+        height: positions[index]?.height ?? CARD_HEIGHT,
       })));
       setQuestions(round.questions);
       setLocalQuestionIndex(0);
@@ -208,6 +219,7 @@ const SpeedCardScreen = () => {
   };
 
   const handleReadyNo = () => {
+    setPhase('loading');
     exitToLobby();
   };
 
@@ -300,38 +312,58 @@ const SpeedCardScreen = () => {
           <Text style={styles.score}>+{score}</Text>
         </View>
 
-        <View style={styles.imageWrap} onLayout={onBoardLayout}>
+        <View
+          style={styles.imageWrap}
+          onLayout={onBoardLayout}
+          pointerEvents="box-none"
+          collapsable={false}
+        >
           {phase === 'loading' ? (
-            <View style={styles.boardStatus}>
+            <View style={styles.boardStatus} pointerEvents="auto">
               <Text style={styles.boardStatusText}>Connecting to OpenAI…</Text>
             </View>
           ) : null}
           {phase === 'error' ? (
-            <View style={styles.boardStatus}>
+            <View style={styles.boardStatus} pointerEvents="auto">
               <Text style={styles.boardStatusText}>{loadError ?? 'Online round failed'}</Text>
               <GradientButton title="Try Again" onPress={() => { void dealRound(); }} style={styles.retryBtn} />
             </View>
           ) : null}
           {cards.map((card) => (
-            <TouchableOpacity
+            <View
               key={card.id}
-              activeOpacity={0.9}
-              disabled={phase !== 'question' || Boolean(flashKind)}
-              onPress={() => handleCardPress(card)}
+              collapsable={false}
+              pointerEvents="auto"
               style={[
-                styles.card,
+                styles.cardSlot,
                 {
                   left: card.x,
                   top: card.y,
-                  backgroundColor: faceUp ? card.hex : '#1B0F33',
-                  borderColor: faceUp && (card.id === 'white' || card.id === 'yellow' || card.id === 'gold')
-                    ? 'rgba(13,2,33,0.45)'
-                    : faceUp
-                      ? 'rgba(255,255,255,0.35)'
-                      : GameColors.cardBorder,
+                  width: card.width,
+                  height: card.height,
                 },
               ]}
-            />
+            >
+              <Pressable
+                disabled={phase !== 'question' || Boolean(flashKind)}
+                onPress={() => handleCardPress(card)}
+                style={styles.cardHit}
+              >
+                <View
+                  style={[
+                    styles.cardFace,
+                    {
+                      backgroundColor: faceUp ? card.hex : '#1B0F33',
+                      borderColor: faceUp && (card.id === 'white' || card.id === 'yellow' || card.id === 'gold')
+                        ? 'rgba(13,2,33,0.45)'
+                        : faceUp
+                          ? 'rgba(255,255,255,0.35)'
+                          : GameColors.cardBorder,
+                    },
+                  ]}
+                />
+              </Pressable>
+            </View>
           ))}
         </View>
 
@@ -383,7 +415,7 @@ const SpeedCardScreen = () => {
           ]}
         >
           <Ionicons
-            name="checkmark-circle"
+            name={flashKind === 'correct' ? 'checkmark-circle' : 'close'}
             size={96}
             color={flashKind === 'correct' ? GameColors.accentGreen : GameColors.accentRed}
           />
@@ -414,10 +446,12 @@ const styles = StyleSheet.create({
   segment: { flex: 1, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)' },
   segmentDone: { backgroundColor: GameColors.accentGreen },
   imageWrap: { flex: 1, minHeight: 240, maxHeight: 330, borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: GameColors.cardBorder, backgroundColor: GameColors.backgroundSecondary },
-  boardStatus: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, gap: 14 },
+  boardStatus: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, gap: 14, zIndex: 4 },
   boardStatusText: { ...Typography.caption, color: GameColors.textSecondary, textAlign: 'center' },
   retryBtn: { width: '80%' },
-  card: { position: 'absolute', width: CARD_WIDTH, height: CARD_HEIGHT, borderRadius: 12, borderWidth: 2 },
+  cardSlot: { position: 'absolute', zIndex: 2, elevation: 4 },
+  cardHit: { flex: 1 },
+  cardFace: { flex: 1, borderRadius: 12, borderWidth: 2 },
   questionCard: { padding: 14, gap: 4 },
   questionLabel: { ...Typography.small, color: GameColors.accentGold, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
   questionText: { ...Typography.semibold, color: GameColors.textWhite, textAlign: 'right' },

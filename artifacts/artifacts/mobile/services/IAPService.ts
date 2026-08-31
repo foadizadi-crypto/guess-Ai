@@ -101,6 +101,10 @@ class IAPService {
   }
 
   async purchase(sku: string): Promise<{ success: boolean; transactionId: string | null }> {
+    const { isGoogleUser } = await import('./authService');
+    if (!isGoogleUser()) {
+      return { success: false, transactionId: null };
+    }
     await new Promise<void>((r) => setTimeout(r, 900));
     if (sku === IAP_SKUS.REMOVE_ADS || sku === IAP_SKUS.ADFREE_LIFETIME) {
       const { useAdStore } = require('@/store/adStore');
@@ -110,6 +114,8 @@ class IAPService {
   }
 
   async restoreAdsRemoved(): Promise<boolean> {
+    const { isGoogleUser } = await import('./authService');
+    if (!isGoogleUser()) return false;
     return false;
   }
 }

@@ -17,7 +17,7 @@ import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { storageService } from '@/services/StorageService';
 import { ROUTES } from '@/navigation/routes';
-import { completeRedirectSignIn, isGoogleUser, signOutIfNotGoogle, waitForAuthReady } from '@/services/authService';
+import { completeRedirectSignIn, isSignedInPlayer, signOutIfUnsupportedAuth, waitForAuthReady } from '@/services/authService';
 import { fetchRegisteredNickname } from '@/services/nicknameService';
 import { useUserStore } from '@/store/userStore';
 
@@ -125,13 +125,13 @@ export default function SplashScreen() {
     const decide = async (): Promise<string> => {
       try {
         await completeRedirectSignIn();
-        await signOutIfNotGoogle();
+        await signOutIfUnsupportedAuth();
         const [done, user] = await Promise.all([
           storageService.isOnboardingDone(),
           waitForAuthReady(),
         ]);
         if (!done) return ROUTES.ONBOARDING;
-        if (!isGoogleUser(user)) return ROUTES.LOGIN;
+        if (!isSignedInPlayer(user)) return ROUTES.LOGIN;
         const uid = user.uid;
         if (!useUserStore.getState().isNicknameVerifiedFor(uid)) {
           void fetchRegisteredNickname().then((nickname) => {
