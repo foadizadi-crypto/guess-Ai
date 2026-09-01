@@ -4,11 +4,14 @@
  * Called by the mobile app from result.tsx after every game.
  * Writes to Firestore `game_sessions/{sessionId}` and atomically
  * updates the player's aggregate stats in `players/{playerId}`.
+ *
+ * `xp` (leaderboard field) is kept in lockstep with `totalXpEarned`
+ * so global ranking cannot stay at 0 after games have been recorded.
  */
 
 import { Router, type Request, type Response } from "express";
-import { FieldValue } from "firebase-admin/firestore";
 import { getFirestore } from "../lib/firebaseAdmin";
+import { applySessionXp, finiteNumber } from "../lib/playerXp";
 import { requireAuth } from "../lib/verifyAuth";
 
 const router = Router();
@@ -47,35 +50,41 @@ router.post("/sessions", requireAuth, async (req: Request, res: Response) => {
     ? db.collection("game_sessions").doc(body.sessionId)
     : db.collection("game_sessions").doc();
 
-  const batch = db.batch();
-
-  batch.set(sessionRef, {
-    playerId,
-    difficulty,
-    category,
-    correctAnswers: body.correctAnswers ?? 0,
-    wrongAnswers:   body.wrongAnswers   ?? 0,
-    maxCombo:       body.maxCombo       ?? 0,
-    xpEarned:       body.xpEarned       ?? 0,
-    coinsEarned:    body.coinsEarned    ?? 0,
-    score:          body.score          ?? 0,
-    startTime:      body.startTime      ?? null,
-    endTime:        body.endTime        ?? null,
-    wasAbandoned:   body.wasAbandoned   ?? false,
-    recordedAt:     new Date().toISOString(),
-  });
-
-  // Atomically update player aggregate stats
   const playerRef = db.collection("players").doc(playerId);
-  batch.set(playerRef, {
-    totalGamesPlayed:    FieldValue.increment(1),
-    totalCorrectAnswers: FieldValue.increment(body.correctAnswers ?? 0),
-    totalXpEarned:       FieldValue.increment(body.xpEarned       ?? 0),
-    totalCoinsEarned:    FieldValue.increment(body.coinsEarned    ?? 0),
-    lastPlayedAt:        new Date().toISOString(),
-  }, { merge: true });
+  const sessionXp = finiteNumber(body.xpEarned);
+  const sessionCoins = finiteNumber(body.coinsEarned);
+  const sessionCorrect = finiteNumber(body.correctAnswers);
 
-  await batch.commit();
+  await db.runTransaction(async (tx) => {
+    const playerSnap = await tx.get(playerRef);
+    const current = playerSnap.data() ?? {};
+    const nextXp = applySessionXp(current, sessionXp);
+
+    tx.set(sessionRef, {
+      playerId,
+      difficulty,
+      category,
+      correctAnswers: sessionCorrect,
+      wrongAnswers:   finiteNumber(body.wrongAnswers),
+      maxCombo:       finiteNumber(body.maxCombo),
+      xpEarned:       sessionXp,
+      coinsEarned:    sessionCoins,
+      score:          finiteNumber(body.score),
+      startTime:      body.startTime      ?? null,
+      endTime:        body.endTime        ?? null,
+      wasAbandoned:   body.wasAbandoned   ?? false,
+      recordedAt:     new Date().toISOString(),
+    });
+
+    tx.set(playerRef, {
+      totalGamesPlayed:    finiteNumber(current.totalGamesPlayed) + 1,
+      totalCorrectAnswers: finiteNumber(current.totalCorrectAnswers) + sessionCorrect,
+      totalXpEarned:       nextXp.totalXpEarned,
+      totalCoinsEarned:    finiteNumber(current.totalCoinsEarned) + sessionCoins,
+      xp:                  nextXp.xp,
+      lastPlayedAt:        new Date().toISOString(),
+    }, { merge: true });
+  });
 
   res.json({ ok: true, sessionId: sessionRef.id });
 });

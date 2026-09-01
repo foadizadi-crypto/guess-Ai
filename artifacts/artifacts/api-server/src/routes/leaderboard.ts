@@ -11,8 +11,10 @@
  */
 
 import { Router, type Request, type Response } from "express";
+import type { Firestore, QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { getFirestore } from "../lib/firebaseAdmin";
 import { logger } from "../lib/logger";
+import { finiteNumber, playerLeaderboardXp } from "../lib/playerXp";
 import { requireAuth } from "../lib/verifyAuth";
 
 const router = Router();
@@ -53,6 +55,83 @@ async function getWeeklySortedTotals(): Promise<[string, number][]> {
   });
 
   return [...totals.entries()].sort(([, a], [, b]) => b - a);
+}
+
+async function persistXpCatchUp(docs: QueryDocumentSnapshot[]): Promise<void> {
+  const stale = docs.filter((docSnap) => {
+    const d = docSnap.data() as { xp?: unknown; totalXpEarned?: unknown };
+    return finiteNumber(d.xp) < playerLeaderboardXp(d);
+  });
+  if (stale.length === 0) return;
+  const batch = stale[0]!.ref.firestore.batch();
+  for (const docSnap of stale) {
+    const score = playerLeaderboardXp(docSnap.data() as { xp?: unknown; totalXpEarned?: unknown });
+    batch.set(docSnap.ref, { xp: score }, { merge: true });
+  }
+  await batch.commit();
+}
+
+async function topPlayersByLeaderboardXp(db: Firestore, limit: number) {
+  const col = db.collection("players");
+  const byXp = await col.orderBy("xp", "desc").limit(limit).get();
+  let byEarned: Awaited<ReturnType<typeof col.get>> | undefined;
+  try {
+    byEarned = await col.orderBy("totalXpEarned", "desc").limit(limit).get();
+  } catch (err) {
+    logger.warn({ err }, "totalXpEarned ranking query failed — using xp only");
+  }
+
+  const merged = new Map<string, {
+    username: string;
+    xp: number;
+    level: number;
+    avatarId: string;
+  }>();
+
+  const ingest = (docs: QueryDocumentSnapshot[]) => {
+    for (const docSnap of docs) {
+      const d = docSnap.data() as {
+        username?: string;
+        xp?: number;
+        totalXpEarned?: number;
+        level?: number;
+        selectedAvatarId?: string;
+      };
+      const score = playerLeaderboardXp(d);
+      const prev = merged.get(docSnap.id);
+      if (prev && prev.xp >= score) continue;
+      merged.set(docSnap.id, {
+        username: d.username ?? "Player",
+        xp: score,
+        level: d.level ?? 1,
+        avatarId: d.selectedAvatarId ?? "avatar_1",
+      });
+    }
+  };
+
+  ingest(byXp.docs);
+  if (byEarned) ingest(byEarned.docs);
+
+  const seen = new Map<string, QueryDocumentSnapshot>();
+  for (const docSnap of byXp.docs) seen.set(docSnap.id, docSnap);
+  if (byEarned) {
+    for (const docSnap of byEarned.docs) seen.set(docSnap.id, docSnap);
+  }
+  void persistXpCatchUp([...seen.values()]).catch((err) => {
+    logger.warn({ err }, "leaderboard xp catch-up write failed");
+  });
+
+  return [...merged.entries()]
+    .sort((a, b) => b[1].xp - a[1].xp)
+    .slice(0, limit)
+    .map(([userId, row], i) => ({
+      rank: i + 1,
+      userId,
+      username: row.username,
+      xp: row.xp,
+      level: row.level,
+      avatarId: row.avatarId,
+    }));
 }
 
 // ─── GET /api/leaderboard ─────────────────────────────────────────────────────
@@ -106,25 +185,9 @@ router.get("/leaderboard", async (req: Request, res: Response) => {
       }));
 
     } else {
-      // ── Global: top players by total XP from players collection ─────────────
-      const snap = await db.collection("players")
-        .orderBy("xp", "desc")
-        .limit(limit)
-        .get();
-
-      entries = snap.docs.map((doc, i) => {
-        const d = doc.data() as {
-          username?: string; xp?: number; level?: number; selectedAvatarId?: string;
-        };
-        return {
-          rank:     i + 1,
-          userId:   doc.id,
-          username: d.username         ?? "Player",
-          xp:       d.xp               ?? 0,
-          level:    d.level             ?? 1,
-          avatarId: d.selectedAvatarId  ?? "avatar_1",
-        };
-      });
+      // Global: rank by max(xp, totalXpEarned) so session XP cannot be hidden
+      // when the live `xp` field is still 0 / stale.
+      entries = await topPlayersByLeaderboardXp(db, limit);
     }
 
     res.json(entries);
@@ -156,21 +219,28 @@ router.get("/leaderboard/rank", requireAuth, async (req: Request, res: Response)
       return;
     }
 
-    // ── Global: exact rank via a count() aggregation query — real, and cheap
-    // even with a large player base, since it never loads the full collection.
+    // Global: rank by max(xp, totalXpEarned) so a stale xp:0 cannot hide
+    // session XP. Union of both fields so rank matches the merged list.
     const playerDoc = await db.collection("players").doc(userId).get();
     if (!playerDoc.exists) {
       res.json({ rank: null, xp: 0 });
       return;
     }
 
-    const xp = (playerDoc.data() as { xp?: number }).xp ?? 0;
-    const higherCount = await db.collection("players")
-      .where("xp", ">", xp)
-      .count()
-      .get();
+    const data = playerDoc.data() as { xp?: number; totalXpEarned?: number };
+    const xp = playerLeaderboardXp(data);
+    const higherIds = new Set<string>();
+    const [xpSnap, earnedSnap] = await Promise.all([
+      db.collection("players").where("xp", ">", xp).get(),
+      db.collection("players").where("totalXpEarned", ">", xp).get().catch((err) => {
+        logger.warn({ err }, "totalXpEarned rank query failed — using xp only");
+        return null;
+      }),
+    ]);
+    xpSnap.docs.forEach((docSnap) => higherIds.add(docSnap.id));
+    earnedSnap?.docs.forEach((docSnap) => higherIds.add(docSnap.id));
 
-    res.json({ rank: higherCount.data().count + 1, xp });
+    res.json({ rank: higherIds.size + 1, xp });
   } catch (err) {
     logger.warn({ err }, "Firestore unavailable — returning unranked");
     res.json({ rank: null, xp: 0 });
