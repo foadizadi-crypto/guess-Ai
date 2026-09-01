@@ -28,7 +28,7 @@ export default function FriendsScreen() {
     <PlaceholderScreen
       title="Friends"
       icon="people"
-      subtitle="Add friends, compare scores, and send each other stamina."
+      subtitle="Friends is not available yet. This screen is a placeholder until social features ship."
       testID="friends-screen"
     >
       <View style={styles.card}>
@@ -47,7 +47,7 @@ export default function FriendsScreen() {
         <Ionicons name="person-add-outline" size={28} color={GameColors.textSecondary} />
         <Text style={styles.emptyTitle}>No friends yet</Text>
         <Text style={styles.emptyCopy}>
-          Friend codes and invites arrive with the social update.
+          Friend codes and invites are not in this build.
         </Text>
       </View>
     </PlaceholderScreen>

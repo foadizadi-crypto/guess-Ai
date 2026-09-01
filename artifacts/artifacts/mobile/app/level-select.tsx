@@ -12,8 +12,7 @@ import { useGameStore } from '@/store/gameStore';
 import { ROUTES } from '@/navigation/routes';
 import type { Difficulty } from '@/types';
 import { useRTL } from '@/hooks/useRTL';
-import { GAME_CONSTANTS } from '@/constants';
-import { DIFFICULTY_CONFIG } from '@/gameEngine';
+import { isDifficultyOpen } from '@/shared/difficulty';
 
 interface LevelCard {
   difficulty: Difficulty;
@@ -23,6 +22,7 @@ interface LevelCard {
   blur: string;
   hints: string;
   multiplier: string;
+  open: boolean;
 }
 
 const LEVELS: LevelCard[] = [
@@ -34,6 +34,7 @@ const LEVELS: LevelCard[] = [
     blur: '50% Blur',
     hints: '2 Hints',
     multiplier: '1x Score',
+    open: true,
   },
   {
     difficulty: 'medium',
@@ -43,6 +44,7 @@ const LEVELS: LevelCard[] = [
     blur: '80% Blur',
     hints: '1 Hint',
     multiplier: '2x Score',
+    open: true,
   },
   {
     difficulty: 'hard',
@@ -52,6 +54,27 @@ const LEVELS: LevelCard[] = [
     blur: '100% Blur',
     hints: 'No hints',
     multiplier: '3x Score',
+    open: true,
+  },
+  {
+    difficulty: 'extra-hard',
+    label: 'Extra Hard',
+    icon: 'lock-closed-outline',
+    color: GameColors.textSecondary,
+    blur: 'Locked',
+    hints: '',
+    multiplier: '',
+    open: false,
+  },
+  {
+    difficulty: 'max',
+    label: 'Max',
+    icon: 'lock-closed-outline',
+    color: GameColors.textSecondary,
+    blur: 'Locked',
+    hints: '',
+    multiplier: '',
+    open: false,
   },
 ];
 
@@ -63,12 +86,14 @@ export default function LevelSelectScreen() {
   const selectedDifficulty = useGameStore((s) => s.selectedDifficulty);
 
   const handleSelect = (difficulty: Difficulty) => {
+    if (!isDifficultyOpen(difficulty)) return;
     hapticsService.impact(1);
     setDifficulty(difficulty);
     router.push(ROUTES.CATEGORY_SELECT);
   };
 
   const handleNext = () => {
+    if (!isDifficultyOpen(selectedDifficulty)) return;
     router.push(ROUTES.CATEGORY_SELECT);
   };
 
@@ -91,16 +116,19 @@ export default function LevelSelectScreen() {
         <ScrollView style={styles.cards} contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
           {LEVELS.map((lvl) => {
             const selected = selectedDifficulty === lvl.difficulty;
+            const locked = !lvl.open;
             return (
               <TouchableOpacity
                 key={lvl.difficulty}
                 style={[
                   styles.card,
-                  { borderColor: selected ? lvl.color : GameColors.border },
-                  selected && { backgroundColor: `${lvl.color}15` },
+                  { borderColor: selected && !locked ? lvl.color : GameColors.border },
+                  selected && !locked && { backgroundColor: `${lvl.color}15` },
+                  locked && { opacity: 0.55 },
                 ]}
                 onPress={() => handleSelect(lvl.difficulty)}
-                activeOpacity={0.8}
+                activeOpacity={locked ? 1 : 0.8}
+                disabled={locked}
               >
                 <View style={[styles.cardIcon, { borderColor: lvl.color }]}>
                   <Ionicons name={lvl.icon} size={32} color={lvl.color} />
@@ -108,13 +136,13 @@ export default function LevelSelectScreen() {
                 <View style={styles.cardInfo}>
                   <Text style={[styles.cardLabel, { color: lvl.color }]}>{lvl.label}</Text>
                   <View style={styles.metaGrid}>
-                    <Text style={styles.cardMeta}>{lvl.blur}</Text>
-                    <Text style={styles.cardMeta}>{lvl.hints}</Text>
-                    <Text style={styles.cardMeta}>{lvl.multiplier}</Text>
+                    {lvl.blur ? <Text style={styles.cardMeta}>{lvl.blur}</Text> : null}
+                    {lvl.hints ? <Text style={styles.cardMeta}>{lvl.hints}</Text> : null}
+                    {lvl.multiplier ? <Text style={styles.cardMeta}>{lvl.multiplier}</Text> : null}
                   </View>
-                  <Text style={styles.unlockText}>Unlocked</Text>
+                  <Text style={styles.unlockText}>{locked ? 'Locked' : 'Unlocked'}</Text>
                 </View>
-                {selected ? (
+                {selected && !locked ? (
                   <Ionicons name="checkmark-circle" size={24} color={lvl.color} />
                 ) : null}
               </TouchableOpacity>
@@ -123,9 +151,10 @@ export default function LevelSelectScreen() {
         </ScrollView>
 
         <TouchableOpacity
-          style={[styles.nextBtn, { borderColor: GameColors.accentGold }]}
+          style={[styles.nextBtn, { borderColor: GameColors.accentGold, opacity: isDifficultyOpen(selectedDifficulty) ? 1 : 0.45 }]}
           onPress={handleNext}
           activeOpacity={0.8}
+          disabled={!isDifficultyOpen(selectedDifficulty)}
           testID="next-button"
         >
           <Text style={styles.nextText}>Next: Choose Category</Text>

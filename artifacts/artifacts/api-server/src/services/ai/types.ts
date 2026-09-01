@@ -32,6 +32,12 @@ export interface TextProvider {
   complete(params: { system: string; user: string }): Promise<string>;
 }
 
+export type ImageStyle = "default" | "cartoon";
+
+export interface ImageGenerateOptions {
+  style?: ImageStyle;
+}
+
 /**
  * An image-generation provider. Returns either an https URL or a base64
  * data URL — both render fine in the mobile app's <Image> component.
@@ -41,5 +47,7 @@ export interface ImageProvider {
   label: string;
   envKey: string;
   isConfigured(): boolean;
-  generateImage(prompt: string): Promise<string>;
+  generateImage(prompt: string, options?: ImageGenerateOptions): Promise<string>;
+  /** Same vendor/model as generate. Optional: not every provider can inpaint. */
+  editImage?(image: string, prompt: string, options?: ImageGenerateOptions): Promise<string>;
 }

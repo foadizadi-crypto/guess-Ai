@@ -4,7 +4,7 @@ import { getHealthSnapshot, isOnCooldown, recordFailure, recordSuccess } from ".
 import { buildQuestionUserPrompt, extractJson, QUESTION_SYSTEM_PROMPT, QuestionsResponseSchema } from "./prompts";
 import { createOpenAiTextProvider } from "./providers/text/openai";
 import { createOpenAiImageProvider } from "./providers/image/openai-image";
-import type { ImageProvider, QuestionGenParams, RawQuestion, TextProvider } from "./types";
+import type { ImageGenerateOptions, ImageProvider, QuestionGenParams, RawQuestion, TextProvider } from "./types";
 
 const AI_MODE = process.env["AI_MODE"]?.trim().toLowerCase() || "openai";
 
@@ -81,7 +81,10 @@ export interface ImageGenResult {
   providerUsed: string | null;
 }
 
-export async function generateImageWithFallback(prompt: string): Promise<ImageGenResult> {
+export async function generateImageWithFallback(
+  prompt: string,
+  options?: ImageGenerateOptions,
+): Promise<ImageGenResult> {
   const candidates = availableProviders(orderedProviders(IMAGE_PROVIDERS));
 
   if (candidates.length === 0) {
@@ -99,7 +102,7 @@ export async function generateImageWithFallback(prompt: string): Promise<ImageGe
     logger.info({ provider: provider.id }, `Image generation: trying "${provider.label}"`);
 
     try {
-      const url = await provider.generateImage(prompt);
+      const url = await provider.generateImage(prompt, options);
       recordSuccess(provider.id);
       logger.info({ provider: provider.id }, `Image generation: using "${provider.label}"`);
       return { url, providerUsed: provider.id };
@@ -115,6 +118,49 @@ export async function generateImageWithFallback(prompt: string): Promise<ImageGe
   }
 
   throw new HttpError(502, lastMessage ?? "OpenAI image generation failed");
+}
+
+export async function editImageWithFallback(
+  image: string,
+  prompt: string,
+  options?: ImageGenerateOptions,
+): Promise<ImageGenResult> {
+  const candidates = availableProviders(orderedProviders(IMAGE_PROVIDERS)).filter(
+    (provider): provider is ImageProvider & { editImage: NonNullable<ImageProvider["editImage"]> } =>
+      typeof provider.editImage === "function",
+  );
+
+  if (candidates.length === 0) {
+    throw new HttpError(503, "OpenAI image edit is not configured on the API server");
+  }
+
+  let lastMessage: string | null = null;
+
+  for (const provider of candidates) {
+    if (isOnCooldown(provider.id)) {
+      logger.info({ provider: provider.id }, `Image edit: skipping "${provider.label}" (on cooldown)`);
+      continue;
+    }
+
+    logger.info({ provider: provider.id }, `Image edit: trying "${provider.label}"`);
+
+    try {
+      const url = await provider.editImage(image, prompt, options);
+      recordSuccess(provider.id);
+      logger.info({ provider: provider.id }, `Image edit: using "${provider.label}"`);
+      return { url, providerUsed: provider.id };
+    } catch (err) {
+      const classified = classifyError(provider.id, err);
+      lastMessage = classified.message;
+      recordFailure(provider.id, classified.kind, classified.message);
+      logger.warn(
+        { provider: provider.id, kind: classified.kind },
+        `Image edit: "${provider.label}" failed (${classified.kind})`,
+      );
+    }
+  }
+
+  throw new HttpError(502, lastMessage ?? "OpenAI image edit failed");
 }
 
 export function getProviderStatus() {

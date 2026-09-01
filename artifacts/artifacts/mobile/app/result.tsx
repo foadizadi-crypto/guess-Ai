@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Share, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
+import {
+  Alert,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  Platform,
+} from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,13 +24,9 @@ import { useAdStore } from '@/store/adStore';
 import { useAudio } from '@/hooks/useAudio';
 import { ROUTES } from '@/navigation/routes';
 import { useRTL } from '@/hooks/useRTL';
-import {
-  GAME_CONFIG,
-  sessionCompleteCoins,
-  sessionCompleteXP,
-  perfectGameCoins,
-  perfectGameXP,
-} from '@/constants/gameConfig';
+import { GAME_CONFIG } from '@/constants/gameConfig';
+import { GAME_CONSTANTS } from '@/constants';
+import { toGameplayDifficulty } from '@/shared/difficulty';
 import type { MissionType } from '@/types';
 import { recordGameSession, saveAchievements } from '@/services/firestoreService';
 import { getPlayerId } from '@/services/authService';
@@ -46,6 +50,7 @@ export default function ResultScreen() {
     coinsEarned,
     doubleXPActive,
     lastGameWasTimedOut,
+    sessionOutcome,
     maxStreakThisGame,
     totalWrong,
     gameSession,
@@ -80,26 +85,17 @@ export default function ResultScreen() {
   const contentOpacity = useSharedValue(1);
   const contentY = useSharedValue(0);
 
-  const isPerfect   = correctAnswers === totalQuestions;
-  const isVictory   = !lastGameWasTimedOut && isPerfect;
+  const isPerfect =
+    sessionOutcome === 'perfect' ||
+    (sessionOutcome == null && correctAnswers === totalQuestions);
+  const isVictory =
+    sessionOutcome === 'perfect' ||
+    sessionOutcome === 'win' ||
+    (sessionOutcome == null && !lastGameWasTimedOut && correctAnswers === totalQuestions);
   const accuracy    = totalQuestions ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
 
-  // ── Economy calculation — spec v1.0.0 ────────────────────────────────────
-  // Coins: per-correct (easy 2 / med 4 / hard 6, plus streak/snap) tracked in gameStore.coinsEarned
-  //        + session completion bonus (per difficulty: Easy 50 | Med 63 | Hard 75)
-  //        + perfect game bonus if 20/20 (per difficulty: Easy 100 | Med 125 | Hard 150)
-  const completionCoins = sessionCompleteCoins(selectedDifficulty);
-  const perfectCoins    = isPerfect ? perfectGameCoins(selectedDifficulty) : 0;
-  const baseCoins       = coinsEarned + completionCoins + perfectCoins;
-  const totalCoins      = Math.max(0, baseCoins);
-
-  // XP: per-question base + combo (tracked in gameStore.xpEarned)
-  //     + session completion XP (per difficulty: Easy 30 | Med 38 | Hard 45)
-  //     + perfect game XP if 20/20 (per difficulty: Easy 50 | Med 63 | Hard 75)
-  const completionXP = sessionCompleteXP(selectedDifficulty);
-  const perfectXP    = isPerfect ? perfectGameXP(selectedDifficulty) : 0;
-  const baseXP       = xpEarned + completionXP + perfectXP;
-  const totalXP      = doubleXPActive ? baseXP * 2 : baseXP;
+  const totalCoins = Math.max(0, coinsEarned);
+  const totalXP    = doubleXPActive ? xpEarned * 2 : xpEarned;
 
   // ── Double Reward button visibility (spec §7.2 + §7.3) ──────────────────
   // The counter always gates availability — even ad-free pass holders must reach
@@ -139,7 +135,9 @@ export default function ResultScreen() {
     updateMissionProgress('play_games', 1);
     updateMissionProgress('correct_answers', correctAnswers);
     if (selectedDifficulty === 'hard') updateMissionProgress('complete_hard', 1);
-    if (isPerfect)                      updateMissionProgress('perfect_game', 1);
+    if (isPerfect && totalQuestions === GAME_CONSTANTS.TOTAL_QUESTIONS) {
+      updateMissionProgress('perfect_game', 1);
+    }
     if (maxStreakThisGame >= 5)         updateMissionProgress('get_combo', maxStreakThisGame);
     updateMissionProgress('play_category', 1, selectedCategory);
 
@@ -159,7 +157,7 @@ export default function ResultScreen() {
       recordGameSession(
         uid,
         {
-          difficulty:     selectedDifficulty,
+          difficulty:     toGameplayDifficulty(selectedDifficulty),
           category:       selectedCategory,
           correctAnswers,
           wrongAnswers:   totalWrong,
@@ -178,7 +176,7 @@ export default function ResultScreen() {
     // ── Achievement checking ──────────────────────────────────────────────
     // Must run AFTER updateStatistics so the store reflects the latest stats.
     const newlyUnlocked = checkAndUnlockAchievements({
-      isPerfectGame: isPerfect,
+      isPerfectGame: isPerfect && totalQuestions === GAME_CONSTANTS.TOTAL_QUESTIONS,
       maxComboThisGame: maxStreakThisGame,
     });
     if (newlyUnlocked.length > 0) {
@@ -262,11 +260,26 @@ export default function ResultScreen() {
   }));
 
   const goToLobby = () => { resetGame(); router.replace(ROUTES.LOBBY); };
-  const playAgain = () => { resetGame(); router.replace(ROUTES.LEVEL_SELECT); };
+  const playAgain = () => {
+    resetGame({ keepSelection: true });
+    router.replace(ROUTES.LEVEL_SELECT);
+  };
   const shareResult = async () => {
-    await Share.share({
-      message: `I scored ${score} points in GUESSAi with ${accuracy}% accuracy! 🎮`,
-    });
+    const message = `I scored ${score} points in GUESSAi with ${accuracy}% accuracy! 🎮`;
+    try {
+      if (Platform.OS === 'web') {
+        const webShare = typeof navigator !== 'undefined' ? navigator.share : undefined;
+        if (typeof webShare === 'function') {
+          await webShare({ title: 'GUESSAi', text: message });
+          return;
+        }
+        Alert.alert('Share', 'Sharing is not supported in this browser.');
+        return;
+      }
+      await Share.share({ message });
+    } catch {
+      Alert.alert('Share', 'Could not share this result.');
+    }
   };
 
   const topPad = Platform.OS === 'web' ? 58 : insets.top + 18;
@@ -299,13 +312,21 @@ export default function ResultScreen() {
         <Animated.View style={[styles.hero, trophyStyle]}>
           <View style={[styles.trophyCircle, { borderColor: isVictory ? GameColors.accentGold : GameColors.accentRed }]}>
             <Ionicons
-              name={isVictory ? 'trophy-outline' : 'time-outline'}
+              name={isVictory ? 'trophy-outline' : sessionOutcome === 'lose' ? 'close-circle-outline' : 'time-outline'}
               size={64}
               color={isVictory ? GameColors.accentGold : GameColors.accentRed}
             />
           </View>
           <Text style={[styles.title, { color: isVictory ? GameColors.accentGold : GameColors.accentRed }]}>
-            {isVictory ? 'VICTORY' : "TIME'S UP"}
+            {sessionOutcome === 'perfect'
+              ? 'PERFECT'
+              : sessionOutcome === 'win'
+                ? 'VICTORY'
+                : sessionOutcome === 'lose'
+                  ? 'GAME OVER'
+                  : isVictory
+                    ? 'VICTORY'
+                    : "TIME'S UP"}
           </Text>
           <Text style={styles.subtitle}>
             {selectedDifficulty.toUpperCase()} MODE • {correctAnswers}/{totalQuestions} CORRECT

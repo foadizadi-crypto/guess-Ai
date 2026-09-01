@@ -14,8 +14,9 @@ import { useUserStore } from '@/store/userStore';
 import { ROUTES } from '@/navigation/routes';
 import type { Category } from '@/types';
 import { useRTL } from '@/hooks/useRTL';
-import { categoryUnlockLevel, isCategoryUnlocked } from '@/constants/categories';
+import { CATEGORY_LAYOUT, categoryUnlockLevel, isCategoryUnlocked } from '@/constants/categories';
 import { STAMINA_PER_GAME } from '@/constants/economy';
+import { isDifficultyOpen } from '@/shared/difficulty';
 
 interface CatItem {
   key: Category;
@@ -24,24 +25,28 @@ interface CatItem {
   color: string;
 }
 
-const CATEGORIES: CatItem[] = [
-  { key: 'animals', label: 'Animals', icon: 'paw-outline', color: GameColors.accentOrange },
-  { key: 'nature', label: 'Nature', icon: 'leaf-outline', color: GameColors.accentGreen },
-  { key: 'food', label: 'Food', icon: 'pizza-outline', color: '#FF6584' },
-  { key: 'landmarks', label: 'Landmarks', icon: 'business-outline', color: '#64B5F6' },
-  { key: 'movies', label: 'Movies', icon: 'film-outline', color: '#CE93D8' },
-  { key: 'sports', label: 'Sports', icon: 'football-outline', color: GameColors.accentGold },
-  { key: 'technology', label: 'Technology', icon: 'hardware-chip-outline', color: '#80DEEA' },
-  { key: 'art', label: 'Art', icon: 'color-palette-outline', color: '#F48FB1' },
-  { key: 'vehicles', label: 'Vehicles', icon: 'car-outline', color: '#B39DDB' },
-  { key: 'celebrities', label: 'Celebrities', icon: 'star-outline', color: '#FF8A65' },
-  { key: 'history', label: 'History', icon: 'time-outline', color: '#A5D6A7' },
-  { key: 'space', label: 'Space', icon: 'planet-outline', color: '#90CAF9' },
-  { key: 'cities', label: 'Cities', icon: 'business-outline', color: '#81D4FA' },
-  { key: 'music', label: 'Music', icon: 'musical-notes-outline', color: '#F48FB1' },
-  { key: 'science', label: 'Science', icon: 'flask-outline', color: '#80CBC4' },
-  { key: 'speed_card', label: 'Speed Card', icon: 'albums-outline', color: '#FFD54F' },
-];
+const CATEGORY_TILES: Record<Category, Omit<CatItem, 'key'>> = {
+  animals: { label: 'Animals', icon: 'paw-outline', color: GameColors.accentOrange },
+  nature: { label: 'Nature', icon: 'leaf-outline', color: GameColors.accentGreen },
+  food: { label: 'Food', icon: 'pizza-outline', color: '#FF6584' },
+  landmarks: { label: 'Landmarks', icon: 'business-outline', color: '#64B5F6' },
+  movies: { label: 'Movies', icon: 'film-outline', color: '#CE93D8' },
+  sports: { label: 'Sports', icon: 'football-outline', color: GameColors.accentGold },
+  technology: { label: 'Technology', icon: 'hardware-chip-outline', color: '#80DEEA' },
+  art: { label: 'Art', icon: 'color-palette-outline', color: '#F48FB1' },
+  vehicles: { label: 'Vehicles', icon: 'car-outline', color: '#B39DDB' },
+  celebrities: { label: 'Celebrities', icon: 'star-outline', color: '#FF8A65' },
+  history: { label: 'History', icon: 'time-outline', color: '#A5D6A7' },
+  space: { label: 'Space', icon: 'planet-outline', color: '#90CAF9' },
+  cities: { label: 'Cities', icon: 'business-outline', color: '#81D4FA' },
+  music: { label: 'Music', icon: 'musical-notes-outline', color: '#F48FB1' },
+  science: { label: 'Science', icon: 'flask-outline', color: '#80CBC4' },
+  speed_card: { label: 'Speed Card', icon: 'albums-outline', color: '#FFD54F' },
+  count_quick: { label: 'Count Quick', icon: 'apps-outline', color: '#FF4D6D' },
+  lost_item: { label: 'Lost Item', icon: 'images-outline', color: '#FF7043' },
+};
+
+const CATEGORIES: CatItem[] = CATEGORY_LAYOUT.map((key) => ({ key, ...CATEGORY_TILES[key] }));
 
 export default function CategorySelectScreen() {
   const router = useRouter();
@@ -67,6 +72,7 @@ export default function CategorySelectScreen() {
 
   const handlePlay = () => {
     if (!isCategoryUnlocked(selectedCategory, playerLevel)) return;
+    if (!isDifficultyOpen(selectedDifficulty)) return;
     if (!spendEnergy()) {
       Alert.alert(
         'Not enough stamina',
@@ -78,17 +84,28 @@ export default function CategorySelectScreen() {
       );
       return;
     }
-    startSession(selectedDifficulty, selectedCategory);
+    if (selectedCategory !== 'speed_card') {
+      startSession(selectedDifficulty, selectedCategory);
+    }
     setConfirmVisible(false);
-    router.replace((selectedCategory === 'speed_card' ? ROUTES.SPEED_CARD : ROUTES.GAME) as Href);
+    const nextRoute =
+      selectedCategory === 'speed_card'
+        ? ROUTES.SPEED_CARD
+        : selectedCategory === 'count_quick'
+          ? ROUTES.COUNT_QUICK
+          : selectedCategory === 'lost_item'
+            ? ROUTES.LOST_ITEM
+            : ROUTES.GAME;
+    router.replace(nextRoute as Href);
   };
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
 
-  const renderItem: ListRenderItem<CatItem> = ({ item }) => {
+  const renderItem: ListRenderItem<CatItem> = ({ item, index }) => {
     const selected = selectedCategory === item.key;
     const locked = !isCategoryUnlocked(item.key, playerLevel);
+    const slot = index + 1;
     return (
       <TouchableOpacity
         style={[
@@ -100,6 +117,7 @@ export default function CategorySelectScreen() {
         onPress={() => handleSelect(item.key)}
         activeOpacity={0.8}
       >
+        <Text style={[styles.slot, { color: locked ? GameColors.textSecondary : item.color }]}>{slot}</Text>
         <Ionicons name={item.icon} size={32} color={locked ? GameColors.textSecondary : selected ? item.color : GameColors.textSecondary} />
         <Text style={[styles.catLabel, { color: locked ? GameColors.textSecondary : selected ? item.color : GameColors.textSecondary }]}>
           {item.label}
@@ -127,7 +145,7 @@ export default function CategorySelectScreen() {
           <View style={styles.placeholder} />
         </View>
 
-        <Text style={[styles.sub, { textAlign }]}>Animals, Nature, Food, and Speed Card start unlocked</Text>
+        <Text style={[styles.sub, { textAlign }]}>Animals, Nature, and Food start unlocked. New games are categories 16–18.</Text>
 
         <FlatList
           data={CATEGORIES}
@@ -154,7 +172,11 @@ export default function CategorySelectScreen() {
             <Text style={styles.modalCopy}>
               {selectedCategory === 'speed_card'
                 ? `5 cards • Speed Card\n${selectedDifficulty} mode`
-                : `20 questions • 120 seconds\n${selectedCategory} • ${selectedDifficulty} mode`}
+                : selectedCategory === 'count_quick'
+                  ? `5 questions • Count Quick\n${selectedDifficulty} mode`
+                  : selectedCategory === 'lost_item'
+                    ? `5 questions • Lost Item\n${selectedDifficulty} mode`
+                    : `20 questions • 120 seconds\n${selectedCategory} • ${selectedDifficulty} mode`}
             </Text>
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelButton} onPress={() => setConfirmVisible(false)}>
@@ -200,6 +222,14 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     fontFamily: 'Inter_600SemiBold',
     fontWeight: '600',
+  },
+  slot: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+    fontWeight: '700',
   },
   catLocked: { opacity: 0.55 },
   lockBadge: {

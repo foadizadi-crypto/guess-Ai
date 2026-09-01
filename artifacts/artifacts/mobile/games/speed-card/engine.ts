@@ -1,8 +1,15 @@
 import type { Difficulty } from '@/types';
 import { getApiUrl } from '@/services/apiConfig';
+import { toGameplayDifficulty } from '@/shared/difficulty';
+import {
+  SPEED_CARD_COUNT,
+  SPEED_CARD_FLASH_MS,
+  SPEED_CARD_PALETTE,
+  SPEED_CARD_PALETTE_IDS,
+  SPEED_CARD_REVEAL_MS,
+} from '@/games/speed-card/config';
 
-export const SPEED_CARD_COUNT = 5;
-export const SPEED_CARD_FLASH_MS = 500;
+export { SPEED_CARD_COUNT, SPEED_CARD_FLASH_MS };
 
 export interface SpeedCardColor {
   id: string;
@@ -11,9 +18,13 @@ export interface SpeedCardColor {
 }
 
 export function revealDurationMs(difficulty: Difficulty): number {
-  if (difficulty === 'easy') return 3000;
-  if (difficulty === 'medium') return 1500;
-  return 500;
+  return SPEED_CARD_REVEAL_MS[toGameplayDifficulty(difficulty)];
+}
+
+export function paletteSwatchById(id: string): SpeedCardColor | undefined {
+  const swatch = SPEED_CARD_PALETTE.find((color) => color.id === id);
+  if (!swatch) return undefined;
+  return { id: swatch.id, name: swatch.name, hex: swatch.hex };
 }
 
 export interface CardRect {
@@ -38,7 +49,7 @@ export function layoutCardPositions(
   const gap = 12;
   const innerW = Math.max(1, boardWidth - pad * 2);
   const innerH = Math.max(1, boardHeight - pad * 2);
-  const rowPattern = count === 5 ? [3, 2] : [count];
+  const rowPattern = count === SPEED_CARD_COUNT ? [3, 2] : [count];
   const rows = rowPattern.length;
   const maxCols = Math.max(...rowPattern);
   const scale = Math.min(
@@ -74,13 +85,76 @@ export interface SpeedCardRound {
   questions: SpeedCardColor[];
 }
 
-export async function fetchSpeedCardRound(): Promise<SpeedCardRound> {
+function shuffleInPlace<T>(items: T[]): T[] {
+  for (let i = items.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const current = items[i];
+    const swap = items[j];
+    if (current === undefined || swap === undefined) continue;
+    items[i] = swap;
+    items[j] = current;
+  }
+  return items;
+}
+
+function hydrateIds(ids: string[]): SpeedCardColor[] {
+  return ids.map((rawId) => {
+    const swatch = paletteSwatchById(rawId.trim().toLowerCase());
+    if (!swatch) throw new Error(`Speed Card color "${rawId}" is not in the 16-color palette`);
+    return swatch;
+  });
+}
+
+function isPermutation(colors: SpeedCardColor[], questions: SpeedCardColor[]): boolean {
+  if (colors.length !== questions.length) return false;
+  const a = [...colors.map((c) => c.id)].sort();
+  const b = [...questions.map((c) => c.id)].sort();
+  return a.every((id, index) => id === b[index]);
+}
+
+export function assertValidRound(round: SpeedCardRound): SpeedCardRound {
+  if (round.colors.length !== SPEED_CARD_COUNT || round.questions.length !== SPEED_CARD_COUNT) {
+    throw new Error('Speed Card round must have 5 cards and 5 questions');
+  }
+  const colorIds = new Set(round.colors.map((c) => c.id));
+  if (colorIds.size !== SPEED_CARD_COUNT) {
+    throw new Error('Speed Card round has duplicate colors');
+  }
+  if (!round.colors.every((c) => paletteSwatchById(c.id))) {
+    throw new Error('Speed Card round uses a color outside the 16-color palette');
+  }
+  if (!isPermutation(round.colors, round.questions)) {
+    throw new Error('Speed Card questions must be the same colors as the cards');
+  }
+  return {
+    colors: hydrateIds(round.colors.map((c) => c.id)),
+    questions: hydrateIds(round.questions.map((c) => c.id)),
+  };
+}
+
+/** Build one round from the confirmed 16-color palette (same shape as the API). */
+export function buildSpeedCardRound(): SpeedCardRound {
+  const pool = shuffleInPlace([...SPEED_CARD_PALETTE_IDS]);
+  const colorIds = pool.slice(0, SPEED_CARD_COUNT);
+  const questionIds = shuffleInPlace([...colorIds]);
+  if (questionIds.length > 1 && questionIds.every((id, index) => id === colorIds[index])) {
+    const first = questionIds.shift();
+    if (first !== undefined) questionIds.push(first);
+  }
+  return assertValidRound({
+    colors: hydrateIds(colorIds),
+    questions: hydrateIds(questionIds),
+  });
+}
+
+export async function fetchSpeedCardRound(difficulty: Difficulty): Promise<SpeedCardRound> {
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timeout = setTimeout(() => controller?.abort(), 60_000);
   try {
     const response = await fetch(getApiUrl('/api/speed-card/round'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ difficulty: toGameplayDifficulty(difficulty) }),
       signal: controller?.signal,
     });
     if (!response.ok) {
@@ -88,27 +162,13 @@ export async function fetchSpeedCardRound(): Promise<SpeedCardRound> {
       throw new Error(body.error ?? `Speed Card API responded with ${response.status}`);
     }
     const data = (await response.json()) as SpeedCardRound;
-    const valid = (item: SpeedCardColor | undefined): item is SpeedCardColor =>
-      Boolean(item && item.id && item.name && item.hex);
-    if (!Array.isArray(data.colors) || data.colors.length !== SPEED_CARD_COUNT || !data.colors.every(valid)) {
-      throw new Error('Speed Card API returned an invalid color set');
+    return assertValidRound(data);
+  } catch (err) {
+    if (__DEV__) {
+      console.warn('[Speed Card] API failed — using local round in development', err);
+      return buildSpeedCardRound();
     }
-    if (!Array.isArray(data.questions) || data.questions.length !== SPEED_CARD_COUNT || !data.questions.every(valid)) {
-      throw new Error('Speed Card API returned invalid questions');
-    }
-    const colorIds = new Set(data.colors.map((c) => c.id));
-    if (colorIds.size !== SPEED_CARD_COUNT) {
-      throw new Error('Speed Card API returned duplicate colors');
-    }
-    if (!data.questions.every((q) => colorIds.has(q.id))) {
-      throw new Error('Speed Card API returned questions that do not match the cards');
-    }
-    return data;
-  } catch (error) {
-    if (controller?.signal.aborted) {
-      throw new Error('Speed Card API timed out');
-    }
-    throw error;
+    throw err;
   } finally {
     clearTimeout(timeout);
   }

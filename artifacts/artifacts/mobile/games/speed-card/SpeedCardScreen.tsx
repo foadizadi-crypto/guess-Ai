@@ -29,10 +29,12 @@ import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useGameStore } from '@/store/gameStore';
 import { useUserStore } from '@/store/userStore';
+import { useAdStore } from '@/store/adStore';
 import { useAudio } from '@/hooks/useAudio';
 import { DIFFICULTY_CONFIG, calculateAnswerScore, getAvatarAbility, getTimerColor } from '@/gameEngine';
 import { STAMINA_PER_GAME } from '@/constants/economy';
 import { ROUTES } from '@/navigation/routes';
+import { isDifficultyOpen } from '@/shared/difficulty';
 import {
   SPEED_CARD_COUNT,
   SPEED_CARD_FLASH_MS,
@@ -60,15 +62,21 @@ const SpeedCardScreen = () => {
   const difficulty = useGameStore((s) => s.selectedDifficulty);
   const category = useGameStore((s) => s.selectedCategory);
   const timer = useGameStore((s) => s.timer);
+  const isTimerRunning = useGameStore((s) => s.isTimerRunning);
+  const setTimer = useGameStore((s) => s.setTimer);
   const score = useGameStore((s) => s.score);
   const gameSession = useGameStore((s) => s.gameSession);
   const recordAnswer = useGameStore((s) => s.recordAnswer);
   const advanceQuestion = useGameStore((s) => s.advanceQuestion);
+  const restartSession = useGameStore((s) => s.restartSession);
   const startSession = useGameStore((s) => s.startSession);
   const endSession = useGameStore((s) => s.endSession);
   const resetGame = useGameStore((s) => s.resetGame);
   const selectedAvatarId = useUserStore((s) => s.selectedAvatarId);
   const spendEnergy = useUserStore((s) => s.spendEnergy);
+  const canInGameRetryAd = useUserStore((s) => s.canInGameRetryAd);
+  const consumeInGameRetryAd = useUserStore((s) => s.consumeInGameRetryAd);
+  const { showRewarded, isAdFreePassActive } = useAdStore();
   const { playEffect } = useAudio();
 
   const [phase, setPhase] = useState<Phase>('countdown');
@@ -86,6 +94,8 @@ const SpeedCardScreen = () => {
   const countdownStarted = useRef(false);
   const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const revealEndsAt = useRef<number | null>(null);
+  const revealRemaining = useRef<number | null>(null);
   const fetchLock = useRef(false);
   const cdScale = useSharedValue(1.5);
 
@@ -101,12 +111,20 @@ const SpeedCardScreen = () => {
     flashTimer.current = null;
   };
 
-  const finishRound = useCallback(() => {
+  const finishRound = useCallback((reason: 'complete' | 'timeout' = 'complete') => {
     if (endedRef.current) return;
     endedRef.current = true;
     clearTimers();
     setPaused(false);
-    endSession();
+    if (reason === 'timeout') {
+      endSession({ applyFinish: false, sessionOutcome: 'lose' });
+    } else {
+      const corrects = useGameStore.getState().correctAnswers;
+      endSession({
+        applyFinish: true,
+        sessionOutcome: corrects === SPEED_CARD_COUNT ? 'perfect' : 'win',
+      });
+    }
     setTimeout(() => {
       router.replace(ROUTES.RESULT);
     }, 50);
@@ -131,7 +149,7 @@ const SpeedCardScreen = () => {
     setLoadError(null);
     setPhase('loading');
     try {
-      const round = await fetchSpeedCardRound();
+      const round = await fetchSpeedCardRound(difficulty);
       const positions = layoutCardPositions(
         SPEED_CARD_COUNT,
         board.width,
@@ -150,12 +168,9 @@ const SpeedCardScreen = () => {
       setLocalQuestionIndex(0);
       setFaceUp(true);
       setFlashKind(null);
+      revealRemaining.current = null;
+      revealEndsAt.current = null;
       setPhase('reveal');
-      if (revealTimer.current) clearTimeout(revealTimer.current);
-      revealTimer.current = setTimeout(() => {
-        setFaceUp(false);
-        setPhase('question');
-      }, revealDurationMs(difficulty));
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Speed Card API failed';
       setLoadError(msg);
@@ -166,6 +181,57 @@ const SpeedCardScreen = () => {
       fetchLock.current = false;
     }
   }, [board.height, board.width, difficulty]);
+
+  useEffect(() => {
+    if (isDifficultyOpen(difficulty)) return;
+    router.replace(ROUTES.LEVEL_SELECT);
+  }, [difficulty, router]);
+
+  useEffect(() => {
+    if (phase !== 'reveal') {
+      if (phase !== 'question') {
+        revealRemaining.current = null;
+        revealEndsAt.current = null;
+      }
+      return;
+    }
+    if (paused) {
+      if (revealTimer.current) {
+        clearTimeout(revealTimer.current);
+        revealTimer.current = null;
+      }
+      if (revealEndsAt.current != null) {
+        revealRemaining.current = Math.max(0, revealEndsAt.current - Date.now());
+        revealEndsAt.current = null;
+      }
+      return;
+    }
+    const wait = revealRemaining.current ?? revealDurationMs(difficulty);
+    revealRemaining.current = null;
+    revealEndsAt.current = Date.now() + wait;
+    revealTimer.current = setTimeout(() => {
+      setFaceUp(false);
+      setPhase('question');
+      revealEndsAt.current = null;
+    }, wait);
+    return () => {
+      if (revealTimer.current) {
+        clearTimeout(revealTimer.current);
+        revealTimer.current = null;
+      }
+    };
+  }, [difficulty, paused, phase]);
+
+  useEffect(() => {
+    const playing = phase === 'reveal' || phase === 'question' || phase === 'flash';
+    if (!isTimerRunning || paused || !playing || endedRef.current) return;
+    const id = setInterval(() => {
+      const next = Math.max(0, useGameStore.getState().timer - 1);
+      setTimer(next);
+      if (next === 0) finishRound('timeout');
+    }, 1000);
+    return () => clearInterval(id);
+  }, [finishRound, isTimerRunning, paused, phase, setTimer]);
 
   useEffect(() => {
     if (phase === 'loading' && cards.length === 0 && board.width >= 80 && board.height >= 80) {
@@ -179,11 +245,12 @@ const SpeedCardScreen = () => {
 
   useEffect(() => {
     if (gameSession) return;
+    if (phase === 'countdown' || phase === 'ready') return;
     const t = setTimeout(() => {
       if (!useGameStore.getState().gameSession) router.replace(ROUTES.LOBBY);
     }, 50);
     return () => clearTimeout(t);
-  }, [gameSession, router]);
+  }, [gameSession, phase, router]);
 
   useEffect(() => {
     if (countdownStarted.current) return;
@@ -215,15 +282,19 @@ const SpeedCardScreen = () => {
   };
 
   const handleReadyYes = () => {
+    if (!useGameStore.getState().gameSession) {
+      startSession(difficulty, category);
+    }
     void dealRound();
   };
 
   const handleReadyNo = () => {
-    setPhase('loading');
+    useUserStore.getState().addStamina(STAMINA_PER_GAME);
     exitToLobby();
   };
 
   const goNextAfterFlash = useCallback((wasLast: boolean) => {
+    if (endedRef.current) return;
     setFlashKind(null);
     if (wasLast) {
       finishRound();
@@ -235,7 +306,7 @@ const SpeedCardScreen = () => {
   }, [advanceQuestion, finishRound]);
 
   const handleCardPress = (card: PlacedCard) => {
-    if (phase !== 'question' || !currentAsk || flashKind) return;
+    if (phase !== 'question' || !currentAsk || flashKind || endedRef.current) return;
     const correct = card.id === currentAsk.id;
     const points = correct
       ? calculateAnswerScore(difficulty, timer, getAvatarAbility(selectedAvatarId), useGameStore.getState().streak)
@@ -252,10 +323,37 @@ const SpeedCardScreen = () => {
   };
 
   const restart = useCallback(() => {
-    if (!spendEnergy()) {
+    const begin = () => {
+      clearTimers();
+      endedRef.current = false;
+      revealRemaining.current = null;
+      revealEndsAt.current = null;
+      setPaused(false);
+      setCards([]);
+      setQuestions([]);
+      setLocalQuestionIndex(0);
+      setFaceUp(true);
+      setFlashKind(null);
+      countdownStarted.current = true;
+      setCountdown(3);
+      setPhase('countdown');
+      restartSession(difficulty, category);
+    };
+
+    if (spendEnergy()) {
+      begin();
+      return;
+    }
+
+    if (isAdFreePassActive()) {
+      begin();
+      return;
+    }
+
+    if (Platform.OS === 'web') {
       Alert.alert(
-        'Not enough stamina',
-        `Restarting starts a new round and costs ${STAMINA_PER_GAME} stamina. Refill from the lobby first.`,
+        'Ads unavailable',
+        'Rewarded ads are not available in the browser. Refill stamina from the lobby.',
         [
           { text: 'Keep playing', style: 'cancel' },
           { text: 'Exit to lobby', onPress: exitToLobby },
@@ -263,19 +361,48 @@ const SpeedCardScreen = () => {
       );
       return;
     }
-    clearTimers();
-    endedRef.current = false;
-    setPaused(false);
-    setCards([]);
-    setQuestions([]);
-    setLocalQuestionIndex(0);
-    setFaceUp(true);
-    setFlashKind(null);
-    countdownStarted.current = true;
-    setCountdown(3);
-    setPhase('countdown');
-    startSession(difficulty, category);
-  }, [category, difficulty, exitToLobby, spendEnergy, startSession]);
+
+    if (canInGameRetryAd()) {
+      Alert.alert(
+        'Retry this game',
+        'Watch an ad to retry without spending stamina.',
+        [
+          { text: 'Keep playing', style: 'cancel' },
+          {
+            text: 'Watch ad',
+            onPress: () => {
+              void (async () => {
+                const granted = isAdFreePassActive() || (await showRewarded());
+                if (!granted) return;
+                if (!consumeInGameRetryAd()) return;
+                begin();
+              })();
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Not enough stamina',
+      `Restarting starts a new round and costs ${STAMINA_PER_GAME} stamina. Refill from the lobby first.`,
+      [
+        { text: 'Keep playing', style: 'cancel' },
+        { text: 'Exit to lobby', onPress: exitToLobby },
+      ],
+    );
+  }, [
+    canInGameRetryAd,
+    category,
+    consumeInGameRetryAd,
+    difficulty,
+    exitToLobby,
+    isAdFreePassActive,
+    showRewarded,
+    spendEnergy,
+    restartSession,
+  ]);
 
   const cdStyle = useAnimatedStyle(() => ({ transform: [{ scale: cdScale.value }] }));
 
@@ -320,7 +447,7 @@ const SpeedCardScreen = () => {
         >
           {phase === 'loading' ? (
             <View style={styles.boardStatus} pointerEvents="auto">
-              <Text style={styles.boardStatusText}>Connecting to OpenAI…</Text>
+              <Text style={styles.boardStatusText}>Loading colors…</Text>
             </View>
           ) : null}
           {phase === 'error' ? (
@@ -377,7 +504,7 @@ const SpeedCardScreen = () => {
               : phase === 'loading'
                 ? 'Loading colors…'
                 : phase === 'error'
-                  ? 'Online round required'
+                  ? 'Could not deal cards'
                   : 'Watch the cards'}
           </Text>
         </GlassCard>

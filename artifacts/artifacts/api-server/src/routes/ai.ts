@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { HttpError } from "../services/ai/errors";
-import { generateImageWithFallback, generateQuestionsWithFallback, getProviderStatus } from "../services/ai/manager";
-import { generateSpeedCardRound } from "../services/ai/speedCardRound";
-import type { Difficulty } from "../services/ai/types";
+import { editImageWithFallback, generateImageWithFallback, generateQuestionsWithFallback, getProviderStatus } from "../services/ai/manager";
+import { generateSpeedCardRound, parseSpeedCardDifficulty } from "../services/ai/speedCardRound";
+import type { Difficulty, ImageStyle } from "../services/ai/types";
 
 const router: Router = Router();
 
@@ -89,19 +89,54 @@ router.post("/questions", async (req, res, next) => {
 
 router.post("/images", async (req, res, next) => {
   try {
-    const { prompt } = req.body as { prompt?: string };
+    const { prompt, style, editPrompt, optionPrompts } = req.body as {
+      prompt?: string;
+      style?: ImageStyle;
+      editPrompt?: string;
+      optionPrompts?: string[];
+    };
 
     if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
       res.status(400).json({ error: "prompt is required and must be a non-empty string" });
       return;
     }
 
-    const { url, providerUsed } = await generateImageWithFallback(prompt.trim());
+    const imageStyle: ImageStyle = style === "cartoon" ? "cartoon" : "default";
+    const options = { style: imageStyle };
+
+    const { url, providerUsed } = await generateImageWithFallback(prompt.trim(), options);
     if (!url) {
       throw new HttpError(502, "OpenAI returned no image");
     }
 
-    res.json({ url, provider: providerUsed });
+    const shouldEdit = typeof editPrompt === "string" && editPrompt.trim().length > 0;
+    const thumbPrompts = Array.isArray(optionPrompts)
+      ? optionPrompts
+          .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+          .slice(0, 4)
+      : [];
+
+    const [edited, optionUrls] = await Promise.all([
+      shouldEdit
+        ? editImageWithFallback(url, editPrompt.trim(), options).then((result) => {
+            if (!result.url) throw new HttpError(502, "OpenAI returned no edited image");
+            return result.url;
+          })
+        : Promise.resolve(undefined),
+      thumbPrompts.length > 0
+        ? Promise.all(
+            thumbPrompts.map(async (item) => {
+              const generated = await generateImageWithFallback(item.trim(), options);
+              if (!generated.url) {
+                throw new HttpError(502, "OpenAI returned no option image");
+              }
+              return generated.url;
+            }),
+          )
+        : Promise.resolve(undefined),
+    ]);
+
+    res.json({ url, provider: providerUsed, editedUrl: edited, optionUrls });
   } catch (err) {
     next(err);
   }
@@ -111,9 +146,10 @@ router.get("/ai-status", (_req, res) => {
   res.json(getProviderStatus());
 });
 
-router.post("/speed-card/round", async (_req, res, next) => {
+router.post("/speed-card/round", async (req, res, next) => {
   try {
-    const round = await generateSpeedCardRound();
+    const difficulty = parseSpeedCardDifficulty((req.body as { difficulty?: unknown } | undefined)?.difficulty);
+    const round = await generateSpeedCardRound(difficulty);
     res.json(round);
   } catch (err) {
     next(err);
