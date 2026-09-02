@@ -54,7 +54,7 @@ async function getWeeklySortedTotals(): Promise<[string, number][]> {
     totals.set(d.playerId, (totals.get(d.playerId) ?? 0) + (d.xpEarned ?? 0));
   });
 
-  return [...totals.entries()].sort(([, a], [, b]) => b - a);
+  return [...totals.entries()].filter(([, xp]) => xp > 0).sort(([, a], [, b]) => b - a);
 }
 
 async function persistXpCatchUp(docs: QueryDocumentSnapshot[]): Promise<void> {
@@ -98,6 +98,7 @@ async function topPlayersByLeaderboardXp(db: Firestore, limit: number) {
         selectedAvatarId?: string;
       };
       const score = playerLeaderboardXp(d);
+      if (score <= 0) continue;
       const prev = merged.get(docSnap.id);
       if (prev && prev.xp >= score) continue;
       merged.set(docSnap.id, {
@@ -122,6 +123,7 @@ async function topPlayersByLeaderboardXp(db: Firestore, limit: number) {
   });
 
   return [...merged.entries()]
+    .filter(([, row]) => row.xp > 0)
     .sort((a, b) => b[1].xp - a[1].xp)
     .slice(0, limit)
     .map(([userId, row], i) => ({
