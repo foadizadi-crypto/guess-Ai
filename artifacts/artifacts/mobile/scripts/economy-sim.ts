@@ -13,14 +13,16 @@ import {
   STAMINA_PER_GAME,
   STAMINA_AD_REWARD,
   STAMINA_ADS_PER_DAY,
+  IN_GAME_RETRY_ADS_PER_DAY,
   ENERGY_DAILY_REWARD,
   ENERGY_REFILL_GEM_COST,
   STAMINA_UPGRADE_LEVELS,
   MAX_STAMINA_UPGRADE_LEVEL,
-  FIRST_UPGRADE_OFFER_GEM_COST,
   getEnergyCap,
   getRefillIntervalMin,
   getUpgradeGemCost,
+  getUpgradeCoinCost,
+  getDailyWeekPowerUp,
   isFirstUpgradeOfferActive,
   POWER_UP_PRICES,
   IAP_GEM_PACKS,
@@ -31,11 +33,9 @@ import {
 } from '../constants/economy';
 import {
   GAME_CONFIG,
-  sessionCompleteCoins,
-  perfectGameCoins,
-  coinsForCorrect,
-  computeAnswerXP,
+  xpToAdvanceLevel,
 } from '../constants/gameConfig';
+import { applyEngineEvents, mapAnswerToEngineEvents } from '../shared/economy';
 import { SPIN_CONFIG, jackpotPayout } from '../constants/spinConfig';
 import { LEVEL_REWARDS } from '../constants/levelRewards';
 import {
@@ -64,33 +64,50 @@ console.log('\n=== 1. STATIC CONSISTENCY CHECKS ===\n');
 // ── Stamina source ──────────────────────────────────────────────────────────
 console.log('-- Stamina source --');
 check(
-  'base cap is 50 and base refill is 20 min',
-  getEnergyCap(0) === 50 && getRefillIntervalMin(0) === 20,
+  'base cap is 100 and refill is 12 min',
+  getEnergyCap(0) === 100 && getRefillIntervalMin(0) === 12,
   `cap=${getEnergyCap(0)} interval=${getRefillIntervalMin(0)}`,
 );
 const basePerDay = Math.floor((24 * 60) / getRefillIntervalMin(0));
 check(
-  'base source regenerates 72/day (14 games + 2 spare)',
-  basePerDay === 72 && Math.floor(basePerDay / STAMINA_PER_GAME) === 14,
-  `perDay=${basePerDay} games=${Math.floor(basePerDay / STAMINA_PER_GAME)}`,
+  'base source regenerates 120/day at cost 10',
+  basePerDay === 120 && STAMINA_PER_GAME === 10,
+  `perDay=${basePerDay} cost=${STAMINA_PER_GAME}`,
 );
 check(
   'caps strictly increase with level',
   STAMINA_UPGRADE_LEVELS.every((l, i) => i === 0 || l.cap > STAMINA_UPGRADE_LEVELS[i - 1].cap),
 );
 check(
-  'refill interval strictly decreases with level',
-  STAMINA_UPGRADE_LEVELS.every(
-    (l, i) => i === 0 || l.refillIntervalMin < STAMINA_UPGRADE_LEVELS[i - 1].refillIntervalMin,
-  ),
+  'refill interval is 12 minutes at every upgrade level',
+  STAMINA_UPGRADE_LEVELS.every((l) => l.refillIntervalMin === 12),
 );
 check(
-  'gem costs strictly increase with level',
-  STAMINA_UPGRADE_LEVELS.every((l, i) => i === 0 || l.gemCost > STAMINA_UPGRADE_LEVELS[i - 1].gemCost),
+  'lobby stamina ads stay at 5 per day',
+  STAMINA_ADS_PER_DAY === 5 && STAMINA_AD_REWARD === 10,
 );
 check(
-  'max level cap (100) is at least the old pre-v2 cap so no player loses ceiling',
-  getEnergyCap(MAX_STAMINA_UPGRADE_LEVEL) === 100,
+  'in-game retry ads are a separate global 5x10 cap',
+  IN_GAME_RETRY_ADS_PER_DAY === 5 && STAMINA_AD_REWARD === 10,
+);
+check(
+  'daily week 1 is Hint and week 2 is Reveal, then it repeats',
+  getDailyWeekPowerUp(0) === 'hint' &&
+    getDailyWeekPowerUp(6) === 'hint' &&
+    getDailyWeekPowerUp(7) === 'reveal-blur' &&
+    getDailyWeekPowerUp(13) === 'reveal-blur' &&
+    getDailyWeekPowerUp(14) === 'hint',
+);
+check(
+  'upgrade gem prices match the live product table',
+  STAMINA_UPGRADE_LEVELS[1].gemCost === 50 &&
+    STAMINA_UPGRADE_LEVELS[2].gemCost === 150 &&
+    STAMINA_UPGRADE_LEVELS[3].gemCost === 250,
+  STAMINA_UPGRADE_LEVELS.map((l) => l.gemCost).join(','),
+);
+check(
+  'max level cap is 400',
+  getEnergyCap(MAX_STAMINA_UPGRADE_LEVEL) === 400,
   `cap=${getEnergyCap(MAX_STAMINA_UPGRADE_LEVEL)}`,
 );
 check(
@@ -102,24 +119,21 @@ check(
   `refill=${ENERGY_REFILL_GEM_COST} vs pack=${STAMINA_PACKS.find((p) => p.stamina >= getEnergyCap(0))?.gemCost}`,
 );
 check(
-  'launch offer is a genuine discount on level 1',
-  FIRST_UPGRADE_OFFER_GEM_COST < STAMINA_UPGRADE_LEVELS[1].gemCost,
+  '25-gem launch offer is not a live L1 price',
+  !isFirstUpgradeOfferActive(new Date().toISOString(), 0) &&
+    getUpgradeGemCost(1, new Date().toISOString(), 0) === 50,
 );
 check(
-  'launch offer applies for a brand-new account at level 0',
-  isFirstUpgradeOfferActive(new Date().toISOString(), 0) &&
-    getUpgradeGemCost(1, new Date().toISOString(), 0) === FIRST_UPGRADE_OFFER_GEM_COST,
+  'upgrade gem costs match L1/L2/L3',
+  getUpgradeGemCost(1, new Date().toISOString(), 0) === 50 &&
+    getUpgradeGemCost(2, new Date().toISOString(), 1) === 150 &&
+    getUpgradeGemCost(3, new Date().toISOString(), 2) === 250,
 );
 check(
-  'launch offer expires after the window',
-  !isFirstUpgradeOfferActive(new Date(Date.now() - 72 * 3600_000).toISOString(), 0) &&
-    getUpgradeGemCost(1, new Date(Date.now() - 72 * 3600_000).toISOString(), 0) ===
-      STAMINA_UPGRADE_LEVELS[1].gemCost,
-);
-check(
-  'launch offer never discounts levels 2 and 3',
-  getUpgradeGemCost(2, new Date().toISOString(), 1) === STAMINA_UPGRADE_LEVELS[2].gemCost &&
-    getUpgradeGemCost(3, new Date().toISOString(), 2) === STAMINA_UPGRADE_LEVELS[3].gemCost,
+  'L1 has a 25,000 coin alternative; L2 and L3 are gems-only',
+  getUpgradeCoinCost(1) === 25_000 &&
+    getUpgradeCoinCost(2) == null &&
+    getUpgradeCoinCost(3) == null,
 );
 
 // ── Price table consistency ─────────────────────────────────────────────────
@@ -197,32 +211,46 @@ const spinGemEV = SPIN_CONFIG.rewards.reduce(
   0,
 );
 check(
-  'a paid spin is +EV in coins but not absurdly so (1x–3x its cost)',
-  spinCoinEV > SPIN_CONFIG.extraSpinCost && spinCoinEV < SPIN_CONFIG.extraSpinCost * 3,
+  'exactly one gem slot on the wheel and it is the 50-gem jackpot',
+  (() => {
+    const gemSlots = SPIN_CONFIG.rewards.filter((r) => r.type === 'gems' || r.type === 'jackpot');
+    return (
+      gemSlots.length === 1 &&
+      gemSlots[0].isJackpot === true &&
+      gemSlots[0].amount === 50 &&
+      gemSlots[0].type === 'gems'
+    );
+  })(),
+);
+check(
+  'paid-spin coin EV no longer includes a coin jackpot',
+  spinCoinEV >= 0,
   `EV=${spinCoinEV.toFixed(1)} cost=${SPIN_CONFIG.extraSpinCost}`,
 );
-check('spin wheel is a real gem faucet', spinGemEV > 0, `gemEV=${spinGemEV.toFixed(2)}/spin`);
+check(
+  'spin jackpot is the only gem faucet besides shop IAP',
+  spinGemEV === 50 * 0.02,
+  `gemEV=${spinGemEV.toFixed(2)}/spin`,
+);
 
 // ── Level rewards ───────────────────────────────────────────────────────────
 console.log('\n-- Level rewards --');
 const gemLevels = LEVEL_REWARDS.filter((r) => r.gems > 0);
 check(
-  'every 10-level milestone grants gems',
-  gemLevels.length === 50 && gemLevels.every((r) => r.level % 10 === 0),
+  'level rewards do not grant gems',
+  gemLevels.length === 0,
   `count=${gemLevels.length}`,
 );
 check(
-  'gem milestones scale up with level band (progression feels like growth)',
+  'level gem column is zero at every band',
   (() => {
     const at = (lv: number) => LEVEL_REWARDS.find((r) => r.level === lv)!.gems;
-    return at(10) < at(110) && at(110) < at(260) && at(260) < at(410);
+    return at(10) === 0 && at(110) === 0 && at(260) === 0 && at(410) === 0;
   })(),
-  `L10=${LEVEL_REWARDS.find((r) => r.level === 10)!.gems} L110=${LEVEL_REWARDS.find((r) => r.level === 110)!.gems} L260=${LEVEL_REWARDS.find((r) => r.level === 260)!.gems} L410=${LEVEL_REWARDS.find((r) => r.level === 410)!.gems}`,
 );
 check(
-  'early gem income is small enough that day-1 accounts cannot buy an upgrade',
-  LEVEL_REWARDS.filter((r) => r.level <= 30).reduce((s, r) => s + r.gems, 0) <
-    FIRST_UPGRADE_OFFER_GEM_COST,
+  'levels cannot fund a stamina upgrade with gems',
+  LEVEL_REWARDS.filter((r) => r.level <= 30).reduce((s, r) => s + r.gems, 0) === 0,
   `L1-30 gems=${LEVEL_REWARDS.filter((r) => r.level <= 30).reduce((s, r) => s + r.gems, 0)}`,
 );
 check(
@@ -233,7 +261,30 @@ check(
   'level rewards never have negative payouts',
   LEVEL_REWARDS.every((r) => r.coins >= 0 && r.gems >= 0),
 );
-check('max level table matches MAX_LEVEL', LEVEL_REWARDS[LEVEL_REWARDS.length - 1].level <= MAX_LEVEL);
+check(
+  'max level table is not treated as a locked product cap',
+  MAX_LEVEL == null || LEVEL_REWARDS[LEVEL_REWARDS.length - 1].level <= MAX_LEVEL,
+);
+
+// ── Master Engine settlement (live gameplay path) ───────────────────────────
+console.log('\n-- Master Engine settlement --');
+const engineCorrect = applyEngineEvents('guess-ai', ['CORRECT'], 1);
+const engineWrong = applyEngineEvents('guess-ai', ['WRONG'], 1);
+const engineFinish = applyEngineEvents('guess-ai', ['FINISH'], 1);
+check(
+  'CORRECT payout comes from calculateReward, not computeAnswerXP',
+  engineCorrect.xp === 30 && engineCorrect.coins === 15,
+  `xp=${engineCorrect.xp} coins=${engineCorrect.coins}`,
+);
+check(
+  'WRONG pays 0 in the Master Engine',
+  engineWrong.xp === 0 && engineWrong.coins === 0,
+);
+check(
+  'FINISH payout comes from calculateReward, not sessionCompleteCoins',
+  engineFinish.xp === 90 && engineFinish.coins === 45,
+  `xp=${engineFinish.xp} coins=${engineFinish.coins}`,
+);
 
 // ── Coin/gem exchange ───────────────────────────────────────────────────────
 console.log('\n-- Coin to gem exchange --');
@@ -244,8 +295,8 @@ check(
 const lifetimeExchangeGems = COIN_GEM_EXCHANGES.reduce((s, e) => s + e.gems * e.maxPurchases, 0);
 check(
   'lifetime exchange gems cannot fund the whole upgrade tree alone',
-  lifetimeExchangeGems < STAMINA_UPGRADE_LEVELS.reduce((s, l) => s + l.gemCost, 0),
-  `exchange=${lifetimeExchangeGems} tree=${STAMINA_UPGRADE_LEVELS.reduce((s, l) => s + l.gemCost, 0)}`,
+  lifetimeExchangeGems < STAMINA_UPGRADE_LEVELS.reduce((s, l) => s + (l.gemCost ?? 0), 0),
+  `exchange=${lifetimeExchangeGems} tree=${STAMINA_UPGRADE_LEVELS.reduce((s, l) => s + (l.gemCost ?? 0), 0)}`,
 );
 
 console.log('\n=== 2. SIXTY-DAY SIMULATION ===\n');
@@ -266,8 +317,8 @@ interface SimResult {
 /**
  * Deterministic simulation (expected values, no RNG) of a player who logs in
  * daily, claims the daily reward, takes the free spin, watches all stamina ads
- * and plays until out of stamina. `perfectRate` is the share of rounds finished
- * 20/20; the rest are treated as fully-completed non-perfect rounds.
+ * and plays until out of stamina. `perfectRate` is unused; rounds are completed
+ * sessions that settle through the live Master Engine.
  */
 function simulate(opts: {
   days: number;
@@ -278,7 +329,7 @@ function simulate(opts: {
   /** Play sessions per day. The cap truncates accrual, so this matters a lot. */
   sessionsPerDay?: number;
 }): SimResult {
-  const { days, difficulty, accuracy, watchAds, buyUpgrades, sessionsPerDay = 1 } = opts;
+  const { days, accuracy, watchAds, buyUpgrades, sessionsPerDay = 1 } = opts;
 
   let coins = 500; // starting balance from the store defaults
   let gems = 0;
@@ -296,31 +347,42 @@ function simulate(opts: {
   let daysToFirstUpgrade: number | null = null;
 
   const questionsPerRound = GAME_CONFIG.questions_per_session;
+  const gameId = 'guess-ai';
 
-  /** One round played question-by-question through the real reward functions. */
-  function playRound(): { coins: number; xp: number; perfect: boolean } {
+  /**
+   * One round through the live settlement path:
+   * recordAnswer → mapAnswerToEngineEvents → applyEngineEvents
+   * endSession → FINISH
+   */
+  function playRound(playerLevel: number): { coins: number; xp: number } {
     let coinsOut = 0;
     let xpOut = 0;
     let streak = 0;
-    let wrong = 0;
+    let superComboActive = false;
 
     for (let q = 0; q < questionsPerRound; q += 1) {
       const correct = Math.random() < accuracy;
-      if (correct) {
-        streak += 1;
-        xpOut += computeAnswerXP(difficulty, streak);
-        coinsOut += coinsForCorrect(difficulty, streak);
-      } else {
-        streak = 0;
-        wrong += 1;
-        xpOut += GAME_CONFIG.xp_wrong;
-      }
+      const newStreak = correct ? streak + 1 : 0;
+      const newSuperComboActive = correct && newStreak >= GAME_CONFIG.super_combo_threshold;
+      const engine = applyEngineEvents(
+        gameId,
+        mapAnswerToEngineEvents({
+          correct,
+          streakAfter: newStreak,
+          superComboJustActivated: correct && !superComboActive && newSuperComboActive,
+        }),
+        playerLevel,
+      );
+      streak = newStreak;
+      superComboActive = newSuperComboActive;
+      coinsOut += engine.coins;
+      xpOut += engine.xp;
     }
 
-    const perfect = wrong === 0;
-    coinsOut += sessionCompleteCoins(difficulty);
-    if (perfect) coinsOut += perfectGameCoins(difficulty);
-    return { coins: coinsOut, xp: xpOut, perfect };
+    const finish = applyEngineEvents(gameId, ['FINISH'], playerLevel);
+    coinsOut += finish.coins;
+    xpOut += finish.xp;
+    return { coins: coinsOut, xp: xpOut };
   }
 
   for (let day = 1; day <= days; day += 1) {
@@ -337,7 +399,7 @@ function simulate(opts: {
 
     // Rewarded stamina ads.
     if (watchAds) {
-      const adStamina = STAMINA_ADS_PER_DAY * STAMINA_AD_REWARD;
+      const adStamina = (STAMINA_ADS_PER_DAY + IN_GAME_RETRY_ADS_PER_DAY) * STAMINA_AD_REWARD;
       energy += adStamina;
       staminaFromAds += adStamina;
     }
@@ -359,7 +421,7 @@ function simulate(opts: {
         energy -= STAMINA_PER_GAME;
         gamesPlayed += 1;
 
-        const round = playRound();
+        const round = playRound(level);
         const roundCoins = round.coins;
         const capLeft = Math.max(0, DAILY_XP_CAP - dailyXP);
         const roundXP = Math.min(round.xp, capLeft);
@@ -375,10 +437,9 @@ function simulate(opts: {
     // Level ups → claim milestone gems.
     let newLevel = level;
     let acc = 0;
-    for (let l = 1; l < MAX_LEVEL; l += 1) {
-      const needed = Math.round(
-        GAME_CONFIG.xp_base_formula_coefficient * Math.pow(l, GAME_CONFIG.xp_base_formula_exponent),
-      );
+    for (let l = 1; MAX_LEVEL == null || l < MAX_LEVEL; l += 1) {
+      const needed = xpToAdvanceLevel(l);
+      if (needed <= 0) break;
       if (acc + needed > xp) break;
       acc += needed;
       newLevel = l + 1;
@@ -399,7 +460,7 @@ function simulate(opts: {
       const created = new Date(Date.now() - (day - 1) * 86_400_000).toISOString();
       while (sourceLevel < MAX_STAMINA_UPGRADE_LEVEL) {
         const cost = getUpgradeGemCost(sourceLevel + 1, created, sourceLevel);
-        if (gems < cost) break;
+        if (cost == null || gems < cost) break;
         gems -= cost;
         sourceLevel += 1;
         if (daysToFirstUpgrade === null) daysToFirstUpgrade = day;
@@ -449,8 +510,8 @@ console.log(`      total regen — decides playtime: ${(onceADay.gamesPlayed / o
 
 console.log('=== 3. BALANCE ASSERTIONS ON SIMULATION ===\n');
 check(
-  'a player who spreads play across the day reaches the promised ~14 rounds/day',
-  freeNoAds.gamesPlayed / freeNoAds.days >= 14 && freeNoAds.gamesPlayed / freeNoAds.days < 20,
+  'a player who spreads play across the day gets at least a full 12-min regen day of rounds',
+  freeNoAds.gamesPlayed / freeNoAds.days >= 12 && freeNoAds.gamesPlayed / freeNoAds.days < 20,
   `${(freeNoAds.gamesPlayed / freeNoAds.days).toFixed(1)}/day`,
 );
 check(
@@ -459,9 +520,9 @@ check(
   `${(onceADay.gamesPlayed / onceADay.days).toFixed(1)}/day — cap truncates accrual`,
 );
 check(
-  'watching ads is a meaningful but not dominant boost (+1 to +5 rounds/day)',
+  'watching ads can add up to 10 extra rounds/day (lobby 5 + in-game 5)',
   freeWithAds.gamesPlayed - freeNoAds.gamesPlayed > freeNoAds.days &&
-    freeWithAds.gamesPlayed - freeNoAds.gamesPlayed < freeNoAds.days * 5,
+    freeWithAds.gamesPlayed - freeNoAds.gamesPlayed <= freeNoAds.days * 10,
   `+${freeWithAds.gamesPlayed - freeNoAds.gamesPlayed} rounds over ${freeNoAds.days} days`,
 );
 check(

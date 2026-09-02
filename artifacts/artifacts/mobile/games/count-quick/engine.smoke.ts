@@ -11,6 +11,12 @@ import {
   COUNT_QUICK_TARGET_RULE,
 } from './config';
 import { buildCountQuickQuestion, buildCountQuickRound, itemCountForDifficulty, secondsForDifficulty } from './engine';
+import {
+  COUNT_QUICK_COUNTDOWN,
+  COUNT_QUICK_HOW_TO_BODY,
+  COUNT_QUICK_READY_LABEL,
+  countQuickQuestionText,
+} from './flow';
 
 function assert(ok: boolean, msg: string): void {
   if (!ok) throw new Error(msg);
@@ -45,6 +51,25 @@ for (const question of round) {
 const hard = buildCountQuickQuestion('hard');
 assert(hard.items.length === 12, 'hard has 12 items');
 assert(!('xp' in hard) && !('coins' in hard), 'question has no economy fields');
+assert(typeof hard.targetColorName === 'string' && hard.targetColorName.length > 0, 'question has a color name');
+assert(
+  countQuickQuestionText('orange') === 'How many orange cards?',
+  'question copy',
+);
+assert(COUNT_QUICK_READY_LABEL === "I'M READY", 'ready button copy');
+assert(COUNT_QUICK_HOW_TO_BODY.includes('Look carefully'), 'how-to copy');
+assert(COUNT_QUICK_COUNTDOWN.join(',') === '3,2,1', 'countdown 3-2-1');
+
+for (const palette of COUNT_QUICK_PALETTES) {
+  assert(palette.colors.length === 6, `${palette.id} has 6 named swatches`);
+  const names = palette.colors.map((c) => c.name);
+  const hexes = palette.colors.map((c) => c.hex);
+  assert(new Set(names).size === names.length, `${palette.id} color names unique`);
+  assert(hexes.every((hex) => /^#[0-9A-F]{6}$/i.test(hex)), `${palette.id} hex preserved`);
+}
+
+const sunsetOrange = COUNT_QUICK_PALETTES.find((p) => p.id === 'sunset')?.colors.find((c) => c.name === 'orange');
+assert(sunsetOrange?.hex === '#FF6B35', 'sunset orange hex unchanged');
 
 console.log('count-quick engine smoke ok', {
   questions: COUNT_QUICK_QUESTIONS,

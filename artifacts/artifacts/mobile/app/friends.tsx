@@ -45,7 +45,7 @@ export default function FriendsScreen() {
 
       <View style={styles.empty}>
         <Ionicons name="person-add-outline" size={28} color={GameColors.textSecondary} />
-        <Text style={styles.emptyTitle}>No friends yet</Text>
+        <Text style={styles.emptyTitle}>Coming soon</Text>
         <Text style={styles.emptyCopy}>
           Friend codes and invites are not in this build.
         </Text>

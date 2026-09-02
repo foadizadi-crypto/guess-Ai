@@ -38,6 +38,8 @@ if (ADMOB_LINKED) {
 }
 
 const INTERSTITIAL_COOLDOWN_MS = 3 * 60 * 1000;
+/** If AdMob never LOADED/CLOSED/ERROR, fail so lobby can release the reserved slot. */
+const REWARDED_LOAD_TIMEOUT_MS = 25_000;
 
 class AdService {
   private lastInterstitialAt = 0;
@@ -110,11 +112,19 @@ class AdService {
       return await new Promise<boolean>((resolve) => {
         const ad = _Rewarded.createForAdRequest(AD_UNIT_IDS.rewarded);
         let rewarded = false;
+        let settled = false;
+        const finish = (value: boolean) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(value);
+        };
+        const timer = setTimeout(() => finish(false), REWARDED_LOAD_TIMEOUT_MS);
         ad.addAdEventListener(_RewardedEventType.EARNED_REWARD, () => {
           rewarded = true;
         });
-        ad.addAdEventListener(_AdEventType.CLOSED, () => resolve(rewarded));
-        ad.addAdEventListener(_AdEventType.ERROR, () => resolve(false));
+        ad.addAdEventListener(_AdEventType.CLOSED, () => finish(rewarded));
+        ad.addAdEventListener(_AdEventType.ERROR, () => finish(false));
         ad.addAdEventListener(_AdEventType.LOADED, () => ad.show());
         ad.load();
       });

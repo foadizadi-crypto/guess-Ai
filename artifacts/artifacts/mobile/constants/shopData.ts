@@ -141,7 +141,7 @@ export const REAL_MONEY_OFFERS: RealMoneyOffer[] = [
     name: 'Starter Pack',
     description: 'The best deal to kick off your GUESSAi journey.',
     price: '$2.00',
-    contents: ['5× Combo Shield', '3× Clarity Bomb', '1× Exclusive Silver Frame'],
+    contents: ['Chlöe Avatar', 'Basic Wings', '100 Stamina'],
     oneTime: true,
   },
   {
@@ -153,6 +153,13 @@ export const REAL_MONEY_OFFERS: RealMoneyOffer[] = [
     future: true,
   },
 ];
+
+/** IAP Starter Pack grants — existing catalog ids + Master Engine stamina. */
+export const STARTER_PACK_GRANT = {
+  avatarId: 'avatar_2',
+  wingId: 'wing_basic',
+  stamina: 100,
+} as const;
 
 // ─── Ad-removal products ──────────────────────────────────────────────────
 

@@ -5,7 +5,7 @@ import { getStartingClarity, getStartingTime, getAvatarAbility, getRevealDelta }
 import { useUserStore } from '@/store/userStore';
 import { generateId } from '@/utils';
 import { GAME_CONFIG } from '@/constants/gameConfig';
-import { SPEED_CARD_COUNT } from '@/games/speed-card/config';
+import { speedCardContentLevelCap } from '@/games/speed-card/economy';
 import { COUNT_QUICK_QUESTIONS } from '@/games/count-quick/config';
 import { LOST_ITEM_QUESTIONS } from '@/games/lost-item/config';
 import { applyEngineEvents, gameIdForCategory, mapAnswerToEngineEvents, usesSharedSessionTimer } from '@/shared/economy';
@@ -186,7 +186,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         correctAnswers: 0,
         totalQuestions:
           category === 'speed_card'
-            ? SPEED_CARD_COUNT
+            ? speedCardContentLevelCap()
             : category === 'count_quick'
               ? COUNT_QUICK_QUESTIONS
               : category === 'lost_item'

@@ -12,15 +12,8 @@ import {
   xpToAdvanceLevel,
 } from './gameConfig';
 
-// ─── XP per answer ──────────────────────────────────────────────────────────
-export const XP_CORRECT_EASY   = GAME_CONFIG.xp_correct_easy;
-export const XP_CORRECT_MEDIUM = GAME_CONFIG.xp_correct_medium;
-export const XP_CORRECT_HARD   = GAME_CONFIG.xp_correct_hard;
-export const XP_WRONG          = GAME_CONFIG.xp_wrong;
-
-// ─── Game completion bonuses ─────────────────────────────────────────────────
-export const XP_COMPLETION_BONUS = GAME_CONFIG.xp_session_complete_bonus;
-export const XP_PERFECT_BONUS   = GAME_CONFIG.xp_perfect_game_bonus;
+// XP_CORRECT_* / getDifficultyXP / XP_PER_* aliases were unused duplicates.
+// Live settlement is calculateReward — do not reintroduce those constants.
 
 // ─── Combo thresholds ────────────────────────────────────────────────────────
 // Consecutive correct answers within one session earn bonus XP per question.
@@ -38,18 +31,17 @@ export function getComboBonus(streak: number): number {
   return _getComboBonus(streak);
 }
 
-/** Returns base XP for a correct answer based on difficulty. */
-export function getDifficultyXP(difficulty: 'easy' | 'medium' | 'hard'): number {
-  if (difficulty === 'hard')   return XP_CORRECT_HARD;
-  if (difficulty === 'medium') return XP_CORRECT_MEDIUM;
-  return XP_CORRECT_EASY;
+// ─── Level system ────────────────────────────────────────────────────────────
+// Formula now driven by gameConfig.ts (coefficient × level ^ exponent).
+// Global Player Level has no locked product cap yet. GAME_CONFIG.max_level stays
+// configurable; null means uncapped until a cap is specified.
+export function getMaxLevel(): number | null {
+  const max = GAME_CONFIG.max_level;
+  if (max == null || !Number.isFinite(max) || max < 1) return null;
+  return Math.floor(max);
 }
 
-// ─── Level system ────────────────────────────────────────────────────────────
-// Formula now driven by gameConfig.ts (coefficient × level ^ exponent × 100).
-// max_level: 500 per Final Implementation Prompt (change GAME_CONFIG.max_level to 100
-// if capping at 100 per Economy Patch 1.1.1).
-export const MAX_LEVEL = GAME_CONFIG.max_level;
+export const MAX_LEVEL: number | null = GAME_CONFIG.max_level;
 
 /** XP required to advance FROM currentLevel TO currentLevel+1. */
 export function xpToAdvance(currentLevel: number): number {
@@ -57,12 +49,17 @@ export function xpToAdvance(currentLevel: number): number {
 }
 
 // ─── Coin earning rates ──────────────────────────────────────────────────────
-export const COINS_PER_CORRECT_ANSWER = 1;   // every correct answer
-export const COINS_PERFECT_GAME_BONUS  = 25;  // 20/20 correct
+// DEPRECATED / LEGACY — NOT USED BY MASTER ENGINE.
+// Live coin settlement is calculateReward. Do not import these for gameplay payout.
+/** @deprecated LEGACY — NOT USED BY MASTER ENGINE */
 export const COINS_REWARDED_AD         = 30;  // per rewarded ad watched
+/** @deprecated LEGACY — NOT USED BY MASTER ENGINE */
 export const COINS_WEEKLY_CHALLENGE    = 500; // weekly challenge completion
+/** @deprecated LEGACY — NOT USED BY MASTER ENGINE */
 export const COINS_ACHIEVEMENT_MIN     = 50;  // minimum achievement reward
+/** @deprecated LEGACY — NOT USED BY MASTER ENGINE */
 export const COINS_ACHIEVEMENT_MAX     = 500; // maximum achievement reward
+/** @deprecated LEGACY — NOT USED BY MASTER ENGINE */
 export const COINS_LEVEL_MILESTONE     = 200; // every 10-level milestone
 
 // ─── Anti-farming ────────────────────────────────────────────────────────────
@@ -91,16 +88,43 @@ export const IAP_COIN_PACKS = [
 // ─── Daily reward schedule ───────────────────────────────────────────────────
 // The 7-day cycle repeats. Milestone days (14, 30) fire on those exact streak days.
 export const DAILY_REWARD_SCHEDULE = [
-  { day: 1, coins: 15,  bonus: null,              icon: 'logo-bitcoin' as const },
-  { day: 2, coins: 30,  bonus: null,              icon: 'logo-bitcoin' as const },
-  { day: 3, coins: 30,  bonus: 'hint' as const,   icon: 'bulb-outline' as const },
-  { day: 4, coins: 60,  bonus: null,              icon: 'logo-bitcoin' as const },
-  { day: 5, coins: 80,  bonus: null,              icon: 'logo-bitcoin' as const },
-  { day: 6, coins: 100, bonus: null,              icon: 'logo-bitcoin' as const },
-  { day: 7, coins: 150, bonus: 'reveal' as const, icon: 'gift-outline' as const },
+  { day: 1, coins: 15,  bonus: null, icon: 'logo-bitcoin' as const },
+  { day: 2, coins: 30,  bonus: null, icon: 'logo-bitcoin' as const },
+  { day: 3, coins: 30,  bonus: null, icon: 'logo-bitcoin' as const },
+  { day: 4, coins: 60,  bonus: null, icon: 'logo-bitcoin' as const },
+  { day: 5, coins: 80,  bonus: null, icon: 'logo-bitcoin' as const },
+  { day: 6, coins: 100, bonus: null, icon: 'logo-bitcoin' as const },
+  { day: 7, coins: 150, bonus: null, icon: 'logo-bitcoin' as const },
 ] as const;
 
 export type DailyBonusType = 'hint' | 'reveal' | 'cosmetic' | 'premium_cosmetic';
+export type DailyWeekPowerUpId = 'hint' | 'reveal-blur';
+
+/**
+ * 2-week daily cycle from the existing streak counter (no new persistence).
+ * Week 1 (streak 0–6): Hint every claim. Week 2 (streak 7–13): Reveal. Then repeat.
+ */
+export function getDailyWeekPowerUp(streak: number): DailyWeekPowerUpId {
+  const n = Number.isFinite(streak) ? Math.max(0, Math.floor(streak)) : 0;
+  return Math.floor(n / 7) % 2 === 0 ? 'hint' : 'reveal-blur';
+}
+
+/** Streak used for the 2-week cycle. A missed day starts week 1 again. */
+export function dailyWeekStreak(
+  streak: number,
+  lastClaimDate: string | null | undefined,
+  todayStr: string,
+  yesterdayStr: string,
+): number {
+  const n = Number.isFinite(streak) ? Math.max(0, Math.floor(streak)) : 0;
+  if (!lastClaimDate) return n;
+  if (lastClaimDate === todayStr || lastClaimDate === yesterdayStr) return n;
+  return 0;
+}
+
+export function getDailyWeekPowerUpLabel(streak: number): string {
+  return getDailyWeekPowerUp(streak) === 'hint' ? 'Hint' : 'Reveal';
+}
 
 // Milestone days that fire special rewards on top of the cycle
 export const DAILY_MILESTONE_REWARDS = [
@@ -113,8 +137,10 @@ export const PREMIUM_PRICE_MONTHLY      = '$3.99';
 export const PREMIUM_MISSIONS_PER_DAY   = 5; // vs FREE_MISSIONS_PER_DAY for free users
 export const FREE_MISSIONS_PER_DAY      = 3;
 export const PREMIUM_COIN_MULTIPLIER    = 2; // applied to daily login coins
-// Spec: max 3 rewarded ads per day for energy (applies to all players)
+// Unused leftover from an older spec draft. Live lobby ads use STAMINA_ADS_PER_DAY (5).
+/** @deprecated LEGACY — NOT USED BY MASTER ENGINE. Live cap is STAMINA_ADS_PER_DAY. */
 export const REWARDED_ADS_DAILY_FREE    = 3;
+/** @deprecated LEGACY — NOT USED BY MASTER ENGINE. Live cap is STAMINA_ADS_PER_DAY. */
 export const REWARDED_ADS_DAILY_PREMIUM = 3;
 
 // ─── Level gem milestones — DEPRECATED ───────────────────────────────────────
@@ -135,8 +161,7 @@ export const IAP_GEM_PACKS = [
 export type IAPGemPackId = typeof IAP_GEM_PACKS[number]['id'];
 
 // ─── Coin → Gem exchange ──────────────────────────────────────────────────────
-// Players can convert accumulated coins into a small gem grant.
-// Each tier has a lifetime purchase cap to preserve the gem economy.
+// Removed from the live shop. Constants kept so persisted purchase counts still hydrate.
 export const COIN_GEM_EXCHANGES = [
   { id: 'coin_gem_30k',  coins: 30_000,  gems: 5,  maxPurchases: 2, label: '5 💎 for 30,000 🪙' },
   { id: 'coin_gem_100k', coins: 100_000, gems: 25, maxPurchases: 1, label: '25 💎 for 100,000 🪙' },
@@ -144,71 +169,67 @@ export const COIN_GEM_EXCHANGES = [
 export type CoinGemExchangeId = typeof COIN_GEM_EXCHANGES[number]['id'];
 
 // ─── Energy / Stamina ─────────────────────────────────────────────────────────
-// Spec (v2.0 — single upgradable source):
-//   ONE stamina source (the reserve pool was removed). Base cap: 50, cost per
-//   game: 5, base refill: 1 energy / 20 min (72/day ≈ 14 games).
-//   The source is upgradable up to 3 levels — gems only — via the Upgrade
-//   panel on the Customization screen. Each level raises both the cap and the
-//   refill speed. Stamina from ads/packs/daily rewards can OVERFLOW above the
-//   cap (never wasted); timed refill pauses while above the cap.
-export const STAMINA_PER_GAME    = 5; // cost per game round
-export const STAMINA_AD_REWARD   = 5; // stamina per rewarded ad watch
-export const STAMINA_ADS_PER_DAY = 3; // max rewarded ads for stamina/day
-export const ENERGY_DAILY_REWARD = 10; // energy granted on daily reward claim
-export const ENERGY_REFILL_GEM_COST = 10; // gems to instantly refill to cap
+// ONE stamina source. Base cap 100, play cost 10, refill 1 / 12 min at EVERY
+// level. L1/L2/L3 raise capacity only (bonus vs base: +50 / +150 / +300).
+// L1 can be paid with coins OR gems; L2 and L3 are gems only.
+// Ads/packs/daily rewards can OVERFLOW above the cap; timed refill pauses
+// while above the cap.
+export const STAMINA_PER_GAME    = 10;
+export const STAMINA_AD_REWARD   = 10;
+export const STAMINA_ADS_PER_DAY = 5;
+/** Global per-player in-game loss/retry ads (all games share this cap). Each grants STAMINA_AD_REWARD. */
+export const IN_GAME_RETRY_ADS_PER_DAY = 5;
+export const ENERGY_DAILY_REWARD = 10;
+export const ENERGY_REFILL_GEM_COST = 10;
 
 export interface StaminaUpgradeLevel {
   level: number;
-  /** Gems required to unlock this level (0 = base, free). */
-  gemCost: number;
-  /** Max stamina the source holds via timed refill. */
+  /** Gem price. null = not purchasable with gems (base level). */
+  gemCost: number | null;
+  /** Coin alternative. null = gems only. */
+  coinCost: number | null;
   cap: number;
-  /** Minutes per +1 stamina from the timed refill. */
   refillIntervalMin: number;
 }
 
+// Approved PASS 4 product lock (bonus vs base): 100 / 150 / 250 / 400.
+// The older "100 → 150 → 200 → 350" line in `fix and test.md` is superseded.
 export const STAMINA_UPGRADE_LEVELS: readonly StaminaUpgradeLevel[] = [
-  { level: 0, gemCost: 0,   cap: 50,  refillIntervalMin: 20 }, // base: 72/day
-  { level: 1, gemCost: 50,  cap: 60,  refillIntervalMin: 18 }, // 80/day
-  { level: 2, gemCost: 100, cap: 75,  refillIntervalMin: 15 }, // 96/day
-  { level: 3, gemCost: 200, cap: 100, refillIntervalMin: 12 }, // 120/day
-] as const;
+  { level: 0, gemCost: null, coinCost: null,  cap: 100, refillIntervalMin: 12 },
+  { level: 1, gemCost: 50,   coinCost: 25_000, cap: 150, refillIntervalMin: 12 },
+  { level: 2, gemCost: 150,  coinCost: null,  cap: 250, refillIntervalMin: 12 },
+  { level: 3, gemCost: 250,  coinCost: null,  cap: 400, refillIntervalMin: 12 },
+];
 
 export const MAX_STAMINA_UPGRADE_LEVEL = STAMINA_UPGRADE_LEVELS.length - 1;
 
-// ─── First-upgrade launch offer ───────────────────────────────────────────────
-// Level 1 is half price for the first 48 hours after the account is created —
-// a cheap first taste of the gem economy converts far better than full price.
+// Retired: a 25-gem L1 launch discount would conflict with the live 50-gem L1
+// price. Keep the symbols so old imports compile; they must not set a live price.
 export const FIRST_UPGRADE_OFFER_HOURS     = 48;
-export const FIRST_UPGRADE_OFFER_GEM_COST  = 25;
+export const FIRST_UPGRADE_OFFER_GEM_COST  = 50;
 
-/** True while the level-1 launch discount is still valid for this account. */
+/** Launch discount is retired so the UI cannot show a 25-gem L1 price. */
 export function isFirstUpgradeOfferActive(
-  accountCreatedAt: string | number | null | undefined,
-  staminaSourceLevel: number,
-  now: number = Date.now(),
+  _accountCreatedAt?: string | number | null,
+  _staminaSourceLevel?: number,
+  _now?: number,
 ): boolean {
-  if (staminaSourceLevel !== 0) return false;
-  if (!accountCreatedAt) return false;
-  const created = typeof accountCreatedAt === 'number'
-    ? accountCreatedAt
-    : Date.parse(accountCreatedAt);
-  if (!Number.isFinite(created)) return false;
-  return now - created < FIRST_UPGRADE_OFFER_HOURS * 60 * 60 * 1000;
+  return false;
 }
 
-/** Gem cost to reach `targetLevel`, accounting for the launch discount. */
+/** Gem cost to reach `targetLevel`. null for the base row. */
 export function getUpgradeGemCost(
   targetLevel: number,
-  accountCreatedAt: string | number | null | undefined,
-  currentLevel: number,
-  now: number = Date.now(),
-): number {
-  const level = clampUpgradeLevel(targetLevel);
-  if (level === 1 && isFirstUpgradeOfferActive(accountCreatedAt, currentLevel, now)) {
-    return FIRST_UPGRADE_OFFER_GEM_COST;
-  }
-  return STAMINA_UPGRADE_LEVELS[level].gemCost;
+  _accountCreatedAt?: string | number | null,
+  _currentLevel?: number,
+  _now?: number,
+): number | null {
+  return STAMINA_UPGRADE_LEVELS[clampUpgradeLevel(targetLevel)].gemCost;
+}
+
+/** Coin cost to reach `targetLevel`. null when that level is gems-only. */
+export function getUpgradeCoinCost(targetLevel: number): number | null {
+  return STAMINA_UPGRADE_LEVELS[clampUpgradeLevel(targetLevel)].coinCost;
 }
 
 function clampUpgradeLevel(level: number): number {

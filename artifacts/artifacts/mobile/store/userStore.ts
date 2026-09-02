@@ -27,36 +27,55 @@ import { COSMETIC_BY_ID, FRAMES, type CosmeticType } from '@/constants/collectio
 import {
   SPIN_CONFIG,
   pickRewardIndex,
-  jackpotPayout,
   type SpinReward,
 } from '@/constants/spinConfig';
 import { getLevelReward } from '@/constants/levelRewards';
 import { GEM_PACKS, STAMINA_PACKS, type GemPackItem } from '@/constants/shopConfig';
-import { type ConsumableId, CONSUMABLE_PRICES } from '@/constants/shopData';
+import { type ConsumableId, CONSUMABLE_PRICES, STARTER_PACK_GRANT } from '@/constants/shopData';
 import { getDailyMissions, type MissionType } from '@/constants/missions';
 import {
   DAILY_XP_CAP,
-  COINS_PERFECT_GAME_BONUS,
   FREE_MISSIONS_PER_DAY,
   PREMIUM_MISSIONS_PER_DAY,
   PREMIUM_COIN_MULTIPLIER,
-  MAX_LEVEL,
+  getMaxLevel,
   MAX_ENERGY,
   ENERGY_DAILY_REWARD,
   STAMINA_PER_GAME,
+  STAMINA_AD_REWARD,
+  IN_GAME_RETRY_ADS_PER_DAY,
   MAX_STAMINA_UPGRADE_LEVEL,
   getEnergyCap,
   getRefillIntervalMin,
   getUpgradeGemCost,
-  COIN_GEM_EXCHANGES,
+  getUpgradeCoinCost,
+  getDailyWeekPowerUp,
+  dailyWeekStreak,
   type CoinGemExchangeId,
 } from '@/constants/economy';
 import { notificationService } from '@/services/NotificationService';
-import { calculateLevel, isToday, getTodayUTCString } from '@/utils';
+import { calculateLevel, getTodayUTCString, getYesterdayUTCString } from '@/utils';
 import { WING_SOURCES } from '@/constants/characterSources';
+import { ALL_PETS, DEFAULT_OWNED_PETS } from '@/constants/pets';
+import { ALL_STANDS, DEFAULT_OWNED_STANDS } from '@/constants/stands';
+import { mergeOwnedIds, sanitizeEquippedId } from '@/constants/loadout';
+import { keepAtLeast, keepEnergyClock } from '@/shared/progressSafety';
 
 const DEFAULT_NETWORK_MODE: 'auto' | 'online' | 'offline' =
   process.env.EXPO_PUBLIC_USE_ONLINE_AI === 'true' ? 'online' : 'auto';
+
+/**
+ * Notifications are cosmetic. They are fired from inside reward mutations, so a
+ * missing platform method or a rejected schedule must never abort XP, mission
+ * and achievement grants.
+ */
+function notifyLocal(title: string, body: string): void {
+  try {
+    void Promise.resolve(
+      notificationService.scheduleLocalNotification({ title, body, trigger: null }),
+    ).catch(() => {});
+  } catch { /* ignore */ }
+}
 
 export type ConsumableInventory = Record<ConsumableId, number>;
 
@@ -129,12 +148,19 @@ interface UserState {
   energy: number;
   staminaSourceLevel: number;
   lastEnergyRefillTime: number | null;
+  inGameRetryAdsUsed: number;
+  inGameRetryAdsDate: string | null;
   /** ISO timestamp of first launch — drives the 48 h first-upgrade discount. */
   accountCreatedAt: string | null;
 
   // Wings Cosmetic Inventory
   ownedWings: string[];
   equippedWing: string | null;
+  // Pets / Stands — same owned-ids + equipped-id pattern as Wings
+  ownedPets: string[];
+  equippedPet: string | null;
+  ownedStands: string[];
+  equippedStand: string | null;
 
   // Store & Progression Actions Pipelines
   setUsername: (username: string) => void;
@@ -148,6 +174,7 @@ interface UserState {
     coins?: number;
     gems?: number;
     xp?: number;
+    totalXpEarned?: number;
     level?: number;
     isPremium?: boolean;
     selectedAvatarId?: string;
@@ -174,6 +201,10 @@ interface UserState {
     lastEnergyRefillTime?: number | null;
     ownedWings?: string[];
     equippedWing?: string | null;
+    ownedPets?: string[];
+    equippedPet?: string | null;
+    ownedStands?: string[];
+    equippedStand?: string | null;
     dailyXPEarned?: number;
     dailyXPDate?: string | null;
     unclaimedLevelRewards?: number[];
@@ -219,14 +250,18 @@ interface UserState {
   performSpin:   (isFree: boolean) => SpinReward | null;
   tickEnergy: () => void;
   spendEnergy: (amount?: number) => boolean;
+  canInGameRetryAd: () => boolean;
+  consumeInGameRetryAd: () => boolean;
   addStamina: (amount: number) => void;
   refillEnergyWithGems: (gemCost: number) => boolean;
-  /** Unlock the next stamina source level with gems. Returns false when maxed or unaffordable. */
-  upgradeStaminaSource: () => boolean;
+  /** Unlock the next stamina source level with gems or (L1) coins. */
+  upgradeStaminaSource: (payWith?: 'gems' | 'coins') => boolean;
   buyGemPack: (packId: string) => boolean;
   buyCoinGemExchange: (id: CoinGemExchangeId) => boolean;
   purchaseWing: (wingId: string, gemCost: number) => boolean;
   equipWing: (wingId: string | null) => void;
+  equipPet: (petId: string | null) => void;
+  equipStand: (standId: string | null) => void;
 }
 
 const defaultSettings: UserSettings = {
@@ -291,9 +326,15 @@ export const useUserStore = create<UserState>()(
       energy:               MAX_ENERGY,
       staminaSourceLevel:   0,
       lastEnergyRefillTime: null,
+      inGameRetryAdsUsed: 0,
+      inGameRetryAdsDate: null,
       accountCreatedAt:     new Date().toISOString(),
       ownedWings:   [],
       equippedWing: null,
+      ownedPets: [...DEFAULT_OWNED_PETS],
+      equippedPet: null,
+      ownedStands: [...DEFAULT_OWNED_STANDS],
+      equippedStand: null,
       settings: { ...defaultSettings },
       statistics: { ...defaultStatistics },
       dailyXPEarned: 0,
@@ -335,10 +376,16 @@ export const useUserStore = create<UserState>()(
         return {
           username: profile.username?.trim() || state.username,
           nicknameUid: profile.username?.trim() ? uid : state.nicknameUid,
-          coins: typeof profile.coins === 'number' ? profile.coins : state.coins,
-          gems: typeof profile.gems === 'number' ? profile.gems : state.gems,
-          xp: typeof profile.xp === 'number' ? profile.xp : state.xp,
-          level: typeof profile.level === 'number' ? profile.level : state.level,
+          coins: keepAtLeast(state.coins, profile.coins),
+          gems: keepAtLeast(state.gems, profile.gems),
+          xp: Math.max(
+            state.xp,
+            typeof profile.xp === 'number' ? profile.xp : 0,
+            typeof profile.totalXpEarned === 'number' ? profile.totalXpEarned : 0,
+          ),
+          // Level follows XP, which is already monotonic above. A remote 0 (or a
+          // freshly created player document) must never demote an existing player.
+          level: keepAtLeast(state.level, profile.level),
           isPremium: typeof profile.isPremium === 'boolean' ? profile.isPremium : state.isPremium,
           selectedAvatarId: profile.selectedAvatarId || state.selectedAvatarId,
           achievements: mergedAchievements,
@@ -364,13 +411,29 @@ export const useUserStore = create<UserState>()(
             ? profile.extraSpinsToday : state.extraSpinsToday,
           lastExtraSpinDate: profile.lastExtraSpinDate !== undefined
             ? profile.lastExtraSpinDate : state.lastExtraSpinDate,
-          energy: typeof profile.energy === 'number' ? profile.energy : state.energy,
-          staminaSourceLevel: typeof profile.staminaSourceLevel === 'number'
-            ? profile.staminaSourceLevel : state.staminaSourceLevel,
-          lastEnergyRefillTime: profile.lastEnergyRefillTime !== undefined
-            ? profile.lastEnergyRefillTime : state.lastEnergyRefillTime,
+          energy: keepAtLeast(state.energy, profile.energy),
+          staminaSourceLevel: keepAtLeast(
+            state.staminaSourceLevel ?? 0,
+            profile.staminaSourceLevel,
+          ),
+          lastEnergyRefillTime: keepEnergyClock(
+            state.lastEnergyRefillTime,
+            profile.lastEnergyRefillTime,
+          ) ?? state.lastEnergyRefillTime,
           ownedWings: Array.isArray(profile.ownedWings) ? profile.ownedWings : state.ownedWings,
           equippedWing: profile.equippedWing !== undefined ? profile.equippedWing : state.equippedWing,
+          ownedPets: mergeOwnedIds(ALL_PETS, Array.isArray(profile.ownedPets) ? profile.ownedPets : state.ownedPets),
+          equippedPet: sanitizeEquippedId(
+            ALL_PETS,
+            mergeOwnedIds(ALL_PETS, Array.isArray(profile.ownedPets) ? profile.ownedPets : state.ownedPets),
+            profile.equippedPet !== undefined ? profile.equippedPet : state.equippedPet,
+          ),
+          ownedStands: mergeOwnedIds(ALL_STANDS, Array.isArray(profile.ownedStands) ? profile.ownedStands : state.ownedStands),
+          equippedStand: sanitizeEquippedId(
+            ALL_STANDS,
+            mergeOwnedIds(ALL_STANDS, Array.isArray(profile.ownedStands) ? profile.ownedStands : state.ownedStands),
+            profile.equippedStand !== undefined ? profile.equippedStand : state.equippedStand,
+          ),
           dailyXPEarned: typeof profile.dailyXPEarned === 'number'
             ? profile.dailyXPEarned : state.dailyXPEarned,
           dailyXPDate: profile.dailyXPDate !== undefined ? profile.dailyXPDate : state.dailyXPDate,
@@ -434,22 +497,22 @@ export const useUserStore = create<UserState>()(
         const finalDailyXP = currentDailyXP + allowedXP;
 
         const calculatedLevel = calculateLevel(finalXP);
+        const levelCap = getMaxLevel();
         let updatedUnclaimedRewards = [...state.unclaimedLevelRewards];
 
         if (calculatedLevel > state.level) {
           for (let l = state.level + 1; l <= calculatedLevel; l++) {
-            if (l <= MAX_LEVEL) {
+            if (levelCap == null || l <= levelCap) {
               updatedUnclaimedRewards.push(l);
-              notificationService.scheduleLocalNotification({
-                title: 'Level Up! 🎉',
-                body: `Congratulations, you reached Level ${l}! Claim items in profile screen now.`,
-                trigger: null
-              });
+              notifyLocal(
+                'Level Up! 🎉',
+                `Congratulations, you reached Level ${l}! Claim items in profile screen now.`,
+              );
             }
           }
         }
 
-        const newLevel = Math.min(MAX_LEVEL, calculatedLevel);
+        const newLevel = levelCap == null ? calculatedLevel : Math.min(levelCap, calculatedLevel);
         const unlockedAvatars = state.avatars.map((a) =>
           !a.unlocked && a.unlockLevel !== undefined && a.unlockLevel <= newLevel
             ? { ...a, unlocked: true }
@@ -591,26 +654,33 @@ export const useUserStore = create<UserState>()(
       // --- CALIBRATED DAILY STREAK SCHEDULER ---
       claimDailyReward: () => {
         const todayStr = getTodayUTCString();
+        const yesterdayStr = getYesterdayUTCString();
         if (get().dailyReward.lastClaimDate === todayStr) {
           console.log('[Daily Streak Engine] Reward already claimed for today.');
           return 0;
         }
-        const currentDayIdx = get().dailyReward.currentDay ?? 0;
+        const lastDate = get().dailyReward.lastClaimDate ?? null;
+        const missedDay = !!lastDate && lastDate !== todayStr && lastDate !== yesterdayStr;
+        const currentDayIdx = missedDay ? 0 : (get().dailyReward.currentDay ?? 0);
         const amt = DAILY_REWARDS[currentDayIdx]?.coins ?? DAILY_REWARDS[0].coins;
+        const weekStreak = dailyWeekStreak(get().dailyReward.streak ?? 0, lastDate, todayStr, yesterdayStr);
 
         set((state) => {
           if (state.dailyReward.lastClaimDate === todayStr) return {};
 
           const nextDayIdx = (currentDayIdx + 1) % DAILY_REWARDS.length;
           const configNextAmount = DAILY_REWARDS[nextDayIdx].coins;
-          const currentStreak = state.dailyReward.streak;
+          const currentStreak = weekStreak;
+          const weekPowerUp = getDailyWeekPowerUp(weekStreak);
 
-          // Daily reward grants +10 energy — allowed to overflow above the cap
-          // so the reward is never wasted (timed refill pauses above the cap).
           const newEnergy = state.energy + ENERGY_DAILY_REWARD;
+          const newPowerUps = { ...state.powerUps };
+          newPowerUps[weekPowerUp] = (newPowerUps[weekPowerUp] || 0) + 1;
+
           return {
             coins: state.coins + amt,
             energy: newEnergy,
+            powerUps: newPowerUps,
             dailyReward: {
               lastClaimed: new Date().toISOString(),
               lastClaimDate: todayStr,
@@ -639,7 +709,6 @@ export const useUserStore = create<UserState>()(
             return { unclaimedLevelRewards: state.unclaimedLevelRewards.filter((l) => l !== level) };
           }
 
-          // Economy v2: 10-level milestones grant +5 gems (free-player gem faucet)
           const newGems = state.gems + (configurationPack.gems ?? 0);
           let newCoins = state.coins + configurationPack.coins;
           const newConsumables = { ...state.consumables };
@@ -740,11 +809,10 @@ export const useUserStore = create<UserState>()(
           const isNowCompleted = updatedCurrent >= m.target;
 
           if (isNowCompleted && !m.completed) {
-            notificationService.scheduleLocalNotification({
-              title: 'Mission Complete! 🎯',
-              body: `Your mission "${m.description}" is finished. Open lobby to claim rewards!`,
-              trigger: null
-            });
+            notifyLocal(
+              'Mission Complete! 🎯',
+              `Your mission "${m.description}" is finished. Open lobby to claim rewards!`,
+            );
           }
 
           return {
@@ -809,9 +877,15 @@ export const useUserStore = create<UserState>()(
         energy: MAX_ENERGY,
         staminaSourceLevel: 0,
         lastEnergyRefillTime: null,
+        inGameRetryAdsUsed: 0,
+        inGameRetryAdsDate: null,
         accountCreatedAt: new Date().toISOString(),
         ownedWings: [],
         equippedWing: null,
+        ownedPets: [...DEFAULT_OWNED_PETS],
+        equippedPet: null,
+        ownedStands: [...DEFAULT_OWNED_STANDS],
+        equippedStand: null,
         statistics: { ...defaultStatistics },
         dailyXPEarned: 0,
         dailyXPDate: null,
@@ -879,11 +953,10 @@ export const useUserStore = create<UserState>()(
           }
 
           newlyUnlocked.forEach((unlockedAch) => {
-            notificationService.scheduleLocalNotification({
-              title: 'Achievement Unlocked! 🏆',
-              body: `You earned the "${unlockedAch.title}" badge!`,
-              trigger: null
-            });
+            notifyLocal(
+              'Achievement Unlocked! 🏆',
+              `You earned the "${unlockedAch.title}" badge!`,
+            );
           });
         }
 
@@ -939,22 +1012,21 @@ export const useUserStore = create<UserState>()(
         equippedCosmetics: { ...state.equippedCosmetics, frame: id }
       })),
 
-      // Spec: Starter Pack ($2.00) → 5 Combo Shields + 3 Clarity Bombs + Silver Frame
-      // (NOT gems — gem grants via IAP are handled by the gem-pack purchase flow)
-      grantStarterPack: () => set((state) => ({
-        coins: state.coins + 500,
-        consumables: {
-          ...state.consumables,
-          combo_shield: (state.consumables.combo_shield ?? 0) + 5,
-          clarity_bomb: (state.consumables.clarity_bomb ?? 0) + 3,
-        },
-        ownedCosmetics: { ...state.ownedCosmetics, frame_silver: true },
-      })),
+      // Starter Pack: existing catalog avatar + starter wings + 100 stamina (no coins/gems).
+      grantStarterPack: () => {
+        get().unlockAvatar(STARTER_PACK_GRANT.avatarId);
+        get().addStamina(STARTER_PACK_GRANT.stamina);
+        set((state) => {
+          if (state.ownedWings.includes(STARTER_PACK_GRANT.wingId)) return {};
+          return { ownedWings: [...state.ownedWings, STARTER_PACK_GRANT.wingId] };
+        });
+      },
 
       canFreeSpin: () => {
         const lastSpin = get().lastSpinDate;
         if (!lastSpin) return true;
-        return !isToday(lastSpin);
+        const elapsedMs = Date.now() - new Date(lastSpin).getTime();
+        return elapsedMs >= SPIN_CONFIG.freeSpinCooldownHours * 3600 * 1000;
       },
 
       canExtraSpin: () => {
@@ -990,8 +1062,13 @@ export const useUserStore = create<UserState>()(
           if (!isFree) {
             if (spinsUsedToday >= SPIN_CONFIG.extraSpinsPerDay) return {};
             if (state.coins < SPIN_CONFIG.extraSpinCost) return {};
-          } else if (state.lastSpinDate && isToday(state.lastSpinDate)) {
-            return {};
+          } else {
+            const elapsedMs = state.lastSpinDate
+              ? Date.now() - new Date(state.lastSpinDate).getTime()
+              : Infinity;
+            if (elapsedMs < SPIN_CONFIG.freeSpinCooldownHours * 3600 * 1000) {
+              return {};
+            }
           }
 
           granted = true;
@@ -1009,7 +1086,7 @@ export const useUserStore = create<UserState>()(
               updatedGems += reward.amount;
               break;
             case 'jackpot':
-              updatedCoins += jackpotPayout(reward.amount);
+              updatedGems += reward.amount;
               break;
             case 'consumable': {
               const consId = (reward.itemId ?? reward.id) as ConsumableId;
@@ -1046,7 +1123,10 @@ export const useUserStore = create<UserState>()(
           return { lastEnergyRefillTime: now };
         }
 
-        const lastRefill = state.lastEnergyRefillTime || now;
+        if (typeof state.lastEnergyRefillTime !== 'number') {
+          return { lastEnergyRefillTime: now };
+        }
+        const lastRefill = state.lastEnergyRefillTime;
         const deltaMs = now - lastRefill;
         const intervalMs = getRefillIntervalMin(state.staminaSourceLevel) * 60 * 1000;
 
@@ -1078,6 +1158,31 @@ export const useUserStore = create<UserState>()(
         return success;
       },
 
+      canInGameRetryAd: () => {
+        const state = get();
+        const today = getTodayUTCString();
+        const used = state.inGameRetryAdsDate === today ? (state.inGameRetryAdsUsed ?? 0) : 0;
+        return used < IN_GAME_RETRY_ADS_PER_DAY;
+      },
+
+      consumeInGameRetryAd: () => {
+        let success = false;
+        set((state) => {
+          const today = getTodayUTCString();
+          const used = state.inGameRetryAdsDate === today ? (state.inGameRetryAdsUsed ?? 0) : 0;
+          if (used >= IN_GAME_RETRY_ADS_PER_DAY) return {};
+          success = true;
+          // Global in-game retry ads (separate from lobby stamina ads): restore
+          // the play-cost stamina and continue/retry without charging again.
+          return {
+            inGameRetryAdsDate: today,
+            inGameRetryAdsUsed: used + 1,
+            energy: state.energy + STAMINA_AD_REWARD,
+          };
+        });
+        return success;
+      },
+
       // Ads, packs and rewards add straight to the main source and may overflow
       // above the cap so no purchased stamina is ever wasted.
       addStamina: (amount) => set((state) => ({ energy: state.energy + amount })),
@@ -1096,16 +1201,23 @@ export const useUserStore = create<UserState>()(
         return success;
       },
 
-      upgradeStaminaSource: () => {
+      upgradeStaminaSource: (payWith = 'gems') => {
         let success = false;
         set((state) => {
           const currentLevel = state.staminaSourceLevel ?? 0;
           const nextLevel = currentLevel + 1;
           if (nextLevel > MAX_STAMINA_UPGRADE_LEVEL) return {};
-          // Price resolved inside the transaction so the discount window cannot
-          // be captured by a stale render and charged after it expired.
+          if (payWith === 'coins') {
+            const coinCost = getUpgradeCoinCost(nextLevel);
+            if (coinCost == null || state.coins < coinCost) return {};
+            success = true;
+            return {
+              coins: state.coins - coinCost,
+              staminaSourceLevel: nextLevel,
+            };
+          }
           const cost = getUpgradeGemCost(nextLevel, state.accountCreatedAt, currentLevel);
-          if (state.gems < cost) return {};
+          if (cost == null || state.gems < cost) return {};
           success = true;
           return {
             gems: state.gems - cost,
@@ -1156,29 +1268,25 @@ export const useUserStore = create<UserState>()(
 
       equipWing: (wingId) => set({ equippedWing: wingId }),
 
-      buyCoinGemExchange: (id) => {
-        const tier = COIN_GEM_EXCHANGES.find((exchange) => exchange.id === id);
-        if (!tier) return false;
+      equipPet: (petId) => set((state) => {
+        const owned = mergeOwnedIds(ALL_PETS, state.ownedPets);
+        if (petId !== null && !owned.includes(petId)) return { ownedPets: owned };
+        return {
+          ownedPets: owned,
+          equippedPet: sanitizeEquippedId(ALL_PETS, owned, petId),
+        };
+      }),
 
-        let success = false;
-        set((state) => {
-          const purchased = state.coinGemExchanges[id] ?? 0;
-          if (purchased >= tier.maxPurchases || state.coins < tier.coins) {
-            return {};
-          }
+      equipStand: (standId) => set((state) => {
+        const owned = mergeOwnedIds(ALL_STANDS, state.ownedStands);
+        if (standId !== null && !owned.includes(standId)) return { ownedStands: owned };
+        return {
+          ownedStands: owned,
+          equippedStand: sanitizeEquippedId(ALL_STANDS, owned, standId),
+        };
+      }),
 
-          success = true;
-          return {
-            coins: state.coins - tier.coins,
-            gems: state.gems + tier.gems,
-            coinGemExchanges: {
-              ...state.coinGemExchanges,
-              [id]: purchased + 1,
-            },
-          };
-        });
-        return success;
-      },
+      buyCoinGemExchange: (_id) => false,
     }),
     {
       name: 'user-store',
@@ -1187,18 +1295,39 @@ export const useUserStore = create<UserState>()(
       // the lobby wing placement can be inspected without changing release
       // progression (the first free wing normally unlocks at level 5).
       merge: (persistedState, currentState) => {
-        const persisted = persistedState as Partial<UserState> & { staminaReserve?: number };
+        const persisted = (persistedState ?? {}) as Partial<UserState> & { staminaReserve?: number };
         // Economy v2 migration: the reserve pool was removed. Fold any legacy
         // reserve into the main source as overflow so players lose nothing.
         const legacyReserve = Math.max(0, persisted.staminaReserve ?? 0);
         const merged: UserState = {
           ...currentState,
           ...persisted,
-          energy: (persisted.energy ?? currentState.energy) + legacyReserve,
-          staminaSourceLevel: persisted.staminaSourceLevel ?? 0,
+          // Local rehydration can land after a cloud hydrate. XP and level are
+          // monotonic, so a stored 0 must never roll back what was just loaded.
+          xp: Math.max(currentState.xp, persisted.xp ?? 0),
+          level: Math.max(currentState.level, persisted.level ?? 0),
+          coins: Math.max(currentState.coins, persisted.coins ?? 0),
+          gems: Math.max(currentState.gems, persisted.gems ?? 0),
+          energy: Math.max(currentState.energy, persisted.energy ?? 0) + legacyReserve,
+          staminaSourceLevel: Math.max(
+            currentState.staminaSourceLevel ?? 0,
+            persisted.staminaSourceLevel ?? 0,
+          ),
           // Existing accounts predate this field; stamp them now so the launch
           // discount applies to genuinely new installs only going forward.
           accountCreatedAt: persisted.accountCreatedAt ?? currentState.accountCreatedAt,
+          ownedPets: mergeOwnedIds(ALL_PETS, persisted.ownedPets),
+          equippedPet: sanitizeEquippedId(
+            ALL_PETS,
+            mergeOwnedIds(ALL_PETS, persisted.ownedPets),
+            persisted.equippedPet,
+          ),
+          ownedStands: mergeOwnedIds(ALL_STANDS, persisted.ownedStands),
+          equippedStand: sanitizeEquippedId(
+            ALL_STANDS,
+            mergeOwnedIds(ALL_STANDS, persisted.ownedStands),
+            persisted.equippedStand,
+          ),
         };
         delete (merged as { staminaReserve?: number }).staminaReserve;
 

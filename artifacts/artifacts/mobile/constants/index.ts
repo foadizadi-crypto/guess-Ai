@@ -1,5 +1,6 @@
 import type { ShopItem, Avatar, LeaderboardEntry, PowerUpId, PowerUpInventory } from '@/types';
 import { POWER_UP_PRICES } from '@/constants/economy';
+import { CATEGORY_LAYOUT } from './categories';
 
 // ─── Game rules ────────────────────────────────────────────────────────────
 
@@ -16,35 +17,14 @@ export const GAME_CONSTANTS = {
   SCORE_BASE: 1000,
   SCORE_HINT_PENALTY: 200,
   SCORE_TIME_BONUS_MAX: 200,
-  COINS_PER_WIN: 50,
   HINT_COST_COINS: 10,
-  XP_PER_WIN: 100,
-  // XP_PER_LEVEL kept for backward compat but level logic now uses economy.ts formula
-  XP_PER_LEVEL: 1000,
   DAILY_REWARD_BASE: 100,
   DAILY_REWARD_STREAK_BONUS: 50,
 } as const;
 
 // ─── Categories ────────────────────────────────────────────────────────────
 
-export const CATEGORIES = [
-  'animals',
-  'nature',
-  'food',
-  'landmarks',
-  'cities',
-  'sports',
-  'movies',
-  'technology',
-  'art',
-  'vehicles',
-  'celebrities',
-  'history',
-  'space',
-  'music',
-  'science',
-  'speed_card',
-] as const;
+export const CATEGORIES = CATEGORY_LAYOUT;
 
 // ─── Default avatars ───────────────────────────────────────────────────────
 
@@ -175,17 +155,18 @@ export const MOCK_LEADERBOARD: LeaderboardEntry[] = LEADERBOARD_NAMES.map((usern
   level: Math.max(2, 15 - Math.floor(index / 4)),
 }));
 
-// ─── Daily rewards — spec schedule ────────────────────────────────────────
-// Cycle: days 1-7 repeat. Milestones (14, 30) fire on those exact streak days.
+// ─── Daily rewards — 7-day coin table ─────────────────────────────────────
+// Coins repeat every 7 days. Power-up (Hint vs Reveal) is the 2-week cycle
+// in getDailyWeekPowerUp — every claim in that week grants that power-up.
 
 export const DAILY_REWARDS = [
-  { day: 1, label: '15 coins',        coins: 15,  icon: 'logo-bitcoin'  as const },
-  { day: 2, label: '30 coins',        coins: 30,  icon: 'logo-bitcoin'  as const },
-  { day: 3, label: '30 coins + Hint', coins: 30,  icon: 'bulb-outline'  as const },
-  { day: 4, label: '60 coins',        coins: 60,  icon: 'logo-bitcoin'  as const },
-  { day: 5, label: '80 coins',        coins: 80,  icon: 'logo-bitcoin'  as const },
-  { day: 6, label: '100 coins',       coins: 100, icon: 'logo-bitcoin'  as const },
-  { day: 7, label: '150 coins + Reveal', coins: 150, icon: 'gift-outline' as const },
+  { day: 1, label: '15 coins',  coins: 15,  icon: 'logo-bitcoin' as const },
+  { day: 2, label: '30 coins',  coins: 30,  icon: 'logo-bitcoin' as const },
+  { day: 3, label: '30 coins',  coins: 30,  icon: 'logo-bitcoin' as const },
+  { day: 4, label: '60 coins',  coins: 60,  icon: 'logo-bitcoin' as const },
+  { day: 5, label: '80 coins',  coins: 80,  icon: 'logo-bitcoin' as const },
+  { day: 6, label: '100 coins', coins: 100, icon: 'logo-bitcoin' as const },
+  { day: 7, label: '150 coins', coins: 150, icon: 'logo-bitcoin' as const },
 ] as const;
 
 // ─── Default power-up inventory ────────────────────────────────────────────

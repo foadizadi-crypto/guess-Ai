@@ -1,5 +1,5 @@
 import { GAME_CONSTANTS } from '@/constants';
-import { MAX_LEVEL } from '@/constants/economy';
+import { getMaxLevel } from '@/constants/economy';
 import { xpToAdvanceLevel, xpThresholdForLevel, levelFromXP as _levelFromXP } from '@/constants/gameConfig';
 
 // ─── ID generation (no uuid package — crashes on iOS/Android) ──────────────
@@ -32,10 +32,12 @@ export const formatTime = (seconds: number): string => {
 /** Total XP accumulated when a player first reaches `level` (level 1 = 0 XP). */
 export const xpAtStartOfLevel = (level: number): number => xpThresholdForLevel(level);
 
-/** Derive the current level from total accumulated XP. Clamped to MAX_LEVEL. */
+/** Derive the current level from total accumulated XP. Optional cap via GAME_CONFIG.max_level. */
 export const calculateLevel = (totalXP: number): number => {
   const level = _levelFromXP(totalXP);
-  return Math.min(Math.max(1, level), MAX_LEVEL);
+  const cap = getMaxLevel();
+  if (cap == null) return Math.max(1, level);
+  return Math.min(Math.max(1, level), cap);
 };
 
 /** XP earned within the current level (resets to 0 each time you level up). */
@@ -44,9 +46,10 @@ export const xpInCurrentLevel = (totalXP: number): number => {
   return totalXP - xpAtStartOfLevel(level);
 };
 
-/** XP required to advance from `level` to `level + 1`. Returns Infinity at MAX_LEVEL. */
+/** XP required to advance from `level` to `level + 1`. Infinity only when a cap is set and reached. */
 export const xpForCurrentLevel = (level: number): number => {
-  if (level >= MAX_LEVEL) return Infinity;
+  const cap = getMaxLevel();
+  if (cap != null && level >= cap) return Infinity;
   return xpToAdvanceLevel(level);
 };
 
@@ -56,7 +59,8 @@ export const xpForCurrentLevel = (level: number): number => {
  */
 export const calculateXPProgress = (totalXP: number): number => {
   const level = calculateLevel(totalXP);
-  if (level >= MAX_LEVEL) return 1;
+  const cap = getMaxLevel();
+  if (cap != null && level >= cap) return 1;
   const xpInLevel = xpInCurrentLevel(totalXP);
   const xpNeeded  = xpForCurrentLevel(level);
   return Math.min(1, xpInLevel / xpNeeded);
@@ -90,6 +94,17 @@ export const isToday = (dateStr: string | null): boolean => {
 /** Returns the current UTC date as YYYY-MM-DD. */
 export const getTodayUTCString = (): string =>
   new Date().toISOString().split('T')[0]!;
+
+/** True when a stored YYYY-MM-DD UTC claim/spin date is today (UTC). */
+export const isUtcDayToday = (yyyyMmDd: string | null | undefined): boolean =>
+  !!yyyyMmDd && yyyyMmDd === getTodayUTCString();
+
+/** Yesterday as YYYY-MM-DD UTC — used to detect a broken daily streak. */
+export const getYesterdayUTCString = (): string => {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().split('T')[0]!;
+};
 
 // ─── Math helpers ──────────────────────────────────────────────────────────
 

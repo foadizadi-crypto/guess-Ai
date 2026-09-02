@@ -145,11 +145,12 @@ async function scheduleStaminaFull(minutesUntilFull: number): Promise<void> {
       title: '⚡ Stamina fully restored!',
       body: 'Your stamina bar is full — come back and play GUESSAi!',
       data: { screen: 'lobby' },
-      ...(Platform.OS === 'android' ? { android: { channelId: 'gameplay' } } : {}),
+      ...(Platform.OS === 'android' ? { channelId: 'gameplay' } : {}),
     },
     {
       type: N.SchedulableTriggerInputTypes.TIME_INTERVAL,
       seconds: minutesUntilFull * 60,
+      repeats: false,
     },
   );
 }
@@ -167,9 +168,30 @@ async function fireAchievementCompleted(achievementName: string): Promise<void> 
         title: '🏆 Achievement Unlocked!',
         body: `You earned: ${achievementName}`,
         data: { screen: 'achievements' },
-        ...(Platform.OS === 'android' ? { android: { channelId: 'rewards' } } : {}),
+        ...(Platform.OS === 'android' ? { channelId: 'rewards' } : {}),
       },
       trigger: null, // immediate
+    });
+  } catch { /* ignore */ }
+}
+
+/**
+ * Generic immediate local notification.
+ * Mirrors the web stub contract so callers never need a platform guard.
+ */
+async function scheduleLocalNotification(
+  opts: { title: string; body: string; trigger: null },
+): Promise<void> {
+  if (!N) return;
+  try {
+    await N.scheduleNotificationAsync({
+      content: {
+        title: opts.title,
+        body: opts.body,
+        data: { screen: 'lobby' },
+        ...(Platform.OS === 'android' ? { channelId: 'rewards' } : {}),
+      },
+      trigger: opts.trigger,
     });
   } catch { /* ignore */ }
 }
@@ -183,7 +205,7 @@ async function scheduleDailyReward(): Promise<void> {
       title: '🎁 Daily reward ready!',
       body: 'Your free daily reward is waiting. Claim it now!',
       data: { screen: 'daily-reward' },
-      ...(Platform.OS === 'android' ? { android: { channelId: 'rewards' } } : {}),
+      ...(Platform.OS === 'android' ? { channelId: 'rewards' } : {}),
     },
     {
       type: N.SchedulableTriggerInputTypes.DAILY,
@@ -202,7 +224,7 @@ async function scheduleWeeklyReward(): Promise<void> {
       title: '📅 Weekly challenge reset!',
       body: 'New weekly challenges are live — play now and earn bonus rewards!',
       data: { screen: 'lobby' },
-      ...(Platform.OS === 'android' ? { android: { channelId: 'rewards' } } : {}),
+      ...(Platform.OS === 'android' ? { channelId: 'rewards' } : {}),
     },
     {
       type: N.SchedulableTriggerInputTypes.WEEKLY,
@@ -222,11 +244,12 @@ async function scheduleSpinReady(cooldownHours: number): Promise<void> {
       title: '🎰 Your free spin is ready!',
       body: 'Come back and spin the wheel — you could win big!',
       data: { screen: 'spin' },
-      ...(Platform.OS === 'android' ? { android: { channelId: 'rewards' } } : {}),
+      ...(Platform.OS === 'android' ? { channelId: 'rewards' } : {}),
     },
     {
       type: N.SchedulableTriggerInputTypes.TIME_INTERVAL,
       seconds: Math.round(cooldownHours * 3_600),
+      repeats: false,
     },
   );
 }
@@ -244,11 +267,12 @@ async function scheduleInactiveReminder(): Promise<void> {
       title: "👋 We miss you, quiz master!",
       body: "Your stamina has been refilling — come back and show off your skills!",
       data: { screen: 'lobby' },
-      ...(Platform.OS === 'android' ? { android: { channelId: 'engagement' } } : {}),
+      ...(Platform.OS === 'android' ? { channelId: 'engagement' } : {}),
     },
     {
       type: N.SchedulableTriggerInputTypes.TIME_INTERVAL,
       seconds: 3 * 24 * 60 * 60, // 3 days
+      repeats: false,
     },
   );
 }
@@ -281,11 +305,16 @@ async function getExpoPushToken(): Promise<string | null> {
 function addResponseListener(callback: (screen: string) => void): () => void {
   if (!N) return () => {};
   const sub = N.addNotificationResponseReceivedListener((response) => {
+    const dataScreen = response.notification.request.content.data?.screen;
+    if (typeof dataScreen === 'string' && dataScreen.length > 0) {
+      callback(dataScreen.startsWith('/') ? dataScreen : `/${dataScreen}`);
+      return;
+    }
     const id = response.notification.request.identifier;
     let screen = '/lobby';
     if (id === IDS.SPIN_READY)                         screen = '/spin';
-    else if (id === IDS.DAILY_REWARD ||
-             id === IDS.WEEKLY_REWARD)                 screen = '/lobby';
+    else if (id === IDS.DAILY_REWARD)                  screen = '/daily-reward';
+    else if (id === IDS.WEEKLY_REWARD)                 screen = '/lobby';
     else if (id === IDS.STAMINA_FULL ||
              id === IDS.INACTIVE)                      screen = '/lobby';
     else if (id.includes('achievement'))               screen = '/achievements';
@@ -309,4 +338,5 @@ export const notificationService = {
   cancelAllScheduledNotifications,
   getExpoPushToken,
   addResponseListener,
+  scheduleLocalNotification,
 };

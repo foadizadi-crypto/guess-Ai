@@ -20,6 +20,7 @@ export interface CountQuickQuestion {
   paletteId: string;
   paletteName: string;
   targetColor: string;
+  targetColorName: string;
   items: CountQuickItem[];
   options: number[];
   correctCount: number;
@@ -78,20 +79,21 @@ function buildOptions(correctCount: number, itemCount: number): number[] {
 export function buildCountQuickQuestion(difficulty: Difficulty): CountQuickQuestion {
   const itemCount = itemCountForDifficulty(difficulty);
   const palette: CountQuickPalette = pickOne(COUNT_QUICK_PALETTES);
-  const targetColor = pickOne(palette.colors);
+  const target = pickOne(palette.colors);
   const items: CountQuickItem[] = [];
   for (let i = 0; i < itemCount; i += 1) {
     items.push({
       shape: pickOne(COUNT_QUICK_SHAPES),
-      color: pickOne(palette.colors),
+      color: pickOne(palette.colors).hex,
     });
   }
   shuffleInPlace(items);
-  const correctCount = items.filter((item) => item.color === targetColor).length;
+  const correctCount = items.filter((item) => item.color === target.hex).length;
   return {
     paletteId: palette.id,
     paletteName: palette.name,
-    targetColor,
+    targetColor: target.hex,
+    targetColorName: target.name,
     items,
     options: buildOptions(correctCount, itemCount),
     correctCount,

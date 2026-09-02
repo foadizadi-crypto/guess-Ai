@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  BackHandler,
   Image,
   Platform,
   StyleSheet,
@@ -8,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { hapticsService } from '@/services/HapticsService';
@@ -21,10 +22,11 @@ import { useGameStore } from '@/store/gameStore';
 import { useUserStore } from '@/store/userStore';
 import { useAdStore } from '@/store/adStore';
 import { useAudio } from '@/hooks/useAudio';
-import { STAMINA_PER_GAME } from '@/constants/economy';
+import { STAMINA_AD_REWARD, STAMINA_PER_GAME } from '@/constants/economy';
 import { ROUTES } from '@/navigation/routes';
 import { isDifficultyOpen } from '@/shared/difficulty';
 import {
+  LOST_ITEM_ANSWER_OPTIONS,
   LOST_ITEM_DARK_MS,
   LOST_ITEM_GAME_OVER_WRONGS,
   LOST_ITEM_QUESTIONS,
@@ -43,6 +45,7 @@ const emptyRound = (): Array<LostItemQuestion | null> => Array.from({ length: LO
 
 const LostItemScreen = () => {
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const difficulty = useGameStore((s) => s.selectedDifficulty);
   const category = useGameStore((s) => s.selectedCategory);
@@ -68,16 +71,24 @@ const LostItemScreen = () => {
   const [picked, setPicked] = useState<number | null>(null);
   const [paused, setPaused] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [sceneLoaded, setSceneLoaded] = useState(false);
+  const [thumbsLoaded, setThumbsLoaded] = useState(0);
 
   const endedRef = useRef(false);
   const genRef = useRef(0);
   const questionsRef = useRef(questions);
   questionsRef.current = questions;
+  const dealRef = useRef<() => Promise<void>>(async () => {});
 
   const current = questions[index];
   const lookMs = phaseMsForDifficulty(difficulty);
   const topPad = Platform.OS === 'web' ? 54 : insets.top + 8;
   const botPad = Platform.OS === 'web' ? 24 : insets.bottom + 12;
+  const thumbNeed = current?.options.length ?? LOST_ITEM_ANSWER_OPTIONS;
+  const clocksArmed =
+    phase === 'dark' ||
+    (phase === 'look' && sceneLoaded) ||
+    (phase === 'answer' && sceneLoaded && thumbsLoaded >= thumbNeed);
 
   const finish = useCallback((outcome: 'perfect' | 'win' | 'lose') => {
     if (endedRef.current) return;
@@ -94,11 +105,17 @@ const LostItemScreen = () => {
 
   const exitToLobby = useCallback(() => {
     setPaused(false);
+    endedRef.current = true;
+    genRef.current += 1;
+    const session = useGameStore.getState().gameSession;
+    if (session && !session.isComplete) {
+      endSession({ applyFinish: false, sessionOutcome: 'lose' });
+    }
     setTimeout(() => {
       resetGame();
       router.replace(ROUTES.LOBBY);
     }, 50);
-  }, [resetGame, router]);
+  }, [endSession, resetGame, router]);
 
   const fillRest = useCallback(async (generation: number, startAt: number) => {
     try {
@@ -138,6 +155,8 @@ const LostItemScreen = () => {
         next[0] = first;
         return next;
       });
+      setSceneLoaded(false);
+      setThumbsLoaded(0);
       setPhase('look');
       setRemainingMs(phaseMsForDifficulty(difficulty));
       void fillRest(generation, 1);
@@ -146,6 +165,7 @@ const LostItemScreen = () => {
       setLoadError(err instanceof Error ? err.message : 'Lost Item images failed');
     }
   }, [difficulty, fillRest]);
+  dealRef.current = deal;
 
   const afterAnswer = useCallback(() => {
     const wrongs = useGameStore.getState().totalWrong;
@@ -165,6 +185,8 @@ const LostItemScreen = () => {
     setFeedback(null);
     setPicked(null);
     if (questionsRef.current[nextIndex]) {
+      setSceneLoaded(false);
+      setThumbsLoaded(0);
       setPhase('look');
       setRemainingMs(phaseMsForDifficulty(difficulty));
     } else {
@@ -198,43 +220,67 @@ const LostItemScreen = () => {
 
   useEffect(() => {
     if (!gameSession?.id) return;
-    void deal();
+    void dealRef.current();
     return () => {
       genRef.current += 1;
     };
-  }, [deal, gameSession?.id]);
+  }, [gameSession?.id]);
+
+  useEffect(() => {
+    const onHardwareBack = () => {
+      if (endedRef.current) return false;
+      setPaused(true);
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    const unsub = navigation.addListener('beforeRemove', (event) => {
+      if (endedRef.current) return;
+      event.preventDefault();
+      setPaused(true);
+    });
+    return unsub;
+  }, [navigation]);
 
   useEffect(() => {
     if (phase !== 'loading' || loadError || !current) return;
+    setSceneLoaded(false);
+    setThumbsLoaded(0);
     setPhase('look');
     setRemainingMs(lookMs);
   }, [current, loadError, lookMs, phase]);
 
   useEffect(() => {
-    if (phase !== 'feedback' || endedRef.current) return;
+    if (phase !== 'feedback' || endedRef.current || paused) return;
     const t = setTimeout(() => {
       afterAnswer();
     }, 1000);
     return () => clearTimeout(t);
-  }, [afterAnswer, phase]);
+  }, [afterAnswer, paused, phase]);
 
   useEffect(() => {
-    if (paused || endedRef.current) return;
+    if (paused || endedRef.current || !clocksArmed) return;
     if (phase !== 'look' && phase !== 'dark' && phase !== 'answer') return;
     const id = setInterval(() => {
       setRemainingMs((ms) => (ms <= 100 ? 0 : ms - 100));
     }, 100);
     return () => clearInterval(id);
-  }, [index, paused, phase]);
+  }, [clocksArmed, index, paused, phase]);
 
   useEffect(() => {
     if (paused || endedRef.current || remainingMs > 0) return;
+    if ((phase === 'look' || phase === 'answer') && !clocksArmed) return;
     if (phase === 'look') {
       setPhase('dark');
       setRemainingMs(LOST_ITEM_DARK_MS);
       return;
     }
     if (phase === 'dark') {
+      setSceneLoaded(false);
+      setThumbsLoaded(0);
       setPhase('answer');
       setRemainingMs(lookMs);
       return;
@@ -242,11 +288,13 @@ const LostItemScreen = () => {
     if (phase === 'answer') {
       submit(false, null);
     }
-  }, [lookMs, paused, phase, remainingMs, submit]);
+  }, [clocksArmed, lookMs, paused, phase, remainingMs, submit]);
 
   const restart = useCallback(() => {
     const begin = () => {
       endedRef.current = false;
+      setPaused(false);
+      setFeedback(null);
       restartSession(difficulty, category);
     };
     if (spendEnergy()) {
@@ -254,8 +302,10 @@ const LostItemScreen = () => {
       return;
     }
     if (isAdFreePassActive()) {
-      begin();
-      return;
+      if (consumeInGameRetryAd()) {
+        begin();
+        return;
+      }
     }
     if (Platform.OS === 'web') {
       Alert.alert(
@@ -271,7 +321,7 @@ const LostItemScreen = () => {
     if (canInGameRetryAd()) {
       Alert.alert(
         'Retry this game',
-        'Watch an ad to retry without spending stamina.',
+        `Watch an ad to restore ${STAMINA_AD_REWARD} stamina and retry this round without paying again.`,
         [
           { text: 'Keep playing', style: 'cancel' },
           {
@@ -368,7 +418,13 @@ const LostItemScreen = () => {
               {phase === 'dark' ? (
                 <View style={styles.blackout} />
               ) : (
-                <Image source={{ uri: sceneUri }} style={styles.scene} resizeMode="cover" />
+                <Image
+                  key={`scene-${index}-${phase}`}
+                  source={{ uri: sceneUri }}
+                  style={styles.scene}
+                  resizeMode="cover"
+                  onLoad={() => setSceneLoaded(true)}
+                />
               )}
             </View>
 
@@ -396,7 +452,13 @@ const LostItemScreen = () => {
                       activeOpacity={0.85}
                     >
                       {thumb ? (
-                        <Image source={{ uri: thumb }} style={styles.thumb} resizeMode="cover" />
+                        <Image
+                          key={`thumb-${index}-${optionIndex}-${thumb.slice(-24)}`}
+                          source={{ uri: thumb }}
+                          style={styles.thumb}
+                          resizeMode="cover"
+                          onLoad={() => setThumbsLoaded((n) => Math.min(thumbNeed, n + 1))}
+                        />
                       ) : null}
                     </TouchableOpacity>
                   );

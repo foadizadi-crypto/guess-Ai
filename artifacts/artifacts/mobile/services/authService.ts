@@ -55,7 +55,7 @@ export function waitForAuthReady(): Promise<User | null> {
       const unsub = onAuthStateChanged(auth, (user) => {
         finish(user, 'firebase');
       });
-      timeout = setTimeout(() => finish(null, 'timeout'), AUTH_READY_TIMEOUT_MS);
+      timeout = setTimeout(() => finish(auth.currentUser, 'timeout'), AUTH_READY_TIMEOUT_MS);
     });
   }
   return _authReady.then(() => auth.currentUser);
@@ -67,7 +67,7 @@ export function getPlayerId(): string | null {
 }
 
 /** True only for a Google credential. */
-export function isGoogleUser(user: User | null = auth.currentUser): user is User {
+export function isGoogleUser(user: User | null = auth.currentUser): boolean {
   if (!user) return false;
   return user.providerData.some((p) => p.providerId === 'google.com');
 }

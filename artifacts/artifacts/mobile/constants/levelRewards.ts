@@ -23,9 +23,7 @@
 //   L500:  Crown + Legendary Title + Golden Skin + Particle Effect + MAX LEVEL Badge
 //          (plus the recurring 401–500 reward)
 //
-// Gems (economy v2): every 10-level milestone also grants gems so free players
-// can slowly access the gem economy (stamina source upgrades etc.). The amount
-// scales with the level band — 2 / 5 / 8 / 12 — see majorLevelGems().
+// Gems are not granted from level rewards (Shop IAP + the one spin jackpot only).
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type RewardItemType =
@@ -61,7 +59,7 @@ export type PackageTier = 'bronze' | 'silver' | 'gold' | 'legendary';
 export interface LevelReward {
   level: number;
   coins: number;
-  /** Gems granted at this level (every 10-level milestone: +5). */
+  /** Always 0 — gems are not a level reward. */
   gems: number;
   /** Bonus XP granted at this level (only at major special levels 300/400). */
   bonusXP?: number;
@@ -152,21 +150,6 @@ function majorExtraCoins(level: number): number {
   return 700;
 }
 
-/**
- * Gems granted at every 10-level milestone (free-player gem faucet).
- *
- * Deliberately progressive: the XP curve makes early milestones fire within
- * the first days of play, so a flat rate flooded new accounts with enough gems
- * to buy a stamina upgrade on day one and killed the aspiration. Small early,
- * generous late — the reward grows as the account does.
- */
-function majorLevelGems(level: number): number {
-  if (level <= 100) return 2;
-  if (level <= 250) return 5;
-  if (level <= 400) return 8;
-  return 12;
-}
-
 function minorItems(level: number): RewardItem[] {
   if (level <= 100) return [];  // no item on minor levels in 1-100 range
   if (level <= 250) {
@@ -226,7 +209,6 @@ function buildLevelRewards(): LevelReward[] {
     }
     if (isMajor) {
       coins += majorExtraCoins(level);
-      gems += majorLevelGems(level);
       items.push(...majorItems(level));
     }
     if (isSpecial) {

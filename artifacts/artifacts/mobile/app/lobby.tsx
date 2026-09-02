@@ -23,16 +23,18 @@ import { PlayerNameModal } from "@/components/PlayerNameModal";
 import { registerNickname, fetchRegisteredNickname } from "@/services/nicknameService";
 import { getPlayerId } from "@/services/authService";
 import { FullBodyAvatarStage } from "@/components/FullBodyAvatarStage";
+import { PhoneStage } from "@/components/PhoneStage";
+import { StaminaUpgradeModal } from "@/components/StaminaUpgradeModal";
 
 import { useUserStore } from "@/store/userStore";
 import { useAudio } from "@/hooks/useAudio";
 import { useAdStore } from "@/store/adStore";
-import { isToday } from "@/utils";
+import { isUtcDayToday } from "@/utils";
 
 import {
-  MAX_ENERGY,
   STAMINA_AD_REWARD,
   STAMINA_ADS_PER_DAY,
+  getEnergyCap,
 } from "@/constants/economy";
 import { DAILY_REWARDS } from "@/constants";
 import { ROUTES } from "@/navigation/routes";
@@ -42,6 +44,14 @@ const HITBOX_Z_BASE = 10000;
 
 const ICON_SCALE = 1.2;
 const HITBOX_SCALE = 1;
+
+function lobbyAlert(title: string, body: string) {
+  if (Platform.OS === "web" && typeof globalThis.alert === "function") {
+    globalThis.alert(`${title}\n\n${body}`);
+    return;
+  }
+  Alert.alert(title, body);
+}
 
 // =====================================================
 // HITBOX ITEM (با قابلیت تنظیم scale جداگانه)
@@ -141,6 +151,7 @@ export default function LobbyScreen() {
   // Plays the one-shot entry flourish (splash.json) each time the lobby mounts;
   // onAnimationFinish flips this back to false so it does not linger.
   const [showSplash, setShowSplash] = useState<boolean>(true);
+  const [staminaUpgradeVisible, setStaminaUpgradeVisible] = useState(false);
 
   // ===================================================
   // USER STORE
@@ -157,12 +168,16 @@ export default function LobbyScreen() {
     claimDailyReward,
     energy,
     tickEnergy,
+    staminaSourceLevel,
     avatars,
     equippedCosmetics,
     equippedWing,
+    equippedPet,
+    equippedStand,
   } = useUserStore();
 
   const addStamina = useUserStore((s) => s.addStamina);
+  const nicknameUid = useUserStore((s) => s.nicknameUid);
   const showRewarded = useAdStore((s) => s.showRewarded);
   const isAdFreePassActive = useAdStore((s) => s.isAdFreePassActive);
   const reserveStaminaAd = useAdStore((s) => s.reserveStaminaAd);
@@ -201,8 +216,26 @@ export default function LobbyScreen() {
   const handleWatchStaminaAd = useCallback(async () => {
     if (adInFlight.current) return;
 
+    if (isAdFreePassActive()) {
+      addStamina(STAMINA_AD_REWARD);
+      hapticsService.notification(1);
+      lobbyAlert(
+        "Stamina added",
+        `+${STAMINA_AD_REWARD} stamina added to your reserve.`,
+      );
+      return;
+    }
+
+    if (Platform.OS === "web" && !__DEV__) {
+      lobbyAlert(
+        "Ads on mobile",
+        "Rewarded ads run in the iOS and Android apps. This web build cannot play an AdMob video, so no stamina was added.",
+      );
+      return;
+    }
+
     if (!reserveStaminaAd()) {
-      Alert.alert(
+      lobbyAlert(
         "No ads left today",
         `You can watch up to ${STAMINA_ADS_PER_DAY} ads a day for stamina. Come back tomorrow.`,
       );
@@ -222,7 +255,7 @@ export default function LobbyScreen() {
     }
 
     if (!earned) {
-      Alert.alert(
+      lobbyAlert(
         "No reward",
         "The ad did not finish, so no stamina was added.",
       );
@@ -231,11 +264,11 @@ export default function LobbyScreen() {
 
     addStamina(STAMINA_AD_REWARD);
     hapticsService.notification(1);
-    Alert.alert(
+    lobbyAlert(
       "Stamina added",
       `+${STAMINA_AD_REWARD} stamina added to your reserve.`,
     );
-  }, [addStamina, releaseStaminaAd, reserveStaminaAd, showRewarded]);
+  }, [addStamina, isAdFreePassActive, releaseStaminaAd, reserveStaminaAd, showRewarded]);
 
   // ===================================================
   // MUSIC / DAILY REWARD
@@ -245,7 +278,7 @@ export default function LobbyScreen() {
     useCallback(() => {
       tickEnergy();
 
-      const claimed = isToday(dailyReward?.lastClaimed);
+      const claimed = isUtcDayToday(dailyReward?.lastClaimDate);
       const uid = getPlayerId();
       const hasNickname = uid && isNicknameVerifiedFor(uid);
       if (!claimed && hasNickname) {
@@ -254,7 +287,7 @@ export default function LobbyScreen() {
         const t = setTimeout(() => setDailyModal(true), 2000);
         return () => clearTimeout(t);
       }
-    }, [dailyReward?.lastClaimed, isNicknameVerifiedFor, tickEnergy]),
+    }, [dailyReward?.lastClaimDate, isNicknameVerifiedFor, nicknameUid, username, tickEnergy]),
   );
 
   // ===================================================
@@ -275,7 +308,26 @@ export default function LobbyScreen() {
   // ===================================================
 
   // Actions that require a valid, saved Player Name before they proceed.
-  const NAME_GATED_ACTIONS = ["play", "avatar_wing_frame", "stand_avatar"];
+  const NAME_GATED_ACTIONS = [
+    "play",
+    "avatar_wing_frame",
+    "stand_avatar",
+    "shop",
+    "spinwheel",
+    "leaderboard",
+    "friends",
+    "settings",
+    "achievement",
+    "profile_lvl_playername",
+    "stamina",
+    "stamina_upgrade",
+    "gem",
+    "coin",
+    "gem_pack",
+    "legendary_pack",
+    "dailyreward",
+    "admob",
+  ];
 
   const handleActionTrigger = async (actionName: string) => {
     if (
@@ -343,7 +395,7 @@ export default function LobbyScreen() {
         router.push({ pathname: ROUTES.SHOP, params: { tab: "gems" } });
         break;
       case "legendary_pack":
-        router.push(ROUTES.SHOP);
+        router.push({ pathname: ROUTES.SHOP, params: { tab: "gems" } });
         break;
       case "coin":
         router.push({ pathname: ROUTES.SHOP, params: { tab: "play" } });
@@ -353,6 +405,9 @@ export default function LobbyScreen() {
         break;
       case "stamina":
         router.push(ROUTES.STAMINA);
+        break;
+      case "stamina_upgrade":
+        setStaminaUpgradeVisible(true);
         break;
       case "spinwheel":
         router.push(ROUTES.SPIN);
@@ -445,7 +500,7 @@ export default function LobbyScreen() {
       top: "13.00%",
       width: "20.32%",
       height: "4.94%",
-      label: `${energy || 0}/${MAX_ENERGY || 20}`,
+      label: `${energy || 0}/${getEnergyCap(staminaSourceLevel ?? 0)}`,
       hasTextOverlay: true,
       iconScale: 1.3 ,
     },
@@ -472,11 +527,11 @@ export default function LobbyScreen() {
     {
       id: "spinwheel",
       left: "77.00%",
-      top: "68.5.00%",
+      top: "63.5%",
       width: "25.15%",
       height: "9.89%",
       label: "Spin",
-      iconScale: 1 ,
+      iconScale: 1.2 ,
     },
     {
       id: "avatar_wing_frame",
@@ -492,11 +547,11 @@ export default function LobbyScreen() {
     {
       id: "stand_avatar",
       left: "29.69%",
-      top: "55.8.58%",
+      top: "55.8%",
       width: "37.73%",
-      height: "6.74%",
+      height: "12.00%",
       label: "Pedestal",
-      iconScale: 4.7, // ← بزرگ‌تر از بقیه
+      iconScale: 5, // ← بزرگ‌تر از بقیه
     },
     {
       id: "play",
@@ -510,7 +565,7 @@ export default function LobbyScreen() {
     {
       id: "dailyreward",
       left: "1.00%",
-      top: "71.00%",
+      top: "66.00%",
       width: "19.35%",
       height: "6.74%",
       label: "Reward",
@@ -519,7 +574,7 @@ export default function LobbyScreen() {
     {
       id: "legendary_pack",
       left: "1.00%",
-      top: "80.00%",
+      top: "77.00%",
       width: "19.35%",
       height: "6.74%",
       label: "Legendary",
@@ -528,26 +583,26 @@ export default function LobbyScreen() {
     },
     {
       id: "gem_pack",
-      left: "80.00%",
+      left: "75.00%",
       top: "79.00%",
       width: "19.35%",
-      height: "7.19%",
+      height: "6.50%",
       label: "Gem Pack",
       premium: true,
       iconScale: 1.2,
     },
     {
       id: "admob",
-      left: "30.66%",
+      left: "43.40%",
       top: "78.40%",
-      width: "37.73%",
+      width: "10.10%",
       height: "5.84%",
       label: "AdMob",
     },
     {
       id: "achievement",
-      left: "82.00%",
-      top: "85.6.00%",
+      left: "78.00%",
+      top: "85.6%",
       width: "15.48%",
       height: "12.58%",
       label: "Badges",
@@ -556,7 +611,7 @@ export default function LobbyScreen() {
     {
       id: "friends",
       left: "53.60%",
-      top: "85.00%",
+      top: "78.00%",
       width: "15.48%",
       height: "12.58%",
       label: "Friends",
@@ -565,7 +620,7 @@ export default function LobbyScreen() {
     {
       id: "shop",
       left: "27.83%",
-      top: "85.5.00%",
+      top: "78.5%",
       width: "15.48%",
       height: "12.58%",
       label: "Shop",
@@ -574,7 +629,7 @@ export default function LobbyScreen() {
     {
       id: "leaderboard",
       left: "3.00%",
-      top: "85.5.00%",
+      top: "84.00%",
       width: "15.48%",
       height: "12.58%",
       label: "Leaderboard",
@@ -634,7 +689,12 @@ export default function LobbyScreen() {
                 ]}
               />
             </AnimatedIcon>
-            <View style={styles.currencyTextContainerOverlay}>
+            <View
+              style={[
+                styles.currencyTextContainerOverlay,
+                box.id === "stamina" && styles.staminaValueOverlay,
+              ]}
+            >
               <Text style={styles.currencyPillValueText} numberOfLines={1}>
                 {box.label}
               </Text>
@@ -671,6 +731,7 @@ export default function LobbyScreen() {
   // ===================================================
 
   return (
+    <PhoneStage>
     <View style={styles.viewViewportContainer}>
       <ExpoImage
         source={require("../assets/background/lobby_BG.webp")}
@@ -743,26 +804,49 @@ export default function LobbyScreen() {
 
           const areaPct = scaledWidth * scaledHeight;
           const zIndex = Math.max(1, Math.round(HITBOX_Z_BASE - areaPct));
+          const boxStyle: any = [
+            styles.hitboxAbsoluteNode,
+            {
+              left: `${scaledLeft}%`,
+              top: `${scaledTop}%`,
+              width: `${scaledWidth}%`,
+              height: `${scaledHeight}%`,
+              zIndex,
+              backgroundColor: debugMode
+                ? "rgba(244, 63, 94, 0.25)"
+                : "transparent",
+              borderWidth: debugMode ? 1 : 0,
+              borderColor: "#f43f5e",
+            },
+          ];
+
+          if (box.id === "stamina") {
+            return (
+              <View key={box.id} style={[boxStyle, { overflow: "visible" }]} pointerEvents="box-none">
+                <PressableComponent
+                  accessibilityLabel="stamina"
+                  style={StyleSheet.absoluteFill}
+                  onPress={() => handleActionTrigger("stamina")}
+                >
+                  {renderComponentUI(box, index * 85)}
+                </PressableComponent>
+                <Pressable
+                  accessibilityLabel="stamina-upgrade"
+                  onPress={() => handleActionTrigger("stamina_upgrade")}
+                  hitSlop={6}
+                  style={styles.staminaPlusHit}
+                >
+                  <Text style={styles.staminaPlusText}>+</Text>
+                </Pressable>
+              </View>
+            );
+          }
 
           return (
             <PressableComponent
               key={box.id}
               accessibilityLabel={box.id}
-              style={[
-                styles.hitboxAbsoluteNode,
-                {
-                  left: `${scaledLeft}%`,
-                  top: `${scaledTop}%`,
-                  width: `${scaledWidth}%`,
-                  height: `${scaledHeight}%`,
-                  zIndex,
-                  backgroundColor: debugMode
-                    ? "rgba(244, 63, 94, 0.25)"
-                    : "transparent",
-                  borderWidth: debugMode ? 1 : 0,
-                  borderColor: "#f43f5e",
-                },
-              ]}
+              style={boxStyle}
               onPress={() => handleActionTrigger(box.id)}
             >
               {renderComponentUI(box, index * 85)}
@@ -824,6 +908,8 @@ export default function LobbyScreen() {
                 <FullBodyAvatarStage
                   avatarId={currentAvatar?.id ?? selectedAvatarId}
                   wingId={equippedWing}
+                  petId={equippedPet}
+                  standId={equippedStand}
                   level={level}
                 />
               </View>
@@ -839,7 +925,8 @@ export default function LobbyScreen() {
           }
           streak={dailyReward?.streak ?? 0}
           currentDay={dailyReward?.currentDay ?? 0}
-          alreadyClaimed={isToday(dailyReward?.lastClaimed ?? null)}
+          alreadyClaimed={isUtcDayToday(dailyReward?.lastClaimDate ?? null)}
+          lastClaimDate={dailyReward?.lastClaimDate ?? null}
           onClose={() => setDailyModal(false)}
           onClaim={claimDailyReward}
           energyReward={10}
@@ -847,6 +934,12 @@ export default function LobbyScreen() {
 
         <PlayerNameModal visible={nameModalVisible} onSubmit={handleNameSubmit} />
 
+        <StaminaUpgradeModal
+          visible={staminaUpgradeVisible}
+          onClose={() => setStaminaUpgradeVisible(false)}
+        />
+
+        {__DEV__ && (
         <View
           style={[
             styles.debugPanel,
@@ -866,8 +959,10 @@ export default function LobbyScreen() {
             thumbColor={debugMode ? "#60a5fa" : "#cbd5e1"}
           />
         </View>
+        )}
       </View>
     </View>
+    </PhoneStage>
   );
 }
 
@@ -896,8 +991,9 @@ function GlowWrapper({ style, onPress, children }: any) {
   }, [glowAnim]);
 
   return (
-    <Pressable onPress={onPress} style={style}>
+    <Pressable onPress={onPress} style={[style, { overflow: "hidden" }]}>
       <RNAnimated.View
+        pointerEvents="none"
         style={[
           StyleSheet.absoluteFill,
           {
@@ -946,11 +1042,12 @@ function WaveWrapper({ style, onPress, children }: any) {
       style={[
         style,
         {
-          overflow: "visible",
+          overflow: "hidden",
         },
       ]}
     >
       <RNAnimated.View
+        pointerEvents="none"
         style={{
           position: "absolute",
           top: "25%",
@@ -998,7 +1095,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     borderRadius: 8,
     justifyContent: "center",
-    overflow: "visible",
+    overflow: "hidden",
   },
   fullSizeContainer: {
     width: "100%",
@@ -1052,6 +1149,28 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
     textAlign: "center",
+  },
+  staminaPlusHit: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 4,
+  },
+  staminaValueOverlay: {
+    right: "28%",
+  },
+  staminaPlusText: {
+    color: "#FFD700",
+    fontSize: 18,
+    fontWeight: "800",
+    lineHeight: 20,
+    textShadowColor: "rgba(0,0,0,0.65)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   centerHeroStageWrapperFrame: {
     width: "100%",

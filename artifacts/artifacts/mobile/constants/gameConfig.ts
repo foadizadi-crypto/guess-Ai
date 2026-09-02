@@ -4,8 +4,8 @@
 // Core logic files must import from this file; never hardcode these numbers.
 //
 // Patch version: 1.1.1-missions
-// Note: max_level is set to 500 per the Final Implementation Prompt.
-//       (Economy Patch 1.1.1 specified 100; override this value to 100 if needed.)
+// Note: max_level is unset until a product cap is specified.
+//       Remote config can assign a finite cap later.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const GAME_CONFIG = {
@@ -99,9 +99,8 @@ export const GAME_CONFIG = {
   max_revives_per_round: 1,
 
   // ── Progression ─────────────────────────────────────────────────────────────
-  // max_level: 500 (per Final Implementation Prompt).
-  // To cap at 100 as per Economy Patch 1.1.1, change this single value.
-  max_level: 500,
+  // Optional global level cap. null = no locked product cap.
+  max_level: null as number | null,
 
   // ── Session Settings ────────────────────────────────────────────────────────
   session_timer_seconds:  120,  // countdown timer per round
@@ -146,13 +145,15 @@ export function applyRemoteConfig(remote: Record<string, unknown>): void {
     'coins_correct_easy', 'coins_correct_medium', 'coins_correct_hard',
     'coins_combo_bonus', 'coins_super_combo', 'snap_correct_coins', 'snap_correct_xp',
     'revive_bonus_seconds', 'interstitial_every_n_sessions',
-    'max_level',
   ];
 
   for (const key of fields) {
     const val = n(key);
     if (val !== undefined) (GAME_CONFIG as Record<string, number>)[key] = val;
   }
+
+  const remoteMaxLevel = n('max_level');
+  if (remoteMaxLevel !== undefined) GAME_CONFIG.max_level = remoteMaxLevel;
 }
 
 // ─── Derived helpers (computed from config, not raw tunables) ─────────────────
@@ -184,16 +185,18 @@ export function xpThresholdForLevel(level: number): number {
 
 /**
  * Level a player is at given their total accumulated XP.
- * Uses an incremental walk (O(level)) — fast enough for max_level 500.
- * Clamped to max_level.
+ * Walks the XP curve until XP is exhausted. Applies GAME_CONFIG.max_level only
+ * when a finite cap has been set.
  */
 export function levelFromXP(totalXP: number): number {
+  const xp = Number.isFinite(totalXP) ? Math.max(0, totalXP) : 0;
   const max = GAME_CONFIG.max_level;
   let level = 1;
   let accumulated = 0;
-  while (level < max) {
+  while (max == null || level < max) {
     const needed = xpToAdvanceLevel(level);
-    if (accumulated + needed > totalXP) break;
+    if (needed <= 0) break;
+    if (accumulated + needed > xp) break;
     accumulated += needed;
     level++;
   }
@@ -265,7 +268,7 @@ export function sessionCompleteXP(difficulty: 'easy' | 'medium' | 'hard'): numbe
   return c.session_complete_xp_easy;
 }
 
-/** Coins awarded for a perfect game (20/20 correct), by difficulty. Stacks with session completion. */
+/** Coins awarded for a perfect game (all answers in that round correct), by difficulty. Stacks with session completion. */
 export function perfectGameCoins(difficulty: 'easy' | 'medium' | 'hard'): number {
   const c = GAME_CONFIG;
   if (difficulty === 'hard')   return c.perfect_coins_hard;

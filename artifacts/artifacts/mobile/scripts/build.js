@@ -69,10 +69,12 @@ function getDeploymentDomain() {
     return stripProtocol(process.env.EXPO_PUBLIC_DOMAIN);
   }
 
-  console.error(
-    'ERROR: No deployment domain found. Set REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, or EXPO_PUBLIC_DOMAIN',
+  // Local / non-Replit builds: do not abort. Metro already serves localhost:8081.
+  // Production still sets REPLIT_* or EXPO_PUBLIC_DOMAIN.
+  console.warn(
+    'No deployment domain set (REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, or EXPO_PUBLIC_DOMAIN). Using localhost.',
   );
-  process.exit(1);
+  return 'localhost';
 }
 
 function prepareDirectories(timestamp) {
@@ -580,10 +582,14 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((error) => {
-  console.error('Build failed:', error.message);
-  if (metroProcess) {
-    metroProcess.kill();
-  }
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error('Build failed:', error.message);
+    if (metroProcess) {
+      metroProcess.kill();
+    }
+    process.exit(1);
+  });
+}
+
+module.exports = { getDeploymentDomain, stripProtocol };

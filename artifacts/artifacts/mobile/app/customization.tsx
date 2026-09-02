@@ -1,10 +1,10 @@
 /**
- * Character customization — live preview plus Avatars / Wings catalogs.
+ * Character customization — live preview plus Avatar / Wings / Pets / Stands.
  *
  * Preview uses the same auto-sizing compositor as the lobby: wings attach
  * to the detected center of the avatar's back for any asset pair.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Alert,
   Image,
@@ -18,7 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { hapticsService } from '@/services/HapticsService';
-import { router } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
 import { AnimatedBackground } from '@/components/AnimatedBackground';
 import { BackButton } from '@/components/BackButton';
@@ -28,21 +28,43 @@ import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
 import { ALL_WINGS } from '@/constants/wings';
+import { ALL_PETS } from '@/constants/pets';
+import { ALL_STANDS } from '@/constants/stands';
 import { getAvatarSource, getWingSource } from '@/constants/characterSources';
 import { ROUTES } from '@/navigation/routes';
-import {
-  STAMINA_UPGRADE_LEVELS,
-  MAX_STAMINA_UPGRADE_LEVEL,
-  FIRST_UPGRADE_OFFER_HOURS,
-  getUpgradeGemCost,
-  isFirstUpgradeOfferActive,
-} from '@/constants/economy';
 
-type CatalogTab = 'avatars' | 'wings' | 'upgrade';
+type CatalogTab = 'avatars' | 'wings' | 'pets' | 'stands';
+
+const TABS: { id: CatalogTab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: 'avatars', label: 'Avatar', icon: 'person' },
+  { id: 'wings', label: 'Wings', icon: 'sparkles' },
+  { id: 'pets', label: 'Pets', icon: 'paw' },
+  { id: 'stands', label: 'Stands', icon: 'cube' },
+];
+
+function notify(title: string, body: string) {
+  if (Platform.OS === 'web' && typeof globalThis.alert === 'function') {
+    globalThis.alert(`${title}\n\n${body}`);
+    return;
+  }
+  Alert.alert(title, body);
+}
 
 export default function CustomizationScreen() {
   const insets = useSafeAreaInsets();
-  const [tab, setTab] = useState<CatalogTab>('avatars');
+  const router = useRouter();
+  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
+  const initialTab: CatalogTab =
+    tabParam === 'wings' || tabParam === 'pets' || tabParam === 'stands' || tabParam === 'avatars'
+      ? tabParam
+      : 'avatars';
+  const [tab, setTab] = useState<CatalogTab>(initialTab);
+
+  useEffect(() => {
+    if (tabParam === 'wings' || tabParam === 'pets' || tabParam === 'stands' || tabParam === 'avatars') {
+      setTab(tabParam);
+    }
+  }, [tabParam]);
 
   const avatars = useUserStore((s) => s.avatars);
   const selectedAvatarId = useUserStore((s) => s.selectedAvatarId);
@@ -50,25 +72,54 @@ export default function CustomizationScreen() {
   const ownedWings = useUserStore((s) => s.ownedWings);
   const equippedWing = useUserStore((s) => s.equippedWing);
   const equipWing = useUserStore((s) => s.equipWing);
+  const ownedPets = useUserStore((s) => s.ownedPets);
+  const equippedPet = useUserStore((s) => s.equippedPet);
+  const equipPet = useUserStore((s) => s.equipPet);
+  const ownedStands = useUserStore((s) => s.ownedStands);
+  const equippedStand = useUserStore((s) => s.equippedStand);
+  const equipStand = useUserStore((s) => s.equipStand);
   const level = useUserStore((s) => s.level);
-  const gems = useUserStore((s) => s.gems ?? 0);
-  const staminaSourceLevel = useUserStore((s) => s.staminaSourceLevel ?? 0);
-  const accountCreatedAt = useUserStore((s) => s.accountCreatedAt);
-  const upgradeStaminaSource = useUserStore((s) => s.upgradeStaminaSource);
 
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 6;
   const bottomPad = Platform.OS === 'web' ? 20 : insets.bottom + 16;
 
   const wingRow = useMemo(
     () => [
-      { id: null as string | null, name: 'None', owned: true },
+      { id: null as string | null, name: 'None', owned: true, icon: 'close-circle-outline' },
       ...ALL_WINGS.map((w) => ({
         id: w.id as string | null,
         name: w.name,
         owned: ownedWings.includes(w.id),
+        icon: 'image-outline',
       })),
     ],
     [ownedWings],
+  );
+
+  const petRow = useMemo(
+    () => [
+      { id: null as string | null, name: 'None', owned: true, icon: 'close-circle-outline' },
+      ...ALL_PETS.map((item) => ({
+        id: item.id as string | null,
+        name: item.name,
+        owned: ownedPets.includes(item.id),
+        icon: item.icon,
+      })),
+    ],
+    [ownedPets],
+  );
+
+  const standRow = useMemo(
+    () => [
+      { id: null as string | null, name: 'None', owned: true, icon: 'close-circle-outline' },
+      ...ALL_STANDS.map((item) => ({
+        id: item.id as string | null,
+        name: item.name,
+        owned: ownedStands.includes(item.id),
+        icon: item.icon,
+      })),
+    ],
+    [ownedStands],
   );
 
   const goLobby = () => {
@@ -99,32 +150,21 @@ export default function CustomizationScreen() {
     router.push({ pathname: ROUTES.SHOP, params: { tab: 'wings' } });
   };
 
-  const nextUpgrade =
-    staminaSourceLevel < MAX_STAMINA_UPGRADE_LEVEL
-      ? STAMINA_UPGRADE_LEVELS[staminaSourceLevel + 1]
-      : null;
-
-  const offerActive = isFirstUpgradeOfferActive(accountCreatedAt, staminaSourceLevel);
-  const nextUpgradeCost = nextUpgrade
-    ? getUpgradeGemCost(nextUpgrade.level, accountCreatedAt, staminaSourceLevel)
-    : 0;
-
-  const handleUpgrade = () => {
-    if (!nextUpgrade) return;
-    hapticsService.impact(0);
-    const ok = upgradeStaminaSource();
-    if (!ok) {
-      Alert.alert(
-        'Not enough gems',
-        `Upgrading to Level ${nextUpgrade.level} costs ${nextUpgradeCost} gems. You have ${gems}.`,
-      );
+  const handleSelectEquipItem = (
+    slot: 'pet' | 'stand',
+    itemId: string | null,
+    owned: boolean,
+    currentlyEquipped: string | null,
+    equip: (id: string | null) => void,
+  ) => {
+    if (owned) {
+      if (itemId === currentlyEquipped) return;
+      hapticsService.impact(0);
+      equip(itemId);
       return;
     }
-    hapticsService.notification(1);
-    Alert.alert(
-      'Source upgraded!',
-      `Stamina source is now Level ${nextUpgrade.level}: cap ${nextUpgrade.cap}, +1 stamina every ${nextUpgrade.refillIntervalMin} minutes.`,
-    );
+    hapticsService.impact(0);
+    notify('Coming soon', `This ${slot} is reserved for a future unlock.`);
   };
 
   return (
@@ -142,6 +182,8 @@ export default function CustomizationScreen() {
         <CharacterStage
           avatarId={selectedAvatarId}
           wingId={equippedWing}
+          petId={equippedPet}
+          standId={equippedStand}
           mode="preview"
         />
         <View style={styles.levelBadge}>
@@ -150,42 +192,22 @@ export default function CustomizationScreen() {
       </View>
 
       <View style={styles.tabRow}>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'avatars' && styles.tabActive]}
-          onPress={() => { hapticsService.impact(0); setTab('avatars'); }}
-          activeOpacity={0.85}
-        >
-          <Ionicons
-            name="person"
-            size={16}
-            color={tab === 'avatars' ? GameColors.backgroundPrimary : GameColors.textWhite}
-          />
-          <Text style={[styles.tabLabel, tab === 'avatars' && styles.tabLabelActive]}>Avatars</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'wings' && styles.tabActive]}
-          onPress={() => { hapticsService.impact(0); setTab('wings'); }}
-          activeOpacity={0.85}
-        >
-          <Ionicons
-            name="sparkles"
-            size={16}
-            color={tab === 'wings' ? GameColors.backgroundPrimary : GameColors.textWhite}
-          />
-          <Text style={[styles.tabLabel, tab === 'wings' && styles.tabLabelActive]}>Wings</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'upgrade' && styles.tabActive]}
-          onPress={() => { hapticsService.impact(0); setTab('upgrade'); }}
-          activeOpacity={0.85}
-        >
-          <Ionicons
-            name="trending-up"
-            size={16}
-            color={tab === 'upgrade' ? GameColors.backgroundPrimary : GameColors.textWhite}
-          />
-          <Text style={[styles.tabLabel, tab === 'upgrade' && styles.tabLabelActive]}>Upgrade</Text>
-        </TouchableOpacity>
+        {TABS.map((entry) => (
+          <TouchableOpacity
+            key={entry.id}
+            style={[styles.tab, tab === entry.id && styles.tabActive]}
+            onPress={() => { hapticsService.impact(0); setTab(entry.id); }}
+            activeOpacity={0.85}
+            accessibilityLabel={`customize-tab-${entry.id}`}
+          >
+            <Ionicons
+              name={entry.icon}
+              size={14}
+              color={tab === entry.id ? GameColors.backgroundPrimary : GameColors.textWhite}
+            />
+            <Text style={[styles.tabLabel, tab === entry.id && styles.tabLabelActive]}>{entry.label}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       <ScrollView
@@ -193,82 +215,7 @@ export default function CustomizationScreen() {
         contentContainerStyle={{ paddingBottom: 12 }}
         showsVerticalScrollIndicator={false}
       >
-        {tab === 'upgrade' ? (
-          <View style={styles.upgradePanel}>
-            <View style={styles.upgradeHeader}>
-              <View>
-                <Text style={styles.upgradeTitle}>Stamina Source</Text>
-                <Text style={styles.upgradeSubtitle}>
-                  Level {staminaSourceLevel} of {MAX_STAMINA_UPGRADE_LEVEL}
-                </Text>
-              </View>
-              <View style={styles.gemPill}>
-                <Ionicons name="diamond" size={14} color="#CE93D8" />
-                <Text style={styles.gemPillText}>{gems}</Text>
-              </View>
-            </View>
-
-            {offerActive && (
-              <View style={styles.offerBanner}>
-                <Ionicons name="flame" size={14} color="#FF7043" />
-                <Text style={styles.offerText}>
-                  Launch offer: first upgrade half price for {FIRST_UPGRADE_OFFER_HOURS}h!
-                </Text>
-              </View>
-            )}
-
-            {STAMINA_UPGRADE_LEVELS.map((lvl) => {
-              const owned = staminaSourceLevel >= lvl.level;
-              const isNext = lvl.level === staminaSourceLevel + 1;
-              const perDay = Math.floor((24 * 60) / lvl.refillIntervalMin);
-              const discounted = isNext && nextUpgradeCost < lvl.gemCost;
-              return (
-                <View
-                  key={lvl.level}
-                  style={[
-                    styles.upgradeRow,
-                    owned && styles.upgradeRowOwned,
-                    isNext && styles.upgradeRowNext,
-                  ]}
-                >
-                  <View style={styles.upgradeRowInfo}>
-                    <Text style={styles.upgradeRowTitle}>
-                      {lvl.level === 0 ? 'Base Source' : `Level ${lvl.level}`}
-                    </Text>
-                    <Text style={styles.upgradeRowDetail}>
-                      Cap {lvl.cap} · +1 every {lvl.refillIntervalMin} min · {perDay}/day
-                    </Text>
-                  </View>
-                  {owned ? (
-                    <Ionicons name="checkmark-circle" size={22} color={GameColors.accentGreen} />
-                  ) : isNext ? (
-                    <View style={styles.upgradePrice}>
-                      <Ionicons name="diamond" size={12} color="#CE93D8" />
-                      {discounted && (
-                        <Text style={styles.upgradePriceStrike}>{lvl.gemCost}</Text>
-                      )}
-                      <Text style={styles.upgradePriceText}>{nextUpgradeCost}</Text>
-                    </View>
-                  ) : (
-                    <Ionicons name="lock-closed" size={16} color={GameColors.textSecondary} />
-                  )}
-                </View>
-              );
-            })}
-
-            {nextUpgrade ? (
-              <GradientButton
-                title={`Upgrade to Level ${nextUpgrade.level} — ${nextUpgradeCost} Gems`}
-                onPress={handleUpgrade}
-              />
-            ) : (
-              <View style={styles.maxedBanner}>
-                <Ionicons name="trophy" size={16} color={GameColors.accentGold} />
-                <Text style={styles.maxedText}>Fully upgraded — maximum source power!</Text>
-              </View>
-            )}
-          </View>
-        ) : tab === 'avatars' ? (
+        {tab === 'avatars' ? (
           <View style={styles.grid}>
             {avatars.map((avatar) => {
               const equipped = avatar.id === selectedAvatarId;
@@ -305,7 +252,7 @@ export default function CustomizationScreen() {
               );
             })}
           </View>
-        ) : (
+        ) : tab === 'wings' ? (
           <View style={styles.grid}>
             {wingRow.map((wing) => {
               const equipped = wing.id === equippedWing;
@@ -339,6 +286,52 @@ export default function CustomizationScreen() {
                     </View>
                   )}
                   <Text style={styles.cardName} numberOfLines={1}>{wing.name}</Text>
+                  {equipped && (
+                    <View style={styles.equippedTag}>
+                      <Text style={styles.equippedTagText}>Equipped</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.grid}>
+            {(tab === 'pets' ? petRow : standRow).map((item) => {
+              const equipped = tab === 'pets' ? item.id === equippedPet : item.id === equippedStand;
+              const locked = !item.owned;
+              return (
+                <TouchableOpacity
+                  key={item.id ?? 'none'}
+                  activeOpacity={0.8}
+                  onPress={() =>
+                    handleSelectEquipItem(
+                      tab === 'pets' ? 'pet' : 'stand',
+                      item.id,
+                      item.owned,
+                      tab === 'pets' ? equippedPet : equippedStand,
+                      tab === 'pets' ? equipPet : equipStand,
+                    )
+                  }
+                  style={[
+                    styles.card,
+                    !locked && !equipped && styles.cardOwned,
+                    equipped && styles.cardEquipped,
+                    locked && styles.cardLocked,
+                  ]}
+                >
+                  <Ionicons
+                    name={item.icon as never}
+                    size={28}
+                    color={equipped ? GameColors.accentGold : GameColors.textSecondary}
+                    style={styles.cardPlaceholder}
+                  />
+                  {locked && (
+                    <View style={styles.lockOverlay}>
+                      <Ionicons name="lock-closed" size={20} color={GameColors.textWhite} />
+                    </View>
+                  )}
+                  <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
                   {equipped && (
                     <View style={styles.equippedTag}>
                       <Text style={styles.equippedTagText}>Equipped</Text>
@@ -406,17 +399,17 @@ const styles = StyleSheet.create({
   },
   tabRow: {
     flexDirection: 'row',
-    marginHorizontal: 16,
+    marginHorizontal: 12,
     marginBottom: 10,
-    gap: 8,
+    gap: 6,
   },
   tab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
+    gap: 4,
+    paddingVertical: 8,
     borderRadius: 12,
     backgroundColor: GameColors.card,
     borderWidth: 1,
@@ -429,7 +422,7 @@ const styles = StyleSheet.create({
   tabLabel: {
     ...Typography.semibold,
     color: GameColors.textWhite,
-    fontSize: 14,
+    fontSize: 11,
   },
   tabLabelActive: {
     color: GameColors.backgroundPrimary,
@@ -500,118 +493,5 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '800',
     color: GameColors.backgroundPrimary,
-  },
-  upgradePanel: {
-    gap: 10,
-    paddingBottom: 4,
-  },
-  upgradeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-  },
-  upgradeTitle: {
-    ...Typography.semibold,
-    fontSize: 18,
-    color: GameColors.textWhite,
-  },
-  upgradeSubtitle: {
-    ...Typography.small,
-    color: GameColors.textSecondary,
-  },
-  gemPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: 'rgba(206,147,216,0.15)',
-  },
-  gemPillText: {
-    ...Typography.small,
-    color: '#CE93D8',
-  },
-  upgradeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: GameColors.card,
-    borderWidth: 1,
-    borderColor: GameColors.border,
-  },
-  upgradeRowOwned: {
-    borderColor: 'rgba(76,175,80,0.45)',
-  },
-  upgradeRowNext: {
-    borderColor: GameColors.accentGold,
-    backgroundColor: 'rgba(255,215,0,0.06)',
-  },
-  upgradeRowInfo: {
-    gap: 2,
-    flexShrink: 1,
-  },
-  upgradeRowTitle: {
-    ...Typography.semibold,
-    fontSize: 14,
-    color: GameColors.textWhite,
-  },
-  upgradeRowDetail: {
-    ...Typography.small,
-    color: GameColors.textSecondary,
-  },
-  upgradePrice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-    backgroundColor: 'rgba(206,147,216,0.18)',
-  },
-  upgradePriceText: {
-    ...Typography.semibold,
-    fontSize: 13,
-    color: '#CE93D8',
-  },
-  upgradePriceStrike: {
-    ...Typography.small,
-    fontSize: 11,
-    color: GameColors.textSecondary,
-    textDecorationLine: 'line-through',
-  },
-  offerBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,112,67,0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,112,67,0.5)',
-  },
-  offerText: {
-    ...Typography.small,
-    color: '#FFAB91',
-    flexShrink: 1,
-  },
-  maxedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,215,0,0.08)',
-    borderWidth: 1,
-    borderColor: GameColors.accentGold,
-  },
-  maxedText: {
-    ...Typography.small,
-    color: GameColors.accentGold,
   },
 });

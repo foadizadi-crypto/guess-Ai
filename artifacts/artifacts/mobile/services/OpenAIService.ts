@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Category, Difficulty, Question } from '@/types';
 import { generateId } from '@/utils';
 import { API_BASE_URL, getApiUrl, safeApiTarget } from '@/services/apiConfig';
+import { toGameplayDifficulty } from '@/shared/difficulty';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -95,15 +96,15 @@ async function persistRecentPlay(category: Category, difficulty: Difficulty): Pr
 
 const REQUEST_TIMEOUT_MS = 120_000;
 
-async function fetchWithTimeout(input: string, init: RequestInit): Promise<Response> {
+async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timeout = setTimeout(() => controller?.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller?.abort(), timeoutMs);
   try {
     if (__DEV__) console.log('[API] request', { target: safeApiTarget(), path: new URL(input).pathname });
     return await fetch(input, controller ? { ...init, signal: controller.signal } : init);
   } catch (error) {
     if (controller?.signal.aborted) {
-      throw new Error(`API request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`);
+      throw new Error(`API request timed out after ${timeoutMs / 1000}s`);
     }
     throw error;
   } finally {
@@ -143,6 +144,42 @@ class OpenAIService {
     return { url: data.url, prompt };
   }
 
+  async generateLostItemImages(input: {
+    scenePrompt: string;
+    editPrompt: string;
+    optionPrompts: string[];
+    style: 'cartoon';
+  }): Promise<{ url: string; editedUrl: string; optionUrls: string[] }> {
+    const response = await fetchWithTimeout(getApiUrl('/api/images'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: input.scenePrompt,
+        style: input.style,
+        editPrompt: input.editPrompt,
+        optionPrompts: input.optionPrompts,
+      }),
+    }, 180_000);
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      throw new Error(body.error ?? `Image API responded with ${response.status}`);
+    }
+
+    const data = (await response.json()) as {
+      url?: string;
+      editedUrl?: string;
+      optionUrls?: string[];
+    };
+    if (!data.url || !data.editedUrl || !Array.isArray(data.optionUrls) || data.optionUrls.length !== 4) {
+      throw new Error('Image API returned an incomplete Lost Item image set');
+    }
+    if (data.optionUrls.some((url) => !url)) {
+      throw new Error('Image API returned a Lost Item option without an image');
+    }
+    return { url: data.url, editedUrl: data.editedUrl, optionUrls: data.optionUrls };
+  }
+
   /**
    * Generate a set of quiz questions via the live OpenAI API.
    * Never substitutes cache, mock, or placeholder content.
@@ -158,7 +195,7 @@ class OpenAIService {
     const response = await fetchWithTimeout(getApiUrl('/api/questions'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ category, difficulty, count }),
+        body: JSON.stringify({ category, difficulty: toGameplayDifficulty(difficulty), count }),
     });
 
     if (!response.ok) {

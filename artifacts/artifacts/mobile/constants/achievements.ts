@@ -43,7 +43,7 @@ export interface AchievementDef {
 // Common: 100 coins / 50 XP
 // Rare:   500 coins / 200 XP
 // Epic:   1000 coins / 500 XP
-// Legendary: gems + exclusive cosmetic (no coins)
+// Legendary: exclusive cosmetic (no gems — gems are Shop IAP + spin jackpot only)
 
 // ─── Definitions ──────────────────────────────────────────────────────────────
 
@@ -66,7 +66,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   {
     id:             'perfect-game',
     title:          'First Perfect Game',
-    description:    'Score 20/20 correct in a single game',
+    description:    'Get a perfect score in a single game',
     category:       'beginner',
     rarity:         'common',
     conditionType:  'perfectGame',
@@ -130,7 +130,6 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     color:          '#FF1744',
     rewardCoins:    0,
     rewardXP:       0,
-    rewardGems:     50,
     rewardCosmeticId: 'frame_cosmic',
   },
   {

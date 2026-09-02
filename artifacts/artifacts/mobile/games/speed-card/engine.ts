@@ -163,12 +163,6 @@ export async function fetchSpeedCardRound(difficulty: Difficulty): Promise<Speed
     }
     const data = (await response.json()) as SpeedCardRound;
     return assertValidRound(data);
-  } catch (err) {
-    if (__DEV__) {
-      console.warn('[Speed Card] API failed — using local round in development', err);
-      return buildSpeedCardRound();
-    }
-    throw err;
   } finally {
     clearTimeout(timeout);
   }

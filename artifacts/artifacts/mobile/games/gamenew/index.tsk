@@ -1,0 +1,22 @@
+import { profile as p1 } from './games/shadow-match/profile';
+import { profile as p2 } from './games/odd-one-out/profile';
+import { profile as p3 } from './games/count-quick/profile';
+import { profile as p4 } from './games/size-compare/profile';
+import { profile as p5 } from './games/angle-spotter/profile';
+import { profile as p6 } from './games/fragment-unify/profile';
+import { profile as p7 } from './games/emotion-match/profile';
+import { profile as p8 } from './games/logic-chain/profile';
+import { profile as p9 } from './games/timeline-builder/profile';
+
+export const QUIZ_GAMES_2 = {
+  'shadow-match':     p1,
+  'odd-one-out':      p2,
+  'count-quick':      p3,
+  'size-compare':     p4,
+  'angle-spotter':    p5,
+  'fragment-unify':   p6,
+  'emotion-match':    p7,
+  'logic-chain':      p8,
+  'timeline-builder': p9,
+};
+export type QuizId2 = keyof typeof QUIZ_GAMES_2;

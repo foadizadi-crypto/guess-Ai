@@ -3,21 +3,19 @@
  *
  * Reachable from the lobby stamina pill. One upgradable stamina source: the
  * bar shows the level-dependent cap (energy may overflow above it from ads,
- * packs and rewards). Refill action spends gems; the source upgrade lives on
- * the Customization screen's Upgrade tab. Watching an ad for stamina stays on
+ * packs and rewards). Refill action spends gems; source upgrade is opened from
+ * the Lobby stamina "+" button. Watching an ad for stamina stays on
  * the lobby AdMob button, which owns the daily-cap logic.
  */
 import React, { useCallback } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import { hapticsService } from '@/services/HapticsService';
 import { PlaceholderScreen } from '@/components/PlaceholderScreen';
 import { ProgressBar } from '@/components/ProgressBar';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
-import { ROUTES } from '@/navigation/routes';
 import {
   STAMINA_PER_GAME,
   ENERGY_REFILL_GEM_COST,
@@ -54,11 +52,6 @@ export default function StaminaScreen() {
     hapticsService.notification(1);
   }, [refillEnergyWithGems]);
 
-  const goToUpgrade = useCallback(() => {
-    hapticsService.impact(0);
-    router.push(ROUTES.CUSTOMIZATION);
-  }, []);
-
   return (
     <PlaceholderScreen
       title="Stamina"
@@ -87,17 +80,17 @@ export default function StaminaScreen() {
         </Text>
       </View>
 
-      <TouchableOpacity style={styles.card} onPress={goToUpgrade} activeOpacity={0.85}>
+      <View style={styles.card}>
         <View style={styles.row}>
           <Text style={styles.rowLabel}>Source Level</Text>
           <Text style={styles.rowValue}>{sourceLevel} / {MAX_STAMINA_UPGRADE_LEVEL}</Text>
         </View>
         <Text style={styles.hint}>
           {sourceLevel < MAX_STAMINA_UPGRADE_LEVEL
-            ? 'Upgrade your source in Customize → Upgrade to raise the cap and refill speed.'
+            ? 'Upgrade your source from the Lobby stamina + button. Refill stays 1 stamina / 12 min at every level.'
             : 'Your stamina source is fully upgraded.'}
         </Text>
-      </TouchableOpacity>
+      </View>
 
       <TouchableOpacity
         style={[styles.refillBtn, isFull && styles.refillBtnDisabled]}

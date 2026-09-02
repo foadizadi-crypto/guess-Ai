@@ -9,16 +9,25 @@ import { CoinDisplay } from '@/components/CoinDisplay';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { DAILY_REWARDS } from '@/constants';
+import { dailyWeekStreak, getDailyWeekPowerUpLabel } from '@/constants/economy';
 import { useUserStore } from '@/store/userStore';
-import { isToday } from '@/utils';
+import { getTodayUTCString, getYesterdayUTCString, isUtcDayToday } from '@/utils';
 
 export default function DailyRewardScreen() {
   const insets = useSafeAreaInsets();
   const dailyReward = useUserStore((s) => s.dailyReward);
   const coins = useUserStore((s) => s.coins);
   const claimDailyReward = useUserStore((s) => s.claimDailyReward);
-  const claimedToday = isToday(dailyReward.lastClaimed);
+  const claimedToday = isUtcDayToday(dailyReward.lastClaimDate);
   const nextDay = ((dailyReward.currentDay ?? 0) % 7) + 1;
+  const weekBonus = getDailyWeekPowerUpLabel(
+    dailyWeekStreak(
+      dailyReward.streak ?? 0,
+      dailyReward.lastClaimDate,
+      getTodayUTCString(),
+      getYesterdayUTCString(),
+    ),
+  );
   const topPad = Platform.OS === 'web' ? 62 : insets.top + 12;
   const bottomPad = Platform.OS === 'web' ? 28 : insets.bottom + 24;
   const handleClaim = () => {
@@ -33,8 +42,8 @@ export default function DailyRewardScreen() {
         <View style={styles.header}><BackButton /><Text style={styles.title}>Daily Reward</Text><CoinDisplay amount={coins} size="small" animate /></View>
         <View style={styles.hero}>
           <View style={styles.gift}><Ionicons name="gift" size={42} color={GameColors.accentGold} /></View>
-          <Text style={styles.heroTitle}>7 Day Streak</Text>
-          <Text style={styles.heroCopy}>Come back every day to unlock bigger rewards.</Text>
+          <Text style={styles.heroTitle}>Daily Rewards</Text>
+          <Text style={styles.heroCopy}>Coins every day. Week 1 adds a Hint; week 2 adds a Reveal. Then it repeats.</Text>
           <Text style={styles.streak}>Current streak: {dailyReward.streak} day{dailyReward.streak === 1 ? '' : 's'}</Text>
         </View>
         <View style={styles.calendar}>
@@ -47,7 +56,7 @@ export default function DailyRewardScreen() {
                 <View style={[styles.rewardIcon, isClaimed && styles.rewardIconClaimed]}>
                   {isClaimed ? <Ionicons name="checkmark" size={22} color={GameColors.backgroundPrimary} /> : <Ionicons name={reward.icon} size={22} color={isNext ? GameColors.accentGold : GameColors.textSecondary} />}
                 </View>
-                <Text style={[styles.rewardLabel, isNext && styles.nextText]}>{reward.label}</Text>
+                <Text style={[styles.rewardLabel, isNext && styles.nextText]}>{reward.coins} coins + {weekBonus}</Text>
               </View>
             );
           })}
@@ -56,7 +65,6 @@ export default function DailyRewardScreen() {
           <Ionicons name={claimedToday ? 'checkmark-circle' : 'gift-outline'} size={20} color={claimedToday ? GameColors.textSecondary : GameColors.backgroundPrimary} />
           <Text style={[styles.claimText, claimedToday && styles.claimedText]}>{claimedToday ? 'Claimed Today' : `Claim Day ${nextDay}`}</Text>
         </TouchableOpacity>
-        {nextDay === 4 && !claimedToday && <Text style={styles.note}>Day 4 includes an Avatar Fragment for your collection.</Text>}
       </ScrollView>
     </AnimatedBackground>
   );

@@ -21,6 +21,8 @@ import { Typography } from '@/theme/typography';
 import { CoinDisplay } from './CoinDisplay';
 import { useRTL } from '@/hooks/useRTL';
 import { DAILY_REWARDS } from '@/constants';
+import { dailyWeekStreak, getDailyWeekPowerUpLabel } from '@/constants/economy';
+import { getTodayUTCString, getYesterdayUTCString } from '@/utils';
 
 interface DailyRewardModalProps {
   visible: boolean;
@@ -33,6 +35,7 @@ interface DailyRewardModalProps {
   onClose: () => void;
   /** Energy granted on claim (spec: +10 energy per daily reward). */
   energyReward?: number;
+  lastClaimDate?: string | null;
 }
 
 export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
@@ -44,6 +47,7 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
   onClaim,
   onClose,
   energyReward = 0,
+  lastClaimDate = null,
 }) => {
   const { textAlign } = useRTL();
   const scale = useSharedValue(0.7);
@@ -89,6 +93,9 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
       active: offset === 0 && !alreadyClaimed,
     };
   });
+  const bonusLabel = getDailyWeekPowerUpLabel(
+    dailyWeekStreak(streak, lastClaimDate, getTodayUTCString(), getYesterdayUTCString()),
+  );
 
   return (
     <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
@@ -130,6 +137,9 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
                     <Text style={styles.energyText}>+{energyReward} ⚡</Text>
                   </View>
                 )}
+                <View style={styles.energyPill}>
+                  <Text style={styles.energyText}>+ {bonusLabel}</Text>
+                </View>
               </View>
             )}
 
@@ -162,7 +172,7 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
               activeOpacity={0.85}
             >
               <Text style={styles.claimText}>
-                {alreadyClaimed ? 'Close' : `Claim ${amount} Coins`}
+                {alreadyClaimed ? 'Close' : `Claim ${amount} Coins + ${bonusLabel}`}
               </Text>
             </TouchableOpacity>
           </Pressable>

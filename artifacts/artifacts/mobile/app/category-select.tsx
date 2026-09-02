@@ -63,7 +63,10 @@ export default function CategorySelectScreen() {
   const handleSelect = (cat: Category) => {
     if (!isCategoryUnlocked(cat, playerLevel)) {
       hapticsService.notification(0);
-      router.push({ pathname: ROUTES.SHOP, params: { tab: 'play' } });
+      Alert.alert(
+        'Category locked',
+        `Unlocks at level ${categoryUnlockLevel(cat)}. Keep playing to reach it.`,
+      );
       return;
     }
     hapticsService.impact(0);
@@ -84,9 +87,7 @@ export default function CategorySelectScreen() {
       );
       return;
     }
-    if (selectedCategory !== 'speed_card') {
-      startSession(selectedDifficulty, selectedCategory);
-    }
+    startSession(selectedDifficulty, selectedCategory);
     setConfirmVisible(false);
     const nextRoute =
       selectedCategory === 'speed_card'

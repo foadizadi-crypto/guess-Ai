@@ -24,10 +24,11 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { adService } from '@/services/AdService';
 import { STAMINA_ADS_PER_DAY } from '@/constants/economy';
+import { getTodayUTCString } from '@/utils';
 
 /** Returns today's date as YYYY-MM-DD UTC. */
 function todayUTC(): string {
-  return new Date().toISOString().slice(0, 10);
+  return getTodayUTCString();
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────

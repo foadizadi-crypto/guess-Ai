@@ -46,7 +46,7 @@ import { useAudio } from '@/hooks/useAudio';
 import { MAINTENANCE_MESSAGE, openAIService } from '@/services/OpenAIService';
 import { DIFFICULTY_CONFIG, calculateAnswerScore, getAvatarAbility, getTimerColor, shuffleOptions } from '@/gameEngine';
 import { GAME_CONFIG } from '@/constants/gameConfig';
-import { STAMINA_PER_GAME } from '@/constants/economy';
+import { STAMINA_AD_REWARD, STAMINA_PER_GAME } from '@/constants/economy';
 import { ROUTES } from '@/navigation/routes';
 import type { Question, PowerUpId } from '@/types';
 
@@ -91,6 +91,8 @@ export default function GameScreen() {
   const consumables = useUserStore((s) => s.consumables);
   const selectedAvatarId = useUserStore((s) => s.selectedAvatarId);
   const spendEnergy = useUserStore((s) => s.spendEnergy);
+  const canInGameRetryAd = useUserStore((s) => s.canInGameRetryAd);
+  const consumeInGameRetryAd = useUserStore((s) => s.consumeInGameRetryAd);
   const addTimerSeconds = useGameStore((s) => s.addTimerSeconds);
   const clearStrikeOut = useGameStore((s) => s.clearStrikeOut);
   const boostClarity = useGameStore((s) => s.boostClarity);
@@ -147,13 +149,17 @@ export default function GameScreen() {
   const offerLoss = useCallback((reason: 'timer' | 'snap' | 'strikes') => {
     if (endedRef.current) return;
     setIsTimerRunning(false);
-    if (!reviveUsedRef.current && GAME_CONFIG.max_revives_per_round > 0) {
+    if (
+      !reviveUsedRef.current &&
+      GAME_CONFIG.max_revives_per_round > 0 &&
+      canInGameRetryAd()
+    ) {
       setLossReason(reason);
       setReviveOpen(true);
       return;
     }
     finishGame();
-  }, [finishGame, setIsTimerRunning]);
+  }, [canInGameRetryAd, finishGame, setIsTimerRunning]);
 
   const handleTimerEnd = useCallback(() => {
     offerLoss('timer');
@@ -194,13 +200,22 @@ export default function GameScreen() {
         Alert.alert('Ad not finished', 'Watch the full video to continue this round.');
         return;
       }
+      if (!consumeInGameRetryAd()) {
+        Alert.alert(
+          'No retry ads left today',
+          'You already used today\'s in-game retry ads. The round will end.',
+        );
+        setReviveOpen(false);
+        finishGame();
+        return;
+      }
       reviveUsedRef.current = true;
       setReviveOpen(false);
       continueAfterRevive(lossReason);
     } finally {
       setReviveLoading(false);
     }
-  }, [continueAfterRevive, isAdFreePassActive, lossReason, reviveLoading, showRewarded]);
+  }, [continueAfterRevive, consumeInGameRetryAd, finishGame, isAdFreePassActive, lossReason, reviveLoading, showRewarded]);
 
   const declineRevive = useCallback(() => {
     if (lossReason === 'snap' && pendingSnapWrongRef.current != null) {
@@ -421,6 +436,7 @@ export default function GameScreen() {
   const useGamePowerUp = useCallback(
     (powerUpId: PowerUpId) => {
       if (feedback || paused || endedRef.current || !currentQuestion || powerUps[powerUpId] < 1) return;
+      if (powerUpId === 'hint' && hintUsed) return;
       if (!usePowerUp(powerUpId)) return;
       hapticsService.notification(1);
       playEffect('button_click');
@@ -450,6 +466,7 @@ export default function GameScreen() {
       currentQuestion,
       feedback,
       finishGame,
+      hintUsed,
       paused,
       playEffect,
       powerUps,
@@ -469,33 +486,68 @@ export default function GameScreen() {
   }, [boostClarity, feedback, paused, playEffect, reviveOpen, useConsumable]);
 
   const restart = useCallback(() => {
-    // A restart is a brand-new round, so it must cost stamina like any other.
-    // Without this the pause menu is an infinite free-round exploit.
-    if (!spendEnergy()) {
+    const begin = () => {
+      endedRef.current = false;
+      reviveUsedRef.current = false;
+      pendingSnapWrongRef.current = null;
+      setPaused(false);
+      setSelectedAnswer(null);
+      setFeedback(null);
+      setBannerText(null);
+      setSnapArmed(false);
+      setReviveOpen(false);
+      setLossReason(null);
+      setAnswerHistory([]);
+      setCountdown(3);
+      startSession(difficulty, category);
+    };
+
+    if (spendEnergy()) {
+      begin();
+      return;
+    }
+
+    if (canInGameRetryAd()) {
       Alert.alert(
-        'Not enough stamina',
-        `Restarting starts a new round and costs ${STAMINA_PER_GAME} stamina. Refill from the lobby first.`,
+        'Retry this game',
+        `Watch an ad to restore ${STAMINA_AD_REWARD} stamina and retry this round without paying again.`,
         [
           { text: 'Keep playing', style: 'cancel' },
-          { text: 'Exit to lobby', onPress: exitToLobby },
+          {
+            text: 'Watch ad',
+            onPress: () => {
+              void (async () => {
+                const granted = isAdFreePassActive() || (await showRewarded());
+                if (!granted) return;
+                if (!consumeInGameRetryAd()) return;
+                begin();
+              })();
+            },
+          },
         ],
       );
       return;
     }
-    endedRef.current = false;
-    reviveUsedRef.current = false;
-    pendingSnapWrongRef.current = null;
-    setPaused(false);
-    setSelectedAnswer(null);
-    setFeedback(null);
-    setBannerText(null);
-    setSnapArmed(false);
-    setReviveOpen(false);
-    setLossReason(null);
-    setAnswerHistory([]);
-    setCountdown(3);
-    startSession(difficulty, category);
-  }, [category, difficulty, exitToLobby, spendEnergy, startSession]);
+
+    Alert.alert(
+      'Not enough stamina',
+      `Restarting starts a new round and costs ${STAMINA_PER_GAME} stamina. Refill from the lobby first.`,
+      [
+        { text: 'Keep playing', style: 'cancel' },
+        { text: 'Exit to lobby', onPress: exitToLobby },
+      ],
+    );
+  }, [
+    canInGameRetryAd,
+    category,
+    consumeInGameRetryAd,
+    difficulty,
+    exitToLobby,
+    isAdFreePassActive,
+    showRewarded,
+    spendEnergy,
+    startSession,
+  ]);
 
   // Reanimated Styles
   const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }] }));
@@ -758,10 +810,10 @@ export default function GameScreen() {
             <Text style={styles.reviveTitle}>Continue?</Text>
             <Text style={styles.reviveCopy}>
               {lossReason === 'timer'
-                ? `Time is up. Watch an ad to add ${GAME_CONFIG.revive_bonus_seconds} seconds.`
+                ? `Time is up. Watch an ad to restore ${STAMINA_AD_REWARD} stamina and add ${GAME_CONFIG.revive_bonus_seconds} seconds.`
                 : lossReason === 'snap'
-                  ? 'Wrong SNAP. Watch an ad to retry this image.'
-                  : 'Too many misses. Watch an ad to keep playing.'}
+                  ? `Wrong SNAP. Watch an ad to restore ${STAMINA_AD_REWARD} stamina and retry this image.`
+                  : `Too many misses. Watch an ad to restore ${STAMINA_AD_REWARD} stamina and keep playing.`}
             </Text>
             <GradientButton
               title={reviveLoading ? 'Loading ad…' : isAdFreePassActive() ? 'Continue (Ad-Free)' : 'Watch ad & continue'}

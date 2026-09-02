@@ -20,6 +20,7 @@ import { getApiUrl } from '@/services/apiConfig';
 import { getPlayerId } from '@/services/authService';
 import { getIdToken } from '@/services/authService';
 import { formatScore } from '@/utils';
+import { rankedLeaderboardEntries } from '@/shared/progressSafety';
 
 // This screen shows the REAL global leaderboard: Top 10 players ranked by
 // real XP (from the `players` collection via the API server), plus the
@@ -118,11 +119,12 @@ export default function LeaderboardScreen() {
       const listRes = listResult.value;
       if (!listRes.ok) throw new Error(`Server returned ${listRes.status}`);
       const payload = await listRes.json() as ApiEntry[] | { entries?: ApiEntry[] };
-      const list = Array.isArray(payload)
+      const rawList = Array.isArray(payload)
         ? payload
         : Array.isArray(payload.entries)
           ? payload.entries
           : [];
+      const list = rankedLeaderboardEntries(rawList);
       setTop10(list.slice(0, 10));
 
       // Prefer the dedicated rank endpoint (accurate even outside Top 10);

@@ -111,7 +111,7 @@ export const MISSION_POOL: MissionDefinition[] = [
     id: 'm_perfect',
     type: 'perfect_game',
     label: 'Flawless Victory',
-    description: 'Get a perfect score — 20/20 correct answers.',
+    description: 'Get a perfect score in a single game.',
     target: 1, reward: 80, difficulty: 'hard',
   },
   {

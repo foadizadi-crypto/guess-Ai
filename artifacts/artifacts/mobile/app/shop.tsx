@@ -61,8 +61,7 @@ import {
 } from "@/constants/shopConfig";
 import {
   IAP_GEM_PACKS,
-  COIN_GEM_EXCHANGES,
-  type CoinGemExchangeId,
+  IAP_COIN_PACKS,
 } from "@/constants/economy";
 import type { PowerUpId } from "@/types";
 import type { CosmeticType } from "@/constants/collections";
@@ -109,6 +108,26 @@ const POWER_UP_IDS = new Set([
   "skip-question",
   "double-xp",
 ]);
+
+const IAP_COIN_SKU: Record<(typeof IAP_COIN_PACKS)[number]["id"], string> = {
+  "coins-100": IAP_SKUS.COINS_100,
+  "coins-500": IAP_SKUS.COINS_500,
+  "coins-1200": IAP_SKUS.COINS_1200,
+  "coins-2500": IAP_SKUS.COINS_2500,
+};
+
+const ADFREE_7DAY_MS = 7 * 24 * 60 * 60 * 1000;
+
+function webConfirm(title: string, body: string): boolean {
+  if (typeof globalThis.confirm !== "function") return false;
+  return globalThis.confirm(`${title}\n\n${body}`);
+}
+
+function webAlert(title: string, body: string): void {
+  if (typeof globalThis.alert === "function") {
+    globalThis.alert(`${title}\n\n${body}`);
+  }
+}
 
 function cosmSubcat(id: string): CosmFilter {
   if (id.includes("avatar")) return "Avatars";
@@ -167,14 +186,12 @@ export default function ShopScreen() {
   const buyAvatar = useUserStore((s) => s.buyAvatar);
   const selectAvatar = useUserStore((s) => s.selectAvatar);
   const selectedAvatarId = useUserStore((s) => s.selectedAvatarId);
-  const mockPurchaseCoins = useUserStore((s) => s.mockPurchaseCoins);
   const grantStarterPack = useUserStore((s) => s.grantStarterPack);
   const addGems = useUserStore((s) => s.addGems);
+  const addCoins = useUserStore((s) => s.addCoins);
   const buyGemPack = useUserStore((s) => s.buyGemPack);
-  const buyCoinGemExchange = useUserStore((s) => s.buyCoinGemExchange);
-  const coinGemExchanges = useUserStore((s) => s.coinGemExchanges);
 
-  const { isAdFreePassActive, removeAds } = useAdStore();
+  const { isAdFreePassActive, removeAds, setAdFreePassExpiry } = useAdStore();
   const adFreeActive = isAdFreePassActive();
 
   // Sound effects are routed through the shared AudioService so the global
@@ -209,31 +226,49 @@ export default function ShopScreen() {
 
   const fail = useCallback((title: string, body: string) => {
     hapticsService.notification(0);
+    if (Platform.OS === "web") {
+      toast(`${title}: ${body}`);
+      webAlert(title, body);
+      return;
+    }
     Alert.alert(title, body);
-  }, []);
+  }, [toast]);
 
   const connectGoogleForPurchase = useCallback(async () => {
     try {
       await linkCurrentUserWithGoogle();
-      Alert.alert('Google connected', 'You can buy with this Google account now.');
+      if (Platform.OS === "web") {
+        webAlert("Google connected", "You can buy with this Google account now.");
+      } else {
+        Alert.alert("Google connected", "You can buy with this Google account now.");
+      }
     } catch (err) {
-      if (err instanceof GoogleSignInError && err.code === 'cancelled') return;
-      if (err instanceof GoogleSignInError && err.code === 'already_in_use') {
-        Alert.alert('Google already in use', GOOGLE_SAVE_IN_USE_MESSAGE);
+      if (err instanceof GoogleSignInError && err.code === "cancelled") return;
+      if (err instanceof GoogleSignInError && err.code === "already_in_use") {
+        fail("Google already in use", GOOGLE_SAVE_IN_USE_MESSAGE);
         return;
       }
-      Alert.alert('Could not connect Google', err instanceof Error ? err.message : 'Please try again.');
+      fail("Could not connect Google", err instanceof Error ? err.message : "Please try again.");
     }
-  }, []);
+  }, [fail]);
 
   const ensureGoogleForIap = useCallback((): boolean => {
     if (isGoogleUser()) return true;
+    if (Platform.OS === "web") {
+      if (webConfirm(
+        "Connect Google to purchase",
+        "Real-money purchases need a Google account. You can keep playing as a guest without buying.",
+      )) {
+        void connectGoogleForPurchase();
+      }
+      return false;
+    }
     Alert.alert(
-      'Connect Google to purchase',
-      'Real-money purchases need a Google account. You can keep playing as a guest without buying.',
+      "Connect Google to purchase",
+      "Real-money purchases need a Google account. You can keep playing as a guest without buying.",
       [
-        { text: 'Not now', style: 'cancel' },
-        { text: 'Connect Google', onPress: () => { void connectGoogleForPurchase(); } },
+        { text: "Not now", style: "cancel" },
+        { text: "Connect Google", onPress: () => { void connectGoogleForPurchase(); } },
       ],
     );
     return false;
@@ -280,71 +315,30 @@ export default function ShopScreen() {
     [buyPowerUp, buyConsumable, ok, fail],
   );
 
-  const handleCoinGemExchange = useCallback(
-    (id: string, coinCost: number, gemGrant: number, maxPurchases: number) => {
-      playClickSound();
-      const purchased = coinGemExchanges[id as CoinGemExchangeId] ?? 0;
-      if (purchased >= maxPurchases) {
-        Alert.alert(
-          "Limit reached",
-          `You can only use this exchange ${maxPurchases} time${maxPurchases > 1 ? "s" : ""}.`,
-        );
-        return;
-      }
-      if (coins < coinCost) {
-        Alert.alert(
-          "Not enough coins",
-          `You need ${coinCost.toLocaleString()} 🪙.`,
-        );
-        return;
-      }
-      Alert.alert(
-        `Convert ${coinCost.toLocaleString()} 🪙?`,
-        `You'll receive ${gemGrant} 💎 (${purchased + 1}/${maxPurchases} uses).`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Convert",
-            onPress: () => {
-              const result = buyCoinGemExchange(id as CoinGemExchangeId);
-              result
-                ? ok(`+${gemGrant} 💎`)
-                : fail("Failed", "Something went wrong.");
-            },
-          },
-        ],
-      );
-    },
-    [coins, coinGemExchanges, buyCoinGemExchange, ok, fail],
-  );
-
   // ── GEMS NATIVE BILLING CONTROLLER ────────────────────────────────────────
   const handleGemPack = useCallback(
     (packId: string, packName: string, gemCost: number) => {
       playClickSound();
       if (gems < gemCost) {
-        Alert.alert(
-          "Not enough gems",
-          `You need ${gemCost} 💎. Buy gems below.`,
-        );
+        fail("Not enough gems", `You need ${gemCost} 💎. Buy gems below.`);
         return;
       }
-      Alert.alert(
-        `Buy ${packName}?`,
-        `Spend ${gemCost} 💎 from your balance.`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Buy",
-            onPress: () => {
-              const result = buyGemPack(packId);
-              result
-                ? ok(`${packName} unlocked!`)
-                : fail("Failed", "Something went wrong.");
-            },
-          },
-        ],
-      );
+      const title = `Buy ${packName}?`;
+      const body = `Spend ${gemCost} 💎 from your balance.`;
+      const confirmBuy = () => {
+        const result = buyGemPack(packId);
+        result
+          ? ok(`${packName} unlocked!`)
+          : fail("Failed", "Something went wrong.");
+      };
+      if (Platform.OS === "web") {
+        if (webConfirm(title, body)) confirmBuy();
+        return;
+      }
+      Alert.alert(title, body, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Buy", onPress: confirmBuy },
+      ]);
     },
     [gems, buyGemPack, ok, fail],
   );
@@ -389,6 +383,38 @@ export default function ShopScreen() {
     [loading, addGems, ok, ensureGoogleForIap],
   );
 
+  const handleIAPCoin = useCallback(
+    async (sku: string, coinAmount: number) => {
+      if (loading) return;
+      if (!ensureGoogleForIap()) return;
+      setLoading(sku);
+      hapticsService.impact(1);
+      playClickSound();
+      try {
+        const { success, transactionId } = await iapService.purchase(sku);
+        if (success) {
+          addCoins(coinAmount);
+          ok(`+${coinAmount} 🪙`);
+          const uid = getPlayerId();
+          if (uid && transactionId) {
+            savePurchaseHistory(uid, {
+              transactionId,
+              productId: sku,
+              date: new Date().toISOString(),
+              status: "completed",
+              coinsGranted: coinAmount,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("[IAP Core System] Coin pack purchase failed:", err);
+      } finally {
+        setLoading(null);
+      }
+    },
+    [loading, addCoins, ok, ensureGoogleForIap, playClickSound],
+  );
+
   const purchaseStarterPack = useCallback(async () => {
     if (loading) return;
     if (!ensureGoogleForIap()) return;
@@ -409,7 +435,6 @@ export default function ShopScreen() {
             productId: IAP_SKUS.STARTER_PACK,
             date: new Date().toISOString(),
             status: "completed",
-            coinsGranted: 500,
           });
         }
       }
@@ -604,77 +629,34 @@ export default function ShopScreen() {
               })}
             </View>
 
-            <SectionHeader
-              label="Convert Coins → Gems"
-              icon="swap-horizontal-outline"
-            />
-            <Text style={s.sectionHint}>
-              Spend accumulated coins to earn a small gem bonus — limited
-              lifetime uses.
-            </Text>
-            {COIN_GEM_EXCHANGES.map((tier) => {
-              const purchased = coinGemExchanges[tier.id] ?? 0;
-              const isMaxed = purchased >= tier.maxPurchases;
-              const canDo = !isMaxed && coins >= tier.coins;
-              return (
+            <SectionHeader label="Coin Packs" icon="logo-bitcoin" />
+            <View style={s.iapGrid}>
+              {IAP_COIN_PACKS.map((pack) => (
                 <TouchableOpacity
-                  key={tier.id}
-                  style={[s.exchangeCard, isMaxed && s.exchangeCardMaxed]}
+                  key={pack.id}
+                  style={[
+                    s.iapGemCard,
+                    loading === IAP_COIN_SKU[pack.id] && s.cardLoading,
+                  ]}
+                  disabled={!!loading}
                   onPress={() =>
-                    handleCoinGemExchange(
-                      tier.id,
-                      tier.coins,
-                      tier.gems,
-                      tier.maxPurchases,
-                    )
+                    void handleIAPCoin(IAP_COIN_SKU[pack.id], pack.amount)
                   }
-                  activeOpacity={isMaxed ? 1 : 0.8}
-                  disabled={isMaxed}
+                  activeOpacity={0.8}
                 >
-                  <View
-                    style={[
-                      s.exchangeIcon,
-                      {
-                        backgroundColor: isMaxed
-                          ? "rgba(255,255,255,0.04)"
-                          : "rgba(206,147,216,0.12)",
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name="swap-horizontal-outline"
-                      size={22}
-                      color={isMaxed ? GameColors.textSecondary : "#CE93D8"}
-                    />
-                  </View>
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <Text
-                      style={[
-                        s.exchangeTitle,
-                        isMaxed && { color: GameColors.textSecondary },
-                      ]}
-                    >
-                      +{tier.gems} 💎
-                    </Text>
-                    <Text style={s.exchangeSub}>
-                      {tier.coins.toLocaleString()} 🪙 · {purchased}/
-                      {tier.maxPurchases} uses
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      s.exchBtn,
-                      canDo && s.exchBtnReady,
-                      isMaxed && s.exchBtnMaxed,
-                    ]}
-                  >
-                    <Text style={[s.exchBtnText, canDo && s.exchBtnTextReady]}>
-                      {isMaxed ? "Maxed" : "Convert"}
+                  <Ionicons name="logo-bitcoin" size={28} color={GameColors.accentGold} />
+                  <Text style={s.iapGemAmount}>
+                    {pack.amount.toLocaleString()}
+                  </Text>
+                  <Text style={s.iapGemLabel}>Coins</Text>
+                  <View style={s.iapGemPricePill}>
+                    <Text style={s.iapGemPrice}>
+                      {loading === IAP_COIN_SKU[pack.id] ? "…" : pack.price}
                     </Text>
                   </View>
                 </TouchableOpacity>
-              );
-            })}
+              ))}
+            </View>
           </>
         )}
 
@@ -795,7 +777,7 @@ export default function ShopScreen() {
                     IAP_SKUS.ADFREE_7DAY,
                   );
                   if (success) {
-                    removeAds();
+                    setAdFreePassExpiry(Date.now() + ADFREE_7DAY_MS);
                     ok("7-day Ad-Free!");
                     const uid = getPlayerId();
                     if (uid && transactionId)
@@ -865,7 +847,7 @@ export default function ShopScreen() {
               icon="gift-outline"
               iconColor={GameColors.accentGold}
               name="Starter Pack"
-              desc="500 Coins + 100 Gems · Best first purchase"
+              desc="Chlöe Avatar + Basic Wings + 100 Stamina"
               price={loading === IAP_SKUS.STARTER_PACK ? "…" : "$2.00"}
               highlight
               loading={loading === IAP_SKUS.STARTER_PACK}
@@ -888,12 +870,12 @@ export default function ShopScreen() {
                     removeAds();
                     toast("Purchases restored");
                   } else
-                    Alert.alert(
+                    fail(
                       "Nothing to restore",
                       "No previous Ad-Free purchase found.",
                     );
                 } catch {
-                  Alert.alert("Restore failed", "Could not reach the store.");
+                  fail("Restore failed", "Could not reach the store.");
                 } finally {
                   setLoading(null);
                 }
@@ -1653,56 +1635,6 @@ const s = StyleSheet.create({
     fontSize: 15,
   },
   cardLoading: { opacity: 0.6 },
-  exchangeCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: "rgba(206,147,216,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(206,147,216,0.25)",
-  },
-  exchangeCardMaxed: {
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderColor: GameColors.border,
-  },
-  exchangeIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  exchangeTitle: {
-    color: GameColors.textWhite,
-    fontFamily: "Inter_700Bold",
-    fontSize: 15,
-  },
-  exchangeSub: {
-    color: GameColors.textSecondary,
-    fontFamily: "Inter_400Regular",
-    fontSize: 11,
-  },
-  exchBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: GameColors.border,
-    backgroundColor: "rgba(255,255,255,0.05)",
-  },
-  exchBtnReady: {
-    backgroundColor: "rgba(206,147,216,0.18)",
-    borderColor: "rgba(206,147,216,0.5)",
-  },
-  exchBtnMaxed: { opacity: 0.4 },
-  exchBtnText: {
-    color: GameColors.textSecondary,
-    fontFamily: "Inter_700Bold",
-    fontSize: 12,
-  },
-  exchBtnTextReady: { color: "#CE93D8" },
   restoreBtn: {
     flexDirection: "row",
     alignItems: "center",

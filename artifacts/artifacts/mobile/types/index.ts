@@ -1,6 +1,7 @@
 // ─── Domain types ──────────────────────────────────────────────────────────
 
-export type Difficulty = 'easy' | 'medium' | 'hard';
+export type GameplayDifficulty = 'easy' | 'medium' | 'hard';
+export type Difficulty = GameplayDifficulty | 'extra-hard' | 'max';
 
 export type Category =
   | 'nature'
@@ -18,7 +19,11 @@ export type Category =
   | 'movies'
   | 'music'
   | 'science'
-  | 'speed_card';
+  | 'speed_card'
+  | 'count_quick'
+  | 'lost_item';
+
+export type SessionOutcome = 'perfect' | 'win' | 'lose';
 
 export type AppScreen =
   | 'splash'

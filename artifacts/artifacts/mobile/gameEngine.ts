@@ -1,5 +1,6 @@
 import type { Difficulty, Question } from '@/types';
 import { GAME_CONFIG } from '@/constants/gameConfig';
+import { toGameplayDifficulty } from '@/shared/difficulty';
 
 export const DIFFICULTY_CONFIG: Record<
   Difficulty,
@@ -8,6 +9,8 @@ export const DIFFICULTY_CONFIG: Record<
   easy: { label: 'Easy', blurPercent: 50, multiplier: 1, hints: 2, color: '#00E676' },
   medium: { label: 'Medium', blurPercent: 80, multiplier: 2, hints: 1, color: '#FFB300' },
   hard: { label: 'Hard', blurPercent: 100, multiplier: 3, hints: 0, color: '#FF1744' },
+  'extra-hard': { label: 'Extra Hard', blurPercent: 100, multiplier: 3, hints: 0, color: '#FF1744' },
+  max: { label: 'Max', blurPercent: 100, multiplier: 3, hints: 0, color: '#FF1744' },
 };
 
 export type AvatarAbility =
@@ -39,7 +42,7 @@ export const getAvatarAbility = (avatarId: string): AvatarAbility => {
 };
 
 export const getStartingClarity = (difficulty: Difficulty, ability: AvatarAbility): number =>
-  Math.min(100, 100 - DIFFICULTY_CONFIG[difficulty].blurPercent + (ability === 'blur-buster' ? 20 : 0));
+  Math.min(100, 100 - DIFFICULTY_CONFIG[toGameplayDifficulty(difficulty)].blurPercent + (ability === 'blur-buster' ? 20 : 0));
 
 /** How much the reveal % changes per answer (one-image-per-round model).
  *  Correct: easy +5 / medium +3 / hard +1 clarity.
@@ -48,15 +51,16 @@ export const getStartingClarity = (difficulty: Difficulty, ability: AvatarAbilit
  */
 export const getRevealDelta = (difficulty: Difficulty, correct: boolean): number => {
   const c = GAME_CONFIG;
+  const tier = toGameplayDifficulty(difficulty);
   if (correct) {
-    return difficulty === 'hard'   ? c.clarity_correct_hard   :
-           difficulty === 'medium' ? c.clarity_correct_medium :
-                                     c.clarity_correct_easy;
+    return tier === 'hard'   ? c.clarity_correct_hard   :
+           tier === 'medium' ? c.clarity_correct_medium :
+                               c.clarity_correct_easy;
   }
   const penalty =
-    difficulty === 'hard'   ? c.clarity_wrong_hard   :
-    difficulty === 'medium' ? c.clarity_wrong_medium :
-                              c.clarity_wrong_easy;
+    tier === 'hard'   ? c.clarity_wrong_hard   :
+    tier === 'medium' ? c.clarity_wrong_medium :
+                        c.clarity_wrong_easy;
   return -penalty;
 };
 
@@ -68,7 +72,7 @@ export const calculateAnswerScore = (
   ability: AvatarAbility,
   streak = 0,
 ): number => {
-  const base = 10 * DIFFICULTY_CONFIG[difficulty].multiplier;
+  const base = 10 * DIFFICULTY_CONFIG[toGameplayDifficulty(difficulty)].multiplier;
   const timeBonus = Math.min(5, Math.floor(timeRemaining / 30));
   const abilityBonus = ability === 'visionary' ? 2 : 0;
   // +1 bonus point per 3 consecutive correct answers (combo)

@@ -25,9 +25,10 @@ import { GlassCard } from '@/components/GlassCard';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
-import { ROUTES } from '@/navigation/routes';
-import { signInAsGuest, connectOrSignInWithGoogle, GoogleSignInError, getPlayerId, GOOGLE_SAVE_IN_USE_MESSAGE, isGuestUser, isGoogleUser } from '@/services/authService';
+import { routeFromLaunchUrl } from '@/navigation/routes';
+import { signInAsGuest, connectOrSignInWithGoogle, GoogleSignInError, getPlayerId, GOOGLE_SAVE_IN_USE_MESSAGE, isGuestUser, isGoogleUser, completeRedirectSignIn, isSignedInPlayer } from '@/services/authService';
 import { fetchRegisteredNickname } from '@/services/nicknameService';
+import * as Linking from 'expo-linking';
 
 /**
  * Google or Guest sign-in. Guest gets a player id immediately (anonymous UID),
@@ -58,6 +59,19 @@ export default function LoginScreen() {
     opacity: logoOpacity.value,
   }));
 
+  const finishSignIn = useCallback(async () => {
+    const uid = getPlayerId();
+    if (!uid) return;
+    const store = useUserStore.getState();
+    if (store.nicknameUid && store.nicknameUid !== uid) {
+      store.resetUser();
+    }
+    const existing = await fetchRegisteredNickname();
+    if (existing) setVerifiedNickname(uid, existing);
+    hapticsService.notification(1);
+    router.replace(routeFromLaunchUrl(await Linking.getInitialURL()) as Parameters<typeof router.replace>[0]);
+  }, [setVerifiedNickname, router]);
+
   useEffect(() => {
     logoOpacity.value = withTiming(1, { duration: 400 });
     logoScale.value = withSpring(1, { damping: 12, stiffness: 100 });
@@ -69,18 +83,18 @@ export default function LoginScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const finishSignIn = useCallback(async () => {
-    const uid = getPlayerId();
-    if (!uid) return;
-    const store = useUserStore.getState();
-    if (store.nicknameUid && store.nicknameUid !== uid) {
-      store.resetUser();
-    }
-    const existing = await fetchRegisteredNickname();
-    if (existing) setVerifiedNickname(uid, existing);
-    hapticsService.notification(1);
-    router.replace(ROUTES.LOBBY);
-  }, [setVerifiedNickname, router]);
+  useEffect(() => {
+    let cancelled = false;
+    void completeRedirectSignIn().then(async (uid) => {
+      if (cancelled) return;
+      if (uid || isSignedInPlayer()) {
+        await finishSignIn();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [finishSignIn]);
 
   const handleGoogle = useCallback(async () => {
     if (busy) return;
@@ -119,7 +133,7 @@ export default function LoginScreen() {
     if (busy) return;
     hapticsService.impact(0);
     if (isGoogleUser() || isGuestUser()) {
-      router.replace(ROUTES.LOBBY);
+      await finishSignIn();
       return;
     }
     setGuestLoading(true);

@@ -91,25 +91,24 @@ export const SPIN_CONFIG: SpinWheelConfig = {
       color:       '#42A5F5',
       icon:        'timer-outline',
     },
-    // Economy v2: small gem faucet so free players can taste the gem economy
-    // (stamina source upgrades) and are more likely to convert to buyers.
+    // Extra gem slots converted to coin amounts already on the wheel.
     {
-      id:          'gems_2',
-      label:       '2 Gems',
-      type:        'gems',
-      amount:      2,
+      id:          'coins_50_b',
+      label:       '50 Coins',
+      type:        'coins',
+      amount:      50,
       probability: 9,
-      color:       '#B39DDB',
-      icon:        'diamond-outline',
+      color:       '#F9A825',
+      icon:        'logo-bitcoin',
     },
     {
-      id:          'gems_5',
-      label:       '5 Gems',
-      type:        'gems',
-      amount:      5,
+      id:          'coins_100_b',
+      label:       '100 Coins',
+      type:        'coins',
+      amount:      100,
       probability: 8,
-      color:       '#CE93D8',
-      icon:        'diamond-outline',
+      color:       '#FFD740',
+      icon:        'logo-bitcoin',
     },
     {
       id:          'rare_sticker',
@@ -132,10 +131,9 @@ export const SPIN_CONFIG: SpinWheelConfig = {
     },
     {
       id:          'jackpot',
-      label:       'JACKPOT!',
-      type:        'jackpot',
-      // Base coin value; the store pays min(amount × jackpotMultiplier, jackpotMaxReward).
-      amount:      500,
+      label:       'JACKPOT! 50 Gems',
+      type:        'gems',
+      amount:      50,
       probability: 2,
       color:       '#FF1744',
       icon:        'flash',

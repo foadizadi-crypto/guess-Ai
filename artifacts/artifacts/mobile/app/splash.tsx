@@ -11,12 +11,13 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedGradientBackground } from '@/components/AnimatedGradientBackground';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { storageService } from '@/services/StorageService';
-import { ROUTES } from '@/navigation/routes';
+import { ROUTES, routeFromLaunchUrl } from '@/navigation/routes';
 import { completeRedirectSignIn, isSignedInPlayer, signOutIfUnsupportedAuth, waitForAuthReady } from '@/services/authService';
 import { fetchRegisteredNickname } from '@/services/nicknameService';
 import { useUserStore } from '@/store/userStore';
@@ -138,7 +139,7 @@ export default function SplashScreen() {
             if (nickname) useUserStore.getState().setVerifiedNickname(uid, nickname);
           });
         }
-        return ROUTES.LOBBY;
+        return routeFromLaunchUrl(await Linking.getInitialURL());
       } catch (err) {
         console.warn('[Splash] startup check failed', err);
         try {

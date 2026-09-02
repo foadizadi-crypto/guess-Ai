@@ -32,37 +32,77 @@ export const COUNT_QUICK_SECONDS: Record<GameplayDifficulty, number> = {
   hard: 2,
 };
 
+export interface CountQuickSwatch {
+  name: string;
+  hex: string;
+}
+
 export interface CountQuickPalette {
   id: string;
   name: string;
-  colors: readonly string[];
+  colors: readonly CountQuickSwatch[];
 }
 
 export const COUNT_QUICK_PALETTES: readonly CountQuickPalette[] = [
   {
     id: 'candy',
     name: 'Candy',
-    colors: ['#FF4D6D', '#FFB703', '#06D6A0', '#4D96FF', '#9B5DE5', '#F15BB5'],
+    colors: [
+      { name: 'red', hex: '#FF4D6D' },
+      { name: 'gold', hex: '#FFB703' },
+      { name: 'green', hex: '#06D6A0' },
+      { name: 'blue', hex: '#4D96FF' },
+      { name: 'purple', hex: '#9B5DE5' },
+      { name: 'pink', hex: '#F15BB5' },
+    ],
   },
   {
     id: 'ocean',
     name: 'Ocean',
-    colors: ['#0077B6', '#00B4D8', '#48CAE4', '#90E0EF', '#023E8A', '#CAF0F8'],
+    colors: [
+      { name: 'navy', hex: '#0077B6' },
+      { name: 'cyan', hex: '#00B4D8' },
+      { name: 'aqua', hex: '#48CAE4' },
+      { name: 'ice', hex: '#90E0EF' },
+      { name: 'blue', hex: '#023E8A' },
+      { name: 'foam', hex: '#CAF0F8' },
+    ],
   },
   {
     id: 'sunset',
     name: 'Sunset',
-    colors: ['#FF6B35', '#F7C59F', '#EF476F', '#FFD166', '#8338EC', '#F72585'],
+    colors: [
+      { name: 'orange', hex: '#FF6B35' },
+      { name: 'peach', hex: '#F7C59F' },
+      { name: 'rose', hex: '#EF476F' },
+      { name: 'gold', hex: '#FFD166' },
+      { name: 'violet', hex: '#8338EC' },
+      { name: 'pink', hex: '#F72585' },
+    ],
   },
   {
     id: 'forest',
     name: 'Forest',
-    colors: ['#2D6A4F', '#40916C', '#52B788', '#74C69D', '#95D5B2', '#D8F3DC'],
+    colors: [
+      { name: 'forest', hex: '#14532D' },
+      { name: 'green', hex: '#22C55E' },
+      { name: 'mint', hex: '#ECFDF5' },
+      { name: 'teal', hex: '#0F766E' },
+      { name: 'lime', hex: '#A3E635' },
+      { name: 'cream', hex: '#F7FEE7' },
+    ],
   },
   {
     id: 'neon',
     name: 'Neon',
-    colors: ['#FF006E', '#FB5607', '#FFBE0B', '#00F5D4', '#3A86FF', '#8338EC'],
+    colors: [
+      { name: 'pink', hex: '#FF006E' },
+      { name: 'orange', hex: '#FB5607' },
+      { name: 'yellow', hex: '#FFBE0B' },
+      { name: 'aqua', hex: '#00F5D4' },
+      { name: 'blue', hex: '#3A86FF' },
+      { name: 'purple', hex: '#8338EC' },
+    ],
   },
 ];
 

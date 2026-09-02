@@ -134,7 +134,7 @@ class IAPService {
     const store = useAdStore.getState();
     if (sku === IAP_SKUS.ADFREE_7DAY) {
       const expiry = Date.now() + 7 * 24 * 60 * 60 * 1000;
-      store.removeAds(expiry);
+      store.setAdFreePassExpiry(expiry);
     } else {
       store.removeAds();
     }
@@ -242,7 +242,7 @@ class IAPService {
       [IAP_SKUS.REMOVE_ADS]: { sku: IAP_SKUS.REMOVE_ADS, title: 'Remove Ads',             description: 'Ad-free forever',         price: '$4.99',  currency: 'USD' },
       [IAP_SKUS.ADFREE_7DAY]: { sku: IAP_SKUS.ADFREE_7DAY, title: 'Ad-Free 7 Days',       description: 'No ads for a week',       price: '$0.99',  currency: 'USD' },
       [IAP_SKUS.ADFREE_LIFETIME]: { sku: IAP_SKUS.ADFREE_LIFETIME, title: 'Ad-Free Lifetime', description: 'Never see an ad again',   price: '$4.99',  currency: 'USD' },
-      [IAP_SKUS.STARTER_PACK]: { sku: IAP_SKUS.STARTER_PACK, title: 'Starter Pack',           description: '500 Coins + 100 Gems',    price: '$2.00',  currency: 'USD' },
+      [IAP_SKUS.STARTER_PACK]: { sku: IAP_SKUS.STARTER_PACK, title: 'Starter Pack',           description: 'Chlöe Avatar + Basic Wings + 100 Stamina',    price: '$2.00',  currency: 'USD' },
       [IAP_SKUS.SEASON_PASS]: { sku: IAP_SKUS.SEASON_PASS, title: 'Season Pass',              description: 'Exclusive season rewards',price: '$5.00',  currency: 'USD' },
     };
     return skus.map((s) => MAP[s]).filter(Boolean) as IAPProduct[];

@@ -24,7 +24,7 @@ export const CONFIG_SEEDS: ConfigSeed[] = [
 
   // Session bonuses
   { key: "xp_session_complete_bonus",     value: "50",   description: "XP bonus for finishing any session" },
-  { key: "xp_perfect_game_bonus",         value: "100",  description: "XP bonus for a perfect game (20/20)" },
+  { key: "xp_perfect_game_bonus",         value: "100",  description: "XP bonus for a perfect game (all answers in the round)" },
 
   // Combo tiers (streak thresholds)
   { key: "combo_tier_1_min",              value: "3",    description: "Streak for Mini-combo" },
@@ -36,11 +36,13 @@ export const CONFIG_SEEDS: ConfigSeed[] = [
   { key: "combo_tier_4_min",              value: "12",   description: "Streak for Ultra Combo" },
   { key: "combo_tier_4_bonus",            value: "12",   description: "Bonus XP/answer at Ultra Combo" },
 
-  // Blur / clarity mechanics
-  { key: "clarity_correct_increment",     value: "5",    description: "Blur removed on correct answer" },
-  { key: "clarity_wrong_penalty_easy",    value: "3",    description: "Blur added on wrong answer (Easy)" },
-  { key: "clarity_wrong_penalty_medium",  value: "5",    description: "Blur added on wrong answer (Medium)" },
-  { key: "clarity_wrong_penalty_hard",    value: "7",    description: "Blur added on wrong answer (Hard)" },
+  // Blur / clarity mechanics (one-image-per-round reveal)
+  { key: "clarity_correct_easy",          value: "5",    description: "Clarity gained on correct answer (Easy)" },
+  { key: "clarity_correct_medium",        value: "3",    description: "Clarity gained on correct answer (Medium)" },
+  { key: "clarity_correct_hard",          value: "1",    description: "Clarity gained on correct answer (Hard)" },
+  { key: "clarity_wrong_easy",            value: "1",    description: "Clarity lost on wrong answer (Easy)" },
+  { key: "clarity_wrong_medium",          value: "3",    description: "Clarity lost on wrong answer (Medium)" },
+  { key: "clarity_wrong_hard",            value: "5",    description: "Clarity lost on wrong answer (Hard)" },
   { key: "initial_blur_easy",             value: "50",   description: "Starting blur on Easy (0=clear, 100=fully blurred)" },
   { key: "initial_blur_medium",           value: "80",   description: "Starting blur on Medium" },
   { key: "initial_blur_hard",             value: "100",  description: "Starting blur on Hard" },

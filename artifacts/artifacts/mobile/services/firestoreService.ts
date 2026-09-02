@@ -26,6 +26,8 @@ export interface PlayerProgressSnapshot {
   coins: number;
   gems: number;
   xp: number;
+  /** Session aggregate from POST /api/sessions. Leaderboard uses max(xp, totalXpEarned). */
+  totalXpEarned?: number;
   level: number;
   isPremium: boolean;
   selectedAvatarId: string;
@@ -52,6 +54,10 @@ export interface PlayerProgressSnapshot {
   lastEnergyRefillTime?: number | null;
   ownedWings?: string[];
   equippedWing?: string | null;
+  ownedPets?: string[];
+  equippedPet?: string | null;
+  ownedStands?: string[];
+  equippedStand?: string | null;
   dailyXPEarned?: number;
   dailyXPDate?: string | null;
   unclaimedLevelRewards?: number[];

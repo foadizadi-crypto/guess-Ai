@@ -25,7 +25,6 @@ import { useAudio } from '@/hooks/useAudio';
 import { ROUTES } from '@/navigation/routes';
 import { useRTL } from '@/hooks/useRTL';
 import { GAME_CONFIG } from '@/constants/gameConfig';
-import { GAME_CONSTANTS } from '@/constants';
 import { toGameplayDifficulty } from '@/shared/difficulty';
 import type { MissionType } from '@/types';
 import { recordGameSession, saveAchievements } from '@/services/firestoreService';
@@ -112,7 +111,6 @@ export default function ResultScreen() {
 
     const sessionId = gameSession?.id;
     if (!sessionId || grantedResultSessions.has(sessionId)) return;
-    grantedResultSessions.add(sessionId);
 
     // Refresh missions before updating progress (ensures today's missions are loaded)
     refreshDailyMissions();
@@ -135,7 +133,7 @@ export default function ResultScreen() {
     updateMissionProgress('play_games', 1);
     updateMissionProgress('correct_answers', correctAnswers);
     if (selectedDifficulty === 'hard') updateMissionProgress('complete_hard', 1);
-    if (isPerfect && totalQuestions === GAME_CONSTANTS.TOTAL_QUESTIONS) {
+    if (isPerfect && correctAnswers === totalQuestions && totalQuestions > 0) {
       updateMissionProgress('perfect_game', 1);
     }
     if (maxStreakThisGame >= 5)         updateMissionProgress('get_combo', maxStreakThisGame);
@@ -176,7 +174,7 @@ export default function ResultScreen() {
     // ── Achievement checking ──────────────────────────────────────────────
     // Must run AFTER updateStatistics so the store reflects the latest stats.
     const newlyUnlocked = checkAndUnlockAchievements({
-      isPerfectGame: isPerfect && totalQuestions === GAME_CONSTANTS.TOTAL_QUESTIONS,
+      isPerfectGame: isPerfect && correctAnswers === totalQuestions && totalQuestions > 0,
       maxComboThisGame: maxStreakThisGame,
     });
     if (newlyUnlocked.length > 0) {
@@ -197,6 +195,10 @@ export default function ResultScreen() {
     for (const level of [...userAfter.unclaimedLevelRewards]) {
       claimLevelReward(level);
     }
+
+    // Marked only once every grant above has actually been applied, so a throw
+    // mid-way leaves the session eligible for a retry instead of losing rewards.
+    grantedResultSessions.add(sessionId);
 
     hapticsService.notification(isVictory ? 1 : 2);
     trophyScale.value = withSpring(1, { damping: 12, stiffness: 80 });
@@ -268,16 +270,18 @@ export default function ResultScreen() {
     const message = `I scored ${score} points in GUESSAi with ${accuracy}% accuracy! 🎮`;
     try {
       if (Platform.OS === 'web') {
-        const webShare = typeof navigator !== 'undefined' ? navigator.share : undefined;
-        if (typeof webShare === 'function') {
-          await webShare({ title: 'GUESSAi', text: message });
+        if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
+          Alert.alert('Share', 'Sharing is not supported in this browser.');
           return;
         }
-        Alert.alert('Share', 'Sharing is not supported in this browser.');
+        await navigator.share.call(navigator, { title: 'GUESSAi', text: message });
         return;
       }
       await Share.share({ message });
-    } catch {
+    } catch (err) {
+      if (err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'AbortError') {
+        return;
+      }
       Alert.alert('Share', 'Could not share this result.');
     }
   };

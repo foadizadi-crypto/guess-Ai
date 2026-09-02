@@ -180,6 +180,7 @@ export default function ProfileScreen() {
 
 
         {/* --- D. VISUAL INTERFACE CALIBRATION MESH PANEL --- */}
+        {__DEV__ && (
         <View style={[styles.debugPanel, { bottom: insets.bottom + 20 }]}>
           <Text style={styles.debugText}>Profile Grid Align:</Text>
           <Switch 
@@ -189,6 +190,7 @@ export default function ProfileScreen() {
             thumbColor={debugMode ? '#60a5fa' : '#cbd5e1'}
           />
         </View>
+        )}
 
       </ImageBackground>
     </View>

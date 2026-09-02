@@ -15,6 +15,7 @@ function progressPayloadFromStore() {
     coins: s.coins,
     gems: s.gems,
     xp: s.xp,
+    totalXpEarned: s.xp,
     level: s.level,
     isPremium: s.isPremium,
     selectedAvatarId: s.selectedAvatarId,
@@ -45,6 +46,10 @@ function progressPayloadFromStore() {
     lastEnergyRefillTime: s.lastEnergyRefillTime,
     ownedWings: s.ownedWings,
     equippedWing: s.equippedWing,
+    ownedPets: s.ownedPets,
+    equippedPet: s.equippedPet,
+    ownedStands: s.ownedStands,
+    equippedStand: s.equippedStand,
     dailyXPEarned: s.dailyXPEarned,
     dailyXPDate: s.dailyXPDate,
     unclaimedLevelRewards: s.unclaimedLevelRewards,
@@ -58,6 +63,17 @@ export function useFirestoreSync(): void {
   const uidRef = useRef<string | null>(getPlayerId());
   const [uid, setUid] = useState<string | null>(getPlayerId());
   const hydrateFromBackend = useUserStore((s) => s.hydrateFromBackend);
+  const [storeHydrated, setStoreHydrated] = useState<boolean>(() =>
+    useUserStore.persist.hasHydrated(),
+  );
+  const [hydratedUid, setHydratedUid] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (storeHydrated) return;
+    const unsub = useUserStore.persist.onFinishHydration(() => setStoreHydrated(true));
+    if (useUserStore.persist.hasHydrated()) setStoreHydrated(true);
+    return unsub;
+  }, [storeHydrated]);
 
   useEffect(() => {
     const unsub = onPlayerIdChange((next) => {
@@ -68,17 +84,27 @@ export function useFirestoreSync(): void {
   }, []);
 
   useEffect(() => {
-    if (!uid) return;
+    if (!uid || !storeHydrated) return;
     let active = true;
-    loadPlayerProfile(uid).then((profile) => {
-      if (active && profile) hydrateFromBackend(uid, profile);
-    });
+    loadPlayerProfile(uid)
+      .then((profile) => {
+        if (active && profile) {
+          hydrateFromBackend(uid, profile);
+          useUserStore.getState().tickEnergy();
+        }
+      })
+      .catch(() => { /* offline: local progress may still sync later */ })
+      .finally(() => { if (active) setHydratedUid(uid); });
     return () => { active = false; };
-  }, [uid, hydrateFromBackend]);
+  }, [uid, storeHydrated, hydrateFromBackend]);
 
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // Never mirror local state to Firestore before both hydration paths have
+    // settled. An early write publishes default progress over real cloud data.
+    if (!uid || !storeHydrated || hydratedUid !== uid) return;
+
     const schedule = () => {
       const state = useUserStore.getState();
       if (!state.username) return;
@@ -97,5 +123,5 @@ export function useFirestoreSync(): void {
       unsub();
       if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     };
-  }, [uid]);
+  }, [uid, storeHydrated, hydratedUid]);
 }

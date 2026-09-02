@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  BackHandler,
   LayoutChangeEvent,
   Modal,
   Platform,
@@ -10,13 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { hapticsService } from '@/services/HapticsService';
@@ -32,9 +27,10 @@ import { useUserStore } from '@/store/userStore';
 import { useAdStore } from '@/store/adStore';
 import { useAudio } from '@/hooks/useAudio';
 import { DIFFICULTY_CONFIG, calculateAnswerScore, getAvatarAbility, getTimerColor } from '@/gameEngine';
-import { STAMINA_PER_GAME } from '@/constants/economy';
+import { STAMINA_AD_REWARD, STAMINA_PER_GAME, IN_GAME_RETRY_ADS_PER_DAY } from '@/constants/economy';
 import { ROUTES } from '@/navigation/routes';
 import { isDifficultyOpen } from '@/shared/difficulty';
+import { speedCardContentLevelCap } from '@/games/speed-card/economy';
 import {
   SPEED_CARD_COUNT,
   SPEED_CARD_FLASH_MS,
@@ -43,8 +39,19 @@ import {
   revealDurationMs,
   type SpeedCardColor,
 } from '@/games/speed-card/engine';
-
-type Phase = 'countdown' | 'ready' | 'loading' | 'reveal' | 'question' | 'flash' | 'error';
+import {
+  SPEED_CARD_CONTINUE_LABEL,
+  SPEED_CARD_CORRECT_LABEL,
+  SPEED_CARD_COUNTDOWN,
+  SPEED_CARD_EXIT_LABEL,
+  SPEED_CARD_HOW_TO_BODY,
+  SPEED_CARD_HOW_TO_TITLE,
+  SPEED_CARD_READY_LABEL,
+  SPEED_CARD_START_LABEL,
+  SPEED_CARD_WRONG_TITLE,
+  speedCardQuestionText,
+  type SpeedCardPlayPhase,
+} from '@/games/speed-card/flow';
 
 interface PlacedCard extends SpeedCardColor {
   x: number;
@@ -58,6 +65,7 @@ const CARD_HEIGHT = 96;
 
 const SpeedCardScreen = () => {
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const difficulty = useGameStore((s) => s.selectedDifficulty);
   const category = useGameStore((s) => s.selectedCategory);
@@ -69,7 +77,6 @@ const SpeedCardScreen = () => {
   const recordAnswer = useGameStore((s) => s.recordAnswer);
   const advanceQuestion = useGameStore((s) => s.advanceQuestion);
   const restartSession = useGameStore((s) => s.restartSession);
-  const startSession = useGameStore((s) => s.startSession);
   const endSession = useGameStore((s) => s.endSession);
   const resetGame = useGameStore((s) => s.resetGame);
   const selectedAvatarId = useUserStore((s) => s.selectedAvatarId);
@@ -79,36 +86,35 @@ const SpeedCardScreen = () => {
   const { showRewarded, isAdFreePassActive } = useAdStore();
   const { playEffect } = useAudio();
 
-  const [phase, setPhase] = useState<Phase>('countdown');
-  const [countdown, setCountdown] = useState(3);
+  const roundCap = speedCardContentLevelCap();
+  const [phase, setPhase] = useState<SpeedCardPlayPhase>('howto');
+  const [countdown, setCountdown] = useState<number>(SPEED_CARD_COUNTDOWN[0]);
   const [paused, setPaused] = useState(false);
   const [cards, setCards] = useState<PlacedCard[]>([]);
-  const [faceUp, setFaceUp] = useState(true);
-  const [questions, setQuestions] = useState<SpeedCardColor[]>([]);
-  const [localQuestionIndex, setLocalQuestionIndex] = useState(0);
-  const [flashKind, setFlashKind] = useState<'correct' | 'wrong' | null>(null);
+  const [ask, setAsk] = useState<SpeedCardColor | null>(null);
+  const [roundIndex, setRoundIndex] = useState(0);
+  const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [board, setBoard] = useState({ width: 0, height: 0 });
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [wrongOpen, setWrongOpen] = useState(false);
+  const [continueLoading, setContinueLoading] = useState(false);
+  const [faceUp, setFaceUp] = useState(true);
 
   const endedRef = useRef(false);
-  const countdownStarted = useRef(false);
   const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const revealEndsAt = useRef<number | null>(null);
   const revealRemaining = useRef<number | null>(null);
   const fetchLock = useRef(false);
-  const cdScale = useSharedValue(1.5);
+  const genRef = useRef(0);
 
   const config = DIFFICULTY_CONFIG[difficulty];
-  const currentAsk = questions[localQuestionIndex];
   const topPad = Platform.OS === 'web' ? 54 : insets.top + 8;
   const botPad = Platform.OS === 'web' ? 24 : insets.bottom + 12;
+  const timersFrozen = paused || wrongOpen || endedRef.current;
 
   const clearTimers = () => {
     if (revealTimer.current) clearTimeout(revealTimer.current);
-    if (flashTimer.current) clearTimeout(flashTimer.current);
     revealTimer.current = null;
-    flashTimer.current = null;
   };
 
   const finishRound = useCallback((reason: 'complete' | 'timeout' = 'complete') => {
@@ -116,40 +122,74 @@ const SpeedCardScreen = () => {
     endedRef.current = true;
     clearTimers();
     setPaused(false);
+    setWrongOpen(false);
     if (reason === 'timeout') {
-      endSession({ applyFinish: false, sessionOutcome: 'lose' });
+      endSession({ applyFinish: false });
     } else {
       const corrects = useGameStore.getState().correctAnswers;
-      endSession({
-        applyFinish: true,
-        sessionOutcome: corrects === SPEED_CARD_COUNT ? 'perfect' : 'win',
-      });
+      if (corrects === roundCap) {
+        endSession({ applyFinish: true, sessionOutcome: 'perfect' });
+      } else if (corrects > 0) {
+        endSession({ applyFinish: true, sessionOutcome: 'win' });
+      } else {
+        endSession({ applyFinish: false, sessionOutcome: 'lose' });
+      }
     }
     setTimeout(() => {
       router.replace(ROUTES.RESULT);
     }, 50);
-  }, [endSession, router]);
+  }, [endSession, roundCap, router]);
 
   const exitToLobby = useCallback(() => {
     clearTimers();
     setPaused(false);
+    setWrongOpen(false);
+    endedRef.current = true;
+    const session = useGameStore.getState().gameSession;
+    if (session && !session.isComplete) {
+      endSession({ applyFinish: false, sessionOutcome: 'lose' });
+    }
     setTimeout(() => {
       resetGame();
       router.replace(ROUTES.LOBBY);
     }, 50);
-  }, [resetGame, router]);
+  }, [endSession, resetGame, router]);
 
-  const dealRound = useCallback(async () => {
-    if (fetchLock.current) return;
-    if (board.width < 80 || board.height < 80) {
-      setPhase('loading');
-      return;
+  const exitToCategory = useCallback(() => {
+    clearTimers();
+    setPaused(false);
+    setWrongOpen(false);
+    endedRef.current = true;
+    const session = useGameStore.getState().gameSession;
+    if (session && !session.isComplete) {
+      endSession({ applyFinish: false, sessionOutcome: 'lose' });
     }
+    setTimeout(() => {
+      resetGame();
+      router.replace(ROUTES.CATEGORY_SELECT);
+    }, 50);
+  }, [endSession, resetGame, router]);
+
+  const beginCountdown = useCallback(() => {
+    clearTimers();
+    revealRemaining.current = null;
+    revealEndsAt.current = null;
+    setCountdown(SPEED_CARD_COUNTDOWN[0]);
+    setPhase('countdown');
+    setFeedback(null);
+    setFaceUp(true);
+  }, []);
+
+  const fetchRound = useCallback(async () => {
+    if (board.width < 80 || board.height < 80) return;
+    if (fetchLock.current) return;
+    const generation = genRef.current + 1;
+    genRef.current = generation;
     fetchLock.current = true;
     setLoadError(null);
-    setPhase('loading');
     try {
       const round = await fetchSpeedCardRound(difficulty);
+      if (generation !== genRef.current) return;
       const positions = layoutCardPositions(
         SPEED_CARD_COUNT,
         board.width,
@@ -164,28 +204,123 @@ const SpeedCardScreen = () => {
         width: positions[index]?.width ?? CARD_WIDTH,
         height: positions[index]?.height ?? CARD_HEIGHT,
       })));
-      setQuestions(round.questions);
-      setLocalQuestionIndex(0);
+      setAsk(round.questions[0] ?? round.colors[0] ?? null);
       setFaceUp(true);
-      setFlashKind(null);
-      revealRemaining.current = null;
-      revealEndsAt.current = null;
-      setPhase('reveal');
+      setFeedback(null);
+      setPhase((current) => (
+        current === 'start' || current === 'loading' || current === 'error' ? 'reveal' : current
+      ));
     } catch (err) {
+      if (generation !== genRef.current) return;
       const msg = err instanceof Error ? err.message : 'Speed Card API failed';
       setLoadError(msg);
       setCards([]);
-      setQuestions([]);
-      setPhase('error');
+      setAsk(null);
+      setPhase((current) => (
+        current === 'howto' || current === 'countdown' ? current : 'error'
+      ));
     } finally {
-      fetchLock.current = false;
+      if (generation === genRef.current) fetchLock.current = false;
     }
   }, [board.height, board.width, difficulty]);
+
+  const afterCorrect = useCallback(() => {
+    if (endedRef.current) return;
+    if (roundIndex >= roundCap - 1) {
+      finishRound();
+      return;
+    }
+    advanceQuestion();
+    setRoundIndex((i) => i + 1);
+    setCards([]);
+    setAsk(null);
+    beginCountdown();
+  }, [advanceQuestion, beginCountdown, finishRound, roundCap, roundIndex]);
+
+  const retryThisRound = useCallback(() => {
+    setWrongOpen(false);
+    setContinueLoading(false);
+    setFeedback(null);
+    beginCountdown();
+  }, [beginCountdown]);
+
+  const handleContinueAd = useCallback(() => {
+    if (continueLoading) return;
+    const begin = () => {
+      if (!consumeInGameRetryAd()) return;
+      retryThisRound();
+    };
+    if (isAdFreePassActive()) {
+      begin();
+      return;
+    }
+    if (Platform.OS === 'web' && !__DEV__) {
+      Alert.alert(
+        'Ads unavailable',
+        'Rewarded ads are not available in the browser. Exit to category or play on the app.',
+      );
+      return;
+    }
+    if (!canInGameRetryAd()) {
+      Alert.alert(
+        'No continues left',
+        `You can watch up to ${IN_GAME_RETRY_ADS_PER_DAY} ads a day to continue. Exit to category, or come back tomorrow.`,
+      );
+      return;
+    }
+    setContinueLoading(true);
+    void (async () => {
+      const granted = await showRewarded();
+      setContinueLoading(false);
+      if (!granted) return;
+      begin();
+    })();
+  }, [
+    canInGameRetryAd,
+    consumeInGameRetryAd,
+    continueLoading,
+    isAdFreePassActive,
+    retryThisRound,
+    showRewarded,
+  ]);
+
+  const handleExitWrong = useCallback(() => {
+    recordAnswer(false, 0);
+    exitToCategory();
+  }, [exitToCategory, recordAnswer]);
+
+  const handleCardPress = (card: PlacedCard) => {
+    if (phase !== 'question' || !ask || feedback || endedRef.current || wrongOpen) return;
+    const correct = card.id === ask.id;
+    hapticsService.notification(correct ? 1 : 0);
+    playEffect(correct ? 'correct' : 'wrong');
+    setFeedback(correct ? 'correct' : 'wrong');
+    setPhase('feedback');
+    if (correct) {
+      const points = calculateAnswerScore(
+        difficulty,
+        timer,
+        getAvatarAbility(selectedAvatarId),
+        useGameStore.getState().streak,
+      );
+      recordAnswer(true, points);
+      return;
+    }
+    setWrongOpen(true);
+  };
 
   useEffect(() => {
     if (isDifficultyOpen(difficulty)) return;
     router.replace(ROUTES.LEVEL_SELECT);
   }, [difficulty, router]);
+
+  useEffect(() => {
+    if (gameSession) return;
+    const t = setTimeout(() => {
+      if (!useGameStore.getState().gameSession) router.replace(ROUTES.LOBBY);
+    }, 50);
+    return () => clearTimeout(t);
+  }, [gameSession, router]);
 
   useEffect(() => {
     if (phase !== 'reveal') {
@@ -195,7 +330,7 @@ const SpeedCardScreen = () => {
       }
       return;
     }
-    if (paused) {
+    if (timersFrozen) {
       if (revealTimer.current) {
         clearTimeout(revealTimer.current);
         revealTimer.current = null;
@@ -220,123 +355,103 @@ const SpeedCardScreen = () => {
         revealTimer.current = null;
       }
     };
-  }, [difficulty, paused, phase]);
+  }, [difficulty, phase, timersFrozen]);
 
   useEffect(() => {
-    const playing = phase === 'reveal' || phase === 'question' || phase === 'flash';
-    if (!isTimerRunning || paused || !playing || endedRef.current) return;
+    const playing = phase === 'reveal' || phase === 'question';
+    if (!isTimerRunning || timersFrozen || !playing) return;
     const id = setInterval(() => {
       const next = Math.max(0, useGameStore.getState().timer - 1);
       setTimer(next);
       if (next === 0) finishRound('timeout');
     }, 1000);
     return () => clearInterval(id);
-  }, [finishRound, isTimerRunning, paused, phase, setTimer]);
+  }, [finishRound, isTimerRunning, phase, setTimer, timersFrozen]);
 
   useEffect(() => {
-    if (phase === 'loading' && cards.length === 0 && board.width >= 80 && board.height >= 80) {
-      void dealRound();
-    }
-  }, [board.height, board.width, cards.length, dealRound, phase]);
+    if (phase !== 'countdown' && phase !== 'start' && phase !== 'loading') return;
+    if (cards.length > 0 || board.width < 80 || board.height < 80) return;
+    void fetchRound();
+  }, [board.height, board.width, cards.length, fetchRound, phase]);
 
   useEffect(() => {
     return () => clearTimers();
   }, []);
 
   useEffect(() => {
-    if (gameSession) return;
-    if (phase === 'countdown' || phase === 'ready') return;
-    const t = setTimeout(() => {
-      if (!useGameStore.getState().gameSession) router.replace(ROUTES.LOBBY);
-    }, 50);
+    if (phase !== 'countdown' || timersFrozen) return;
+    const id = setTimeout(() => {
+      if (countdown <= 1) {
+        setPhase('start');
+        return;
+      }
+      setCountdown((n) => n - 1);
+    }, 1000);
+    return () => clearTimeout(id);
+  }, [countdown, phase, timersFrozen]);
+
+  useEffect(() => {
+    if (phase !== 'start' || timersFrozen) return;
+    const id = setTimeout(() => {
+      if (cards.length > 0) {
+        setFaceUp(true);
+        setPhase('reveal');
+        return;
+      }
+      setPhase('loading');
+    }, SPEED_CARD_FLASH_MS);
+    return () => clearTimeout(id);
+  }, [cards.length, phase, timersFrozen]);
+
+  useEffect(() => {
+    if (phase !== 'feedback' || feedback !== 'correct' || endedRef.current || wrongOpen) return;
+    const t = setTimeout(() => afterCorrect(), SPEED_CARD_FLASH_MS);
     return () => clearTimeout(t);
-  }, [gameSession, phase, router]);
+  }, [afterCorrect, feedback, phase, wrongOpen]);
 
   useEffect(() => {
-    if (countdownStarted.current) return;
-    countdownStarted.current = true;
-    setCountdown(3);
-    setPhase('countdown');
-  }, []);
+    const onHardwareBack = () => {
+      if (endedRef.current) return false;
+      if (wrongOpen) return true;
+      setPaused(true);
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
+    return () => sub.remove();
+  }, [wrongOpen]);
 
   useEffect(() => {
-    if (phase !== 'countdown' || paused) return;
-    if (countdown === 0) {
-      const t = setTimeout(() => setPhase('ready'), 700);
-      return () => clearTimeout(t);
-    }
-    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [countdown, paused, phase]);
-
-  useEffect(() => {
-    if (phase === 'countdown' && countdown > -1) {
-      cdScale.value = 1.5;
-      cdScale.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) });
-    }
-  }, [countdown, cdScale, phase]);
+    const unsub = navigation.addListener('beforeRemove', (event) => {
+      if (endedRef.current) return;
+      event.preventDefault();
+      if (!wrongOpen) setPaused(true);
+    });
+    return unsub;
+  }, [navigation, wrongOpen]);
 
   const onBoardLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
     setBoard({ width, height });
   };
 
-  const handleReadyYes = () => {
-    if (!useGameStore.getState().gameSession) {
-      startSession(difficulty, category);
-    }
-    void dealRound();
-  };
-
-  const handleReadyNo = () => {
-    useUserStore.getState().addStamina(STAMINA_PER_GAME);
-    exitToLobby();
-  };
-
-  const goNextAfterFlash = useCallback((wasLast: boolean) => {
-    if (endedRef.current) return;
-    setFlashKind(null);
-    if (wasLast) {
-      finishRound();
-      return;
-    }
-    setLocalQuestionIndex((i) => i + 1);
-    advanceQuestion();
-    setPhase('question');
-  }, [advanceQuestion, finishRound]);
-
-  const handleCardPress = (card: PlacedCard) => {
-    if (phase !== 'question' || !currentAsk || flashKind || endedRef.current) return;
-    const correct = card.id === currentAsk.id;
-    const points = correct
-      ? calculateAnswerScore(difficulty, timer, getAvatarAbility(selectedAvatarId), useGameStore.getState().streak)
-      : 0;
-    recordAnswer(correct, points);
-    hapticsService.notification(correct ? 1 : 0);
-    playEffect(correct ? 'correct' : 'wrong');
-    setFlashKind(correct ? 'correct' : 'wrong');
-    setPhase('flash');
-    const wasLast = localQuestionIndex >= SPEED_CARD_COUNT - 1;
-    flashTimer.current = setTimeout(() => {
-      goNextAfterFlash(wasLast);
-    }, SPEED_CARD_FLASH_MS);
-  };
-
   const restart = useCallback(() => {
     const begin = () => {
+      genRef.current += 1;
+      fetchLock.current = false;
       clearTimers();
       endedRef.current = false;
       revealRemaining.current = null;
       revealEndsAt.current = null;
       setPaused(false);
+      setWrongOpen(false);
+      setContinueLoading(false);
       setCards([]);
-      setQuestions([]);
-      setLocalQuestionIndex(0);
+      setAsk(null);
+      setRoundIndex(0);
       setFaceUp(true);
-      setFlashKind(null);
-      countdownStarted.current = true;
-      setCountdown(3);
-      setPhase('countdown');
+      setFeedback(null);
+      setCountdown(SPEED_CARD_COUNTDOWN[0]);
+      setPhase('howto');
       restartSession(difficulty, category);
     };
 
@@ -346,8 +461,10 @@ const SpeedCardScreen = () => {
     }
 
     if (isAdFreePassActive()) {
-      begin();
-      return;
+      if (consumeInGameRetryAd()) {
+        begin();
+        return;
+      }
     }
 
     if (Platform.OS === 'web') {
@@ -365,7 +482,7 @@ const SpeedCardScreen = () => {
     if (canInGameRetryAd()) {
       Alert.alert(
         'Retry this game',
-        'Watch an ad to retry without spending stamina.',
+        `Watch an ad to restore ${STAMINA_AD_REWARD} stamina and retry this round without paying again.`,
         [
           { text: 'Keep playing', style: 'cancel' },
           {
@@ -404,7 +521,8 @@ const SpeedCardScreen = () => {
     restartSession,
   ]);
 
-  const cdStyle = useAnimatedStyle(() => ({ transform: [{ scale: cdScale.value }] }));
+  const showAsk = phase === 'question' || phase === 'feedback';
+  const remaining = Math.max(0, roundCap - roundIndex - 1);
 
   return (
     <AnimatedBackground>
@@ -423,18 +541,10 @@ const SpeedCardScreen = () => {
         </View>
 
         <View style={styles.progressRow}>
-          <Text style={styles.counter}>{Math.min(localQuestionIndex + 1, SPEED_CARD_COUNT)} / {SPEED_CARD_COUNT}</Text>
+          <Text style={styles.counter}>{roundIndex + 1} / {roundCap}</Text>
           <View style={styles.segmentTrack}>
-            {Array.from({ length: SPEED_CARD_COUNT }, (_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.segment,
-                  index < localQuestionIndex && styles.segmentDone,
-                  index === localQuestionIndex && phase === 'question' && { backgroundColor: config?.color ?? '#8B5CF6' },
-                ]}
-              />
-            ))}
+            <View style={[styles.segmentNow, { flex: roundIndex + 1 }]} />
+            {remaining > 0 ? <View style={[styles.segment, { flex: remaining }]} /> : null}
           </View>
           <Text style={styles.score}>+{score}</Text>
         </View>
@@ -453,54 +563,59 @@ const SpeedCardScreen = () => {
           {phase === 'error' ? (
             <View style={styles.boardStatus} pointerEvents="auto">
               <Text style={styles.boardStatusText}>{loadError ?? 'Online round failed'}</Text>
-              <GradientButton title="Try Again" onPress={() => { void dealRound(); }} style={styles.retryBtn} />
+              <GradientButton title="Try Again" onPress={() => { void fetchRound(); }} style={styles.retryBtn} />
             </View>
           ) : null}
-          {cards.map((card) => (
-            <View
-              key={card.id}
-              collapsable={false}
-              pointerEvents="auto"
-              style={[
-                styles.cardSlot,
-                {
-                  left: card.x,
-                  top: card.y,
-                  width: card.width,
-                  height: card.height,
-                },
-              ]}
-            >
-              <Pressable
-                disabled={phase !== 'question' || Boolean(flashKind)}
-                onPress={() => handleCardPress(card)}
-                style={styles.cardHit}
+          {cards.map((card) => {
+            const showFace =
+              faceUp
+              || (phase === 'feedback' && feedback === 'correct' && ask?.id === card.id);
+            return (
+              <View
+                key={card.id}
+                collapsable={false}
+                pointerEvents="auto"
+                style={[
+                  styles.cardSlot,
+                  {
+                    left: card.x,
+                    top: card.y,
+                    width: card.width,
+                    height: card.height,
+                  },
+                ]}
               >
-                <View
-                  style={[
-                    styles.cardFace,
-                    {
-                      backgroundColor: faceUp ? card.hex : '#1B0F33',
-                      borderColor: faceUp && (card.id === 'white' || card.id === 'yellow' || card.id === 'gold')
-                        ? 'rgba(13,2,33,0.45)'
-                        : faceUp
-                          ? 'rgba(255,255,255,0.35)'
-                          : GameColors.cardBorder,
-                    },
-                  ]}
-                />
-              </Pressable>
-            </View>
-          ))}
+                <Pressable
+                  disabled={phase !== 'question' || Boolean(feedback)}
+                  onPress={() => handleCardPress(card)}
+                  style={styles.cardHit}
+                >
+                  <View
+                    style={[
+                      styles.cardFace,
+                      {
+                        backgroundColor: showFace ? card.hex : '#1B0F33',
+                        borderColor: showFace && (card.id === 'white' || card.id === 'yellow' || card.id === 'gold')
+                          ? 'rgba(13,2,33,0.45)'
+                          : showFace
+                            ? 'rgba(255,255,255,0.35)'
+                            : GameColors.cardBorder,
+                      },
+                    ]}
+                  />
+                </Pressable>
+              </View>
+            );
+          })}
         </View>
 
         <GlassCard style={styles.questionCard}>
           <Text style={styles.questionLabel}>
-            {phase === 'reveal' ? 'MEMORIZE' : phase === 'question' || phase === 'flash' ? 'WHAT COLOR?' : 'SPEED CARD'}
+            {phase === 'reveal' ? 'MEMORIZE' : showAsk ? 'QUESTION' : 'SPEED CARD'}
           </Text>
           <Text style={styles.questionText} numberOfLines={2}>
-            {currentAsk && (phase === 'question' || phase === 'flash')
-              ? `${currentAsk.name}?`
+            {ask && showAsk
+              ? speedCardQuestionText(ask.name)
               : phase === 'loading'
                 ? 'Loading colors…'
                 : phase === 'error'
@@ -508,44 +623,37 @@ const SpeedCardScreen = () => {
                   : 'Watch the cards'}
           </Text>
         </GlassCard>
+
+        {feedback === 'correct' ? (
+          <Text style={styles.correctFeedback}>{SPEED_CARD_CORRECT_LABEL}</Text>
+        ) : (
+          <View style={styles.feedbackSpacer} />
+        )}
       </View>
 
-      {phase === 'countdown' && (
-        <View style={styles.countdownOverlay}>
-          <Animated.Text style={[styles.countdownNumber, cdStyle, countdown === 0 && { color: GameColors.accentGreen }]}>
-            {countdown === 0 ? 'GO!' : String(countdown)}
-          </Animated.Text>
-          <Text style={styles.countdownSub}>{countdown === 0 ? 'Have fun!' : 'Get ready…'}</Text>
+      {phase === 'howto' && (
+        <View style={styles.howtoOverlay}>
+          <GlassCard style={styles.howtoCard}>
+            <Text style={styles.howtoTitle}>{SPEED_CARD_HOW_TO_TITLE}</Text>
+            <Text style={styles.howtoBody}>{SPEED_CARD_HOW_TO_BODY}</Text>
+            <GradientButton
+              title={SPEED_CARD_READY_LABEL}
+              onPress={() => {
+                hapticsService.impact(0);
+                playEffect('button_click');
+                beginCountdown();
+              }}
+              testID="speed-card-im-ready"
+            />
+          </GlassCard>
         </View>
       )}
 
-      <Modal visible={phase === 'ready'} transparent animationType="fade" onRequestClose={handleReadyNo}>
-        <View style={styles.readyBackdrop}>
-          <View style={styles.readyCard}>
-            <Text style={styles.readyTitle}>Are you Ready?</Text>
-            <View style={styles.readyActions}>
-              <TouchableOpacity style={styles.readyNo} onPress={handleReadyNo}>
-                <Text style={styles.readyNoText}>no</Text>
-              </TouchableOpacity>
-              <GradientButton title="yes" onPress={handleReadyYes} style={styles.readyYes} />
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {flashKind ? (
-        <View
-          pointerEvents="none"
-          style={[
-            styles.flashOverlay,
-            { backgroundColor: flashKind === 'correct' ? 'rgba(0,230,118,0.55)' : 'rgba(255,23,68,0.55)' },
-          ]}
-        >
-          <Ionicons
-            name={flashKind === 'correct' ? 'checkmark-circle' : 'close'}
-            size={96}
-            color={flashKind === 'correct' ? GameColors.accentGreen : GameColors.accentRed}
-          />
+      {phase === 'countdown' || phase === 'start' ? (
+        <View style={styles.countdownOverlay} pointerEvents="none">
+          <Text style={[styles.countdownNumber, phase === 'start' && styles.countdownStart]}>
+            {phase === 'start' ? SPEED_CARD_START_LABEL : String(countdown)}
+          </Text>
         </View>
       ) : null}
 
@@ -555,6 +663,29 @@ const SpeedCardScreen = () => {
         onRestart={restart}
         onExit={exitToLobby}
       />
+
+      <Modal visible={wrongOpen} transparent animationType="fade" onRequestClose={handleExitWrong}>
+        <View style={styles.wrongBackdrop}>
+          <View style={styles.wrongCard}>
+            <Text style={styles.wrongTitle}>{SPEED_CARD_WRONG_TITLE}</Text>
+            <GradientButton
+              title={
+                continueLoading
+                  ? 'Loading ad…'
+                  : isAdFreePassActive()
+                    ? 'Continue (Ad-Free)'
+                    : SPEED_CARD_CONTINUE_LABEL
+              }
+              onPress={handleContinueAd}
+              disabled={continueLoading}
+              style={styles.wrongPrimary}
+            />
+            <TouchableOpacity style={styles.wrongSkip} onPress={handleExitWrong} disabled={continueLoading}>
+              <Text style={styles.wrongSkipText}>{SPEED_CARD_EXIT_LABEL}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </AnimatedBackground>
   );
 };
@@ -567,11 +698,11 @@ const styles = StyleSheet.create({
   timer: { fontSize: 30, fontFamily: 'Inter_700Bold', fontWeight: '700' },
   pauseButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: GameColors.border },
   progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  counter: { ...Typography.small, color: GameColors.textSecondary, width: 42 },
-  score: { ...Typography.small, color: GameColors.accentGold, width: 42, textAlign: 'right', fontFamily: 'Inter_700Bold' },
+  counter: { ...Typography.small, color: GameColors.textSecondary, width: 56 },
+  score: { ...Typography.small, color: GameColors.accentGold, width: 48, textAlign: 'right', fontFamily: 'Inter_700Bold' },
   segmentTrack: { flex: 1, flexDirection: 'row', gap: 3 },
-  segment: { flex: 1, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)' },
-  segmentDone: { backgroundColor: GameColors.accentGreen },
+  segment: { height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)' },
+  segmentNow: { height: 5, borderRadius: 3, backgroundColor: GameColors.accentGold },
   imageWrap: { flex: 1, minHeight: 240, maxHeight: 330, borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: GameColors.cardBorder, backgroundColor: GameColors.backgroundSecondary },
   boardStatus: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, gap: 14, zIndex: 4 },
   boardStatusText: { ...Typography.caption, color: GameColors.textSecondary, textAlign: 'center' },
@@ -581,18 +712,38 @@ const styles = StyleSheet.create({
   cardFace: { flex: 1, borderRadius: 12, borderWidth: 2 },
   questionCard: { padding: 14, gap: 4 },
   questionLabel: { ...Typography.small, color: GameColors.accentGold, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
-  questionText: { ...Typography.semibold, color: GameColors.textWhite, textAlign: 'right' },
+  questionText: { ...Typography.semibold, color: GameColors.textWhite, textAlign: 'left' },
+  correctFeedback: { ...Typography.semibold, color: GameColors.accentGreen, textAlign: 'center', minHeight: 28 },
+  feedbackSpacer: { minHeight: 28 },
+  howtoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 22,
+    backgroundColor: 'rgba(13,2,33,0.78)',
+    zIndex: 80,
+  },
+  howtoCard: { width: '100%', padding: 22, gap: 14 },
+  howtoTitle: { ...Typography.header, color: GameColors.textWhite, fontSize: 28, textAlign: 'center' },
+  howtoBody: { ...Typography.semibold, color: GameColors.textSecondary, textAlign: 'center', lineHeight: 22 },
   countdownOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(13,2,33,0.82)', zIndex: 100 },
-  countdownNumber: { fontSize: 96, fontFamily: 'Inter_700Bold', color: GameColors.textWhite, textShadowColor: GameColors.glow, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 32, lineHeight: 110 },
-  countdownSub: { ...Typography.caption, color: GameColors.textSecondary, marginTop: 8, letterSpacing: 2, textTransform: 'uppercase' },
-  readyBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.82)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  readyCard: { width: '100%', borderRadius: 24, padding: 24, alignItems: 'center', backgroundColor: GameColors.card, borderWidth: 1, borderColor: GameColors.cardBorder, gap: 18 },
-  readyTitle: { ...Typography.header, color: GameColors.textWhite, fontSize: 28, textAlign: 'center' },
-  readyActions: { flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%' },
-  readyNo: { flex: 1, paddingVertical: 16, borderRadius: 14, borderWidth: 1, borderColor: GameColors.border, alignItems: 'center' },
-  readyNoText: { ...Typography.small, color: GameColors.textWhite, fontFamily: 'Inter_600SemiBold' },
-  readyYes: { flex: 1 },
-  flashOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', zIndex: 120 },
+  countdownNumber: { fontSize: 96, fontFamily: 'Inter_700Bold', color: GameColors.textWhite, lineHeight: 110, textAlign: 'center' },
+  countdownStart: { fontSize: 64, lineHeight: 72, color: GameColors.accentGreen },
+  wrongBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.82)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  wrongCard: {
+    width: '100%',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    backgroundColor: GameColors.card,
+    borderWidth: 1,
+    borderColor: GameColors.cardBorder,
+    gap: 12,
+  },
+  wrongTitle: { ...Typography.header, color: GameColors.accentRed, fontSize: 28 },
+  wrongPrimary: { width: '100%' },
+  wrongSkip: { paddingVertical: 10 },
+  wrongSkipText: { color: GameColors.textSecondary, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
 });
 
 export default SpeedCardScreen;

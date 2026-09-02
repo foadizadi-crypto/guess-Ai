@@ -8,9 +8,12 @@ import {
   type ImageSourcePropType,
   type ViewStyle,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import { ASSET_CONTENT_BOUNDS } from "@/constants/assetContentBounds";
 import { getAvatarSource, getWingSource, hasWingArt } from "@/constants/characterSources";
+import { PET_BY_ID } from "@/constants/pets";
+import { STAND_BY_ID } from "@/constants/stands";
 import {
   computeCharacterLayout,
   type AssetMetrics,
@@ -20,6 +23,8 @@ import {
 interface CharacterStageProps {
   avatarId?: string;
   wingId?: string | null;
+  petId?: string | null;
+  standId?: string | null;
   level?: number;
   mode?: CharacterStageMode;
   style?: ViewStyle;
@@ -77,6 +82,8 @@ function resolveAsset(source: ImageSourcePropType): { width?: number; height?: n
 export function CharacterStage({
   avatarId,
   wingId,
+  petId,
+  standId,
   level,
   mode = "preview",
   style,
@@ -95,6 +102,8 @@ export function CharacterStage({
   const avatarSource = getAvatarSource(avatarId);
   const wingSource = getWingSource(wingId);
   const missingWingArt = Boolean(wingId && !hasWingArt(wingId));
+  const pet = petId ? PET_BY_ID.get(petId) : undefined;
+  const stand = standId ? STAND_BY_ID.get(standId) : undefined;
 
   const layout = useMemo(() => {
     const avatar = metricsFor(avatarId) ?? fallbackMetrics(resolveAsset(avatarSource));
@@ -118,6 +127,11 @@ export function CharacterStage({
 
   return (
     <View style={[stageStyle, style]} onLayout={onLayout} pointerEvents="none">
+      {stand && (
+        <View style={styles.standSlot} accessibilityLabel={`equipped-stand-${stand.id}`}>
+          <Ionicons name={stand.icon as never} size={28} color="#E8D5A3" />
+        </View>
+      )}
       {layout.wing && wingSource && (
         <Image
           source={wingSource}
@@ -151,6 +165,11 @@ export function CharacterStage({
           },
         ]}
       />
+      {pet && (
+        <View style={styles.petSlot} accessibilityLabel={`equipped-pet-${pet.id}`}>
+          <Ionicons name={pet.icon as never} size={22} color="#FFD54F" />
+        </View>
+      )}
       {level !== undefined && (
         <View style={styles.levelBadge}>
           <Text style={styles.levelText}>LVL {level}</Text>
@@ -176,6 +195,27 @@ const styles = StyleSheet.create({
   },
   layer: {
     position: "absolute",
+  },
+  standSlot: {
+    position: "absolute",
+    left: "50%",
+    bottom: "4%",
+    transform: [{ translateX: -22 }],
+    width: 44,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 0,
+  },
+  petSlot: {
+    position: "absolute",
+    right: "14%",
+    bottom: "10%",
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 3,
   },
   levelBadge: {
     position: "absolute",

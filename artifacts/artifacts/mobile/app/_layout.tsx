@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, View, type AppStateStatus } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -40,13 +40,17 @@ function AudioProvider() {
 const PUBLIC_ROUTES: readonly string[] = ['/', ROUTES.SPLASH, ROUTES.ONBOARDING, ROUTES.LOGIN, ROUTES.LEGAL];
 
 /**
- * Gameplay routes require a Google or guest session. Nickname is still gated on lobby.
+ * Gameplay routes require a Google or guest session.
+ * Signed-in players without a verified nickname are sent to lobby
+ * (same gate as lobby hitboxes — not a new identity feature).
  */
-function AuthGuard() {
+function AuthGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [uid, setUid] = useState<string | null>(getPlayerId());
   const [signedIn, setSignedIn] = useState(isSignedInPlayer());
   const [authChecked, setAuthChecked] = useState(false);
+  const nicknameUid = useUserStore((s) => s.nicknameUid);
+  const username = useUserStore((s) => s.username);
 
   useEffect(() => {
     const unsub = onPlayerIdChange((next) => {
@@ -70,13 +74,27 @@ function AuthGuard() {
   const isPublic = PUBLIC_ROUTES.includes(pathname);
 
   useEffect(() => {
-    if (!authChecked || isPublic) return;
-    if (signedIn && uid) return;
-    router.replace(ROUTES.LOGIN);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authChecked, uid, signedIn, pathname, isPublic]);
+    if (!authChecked) return;
+    if (pathname === ROUTES.LOGIN && signedIn && uid) {
+      router.replace(ROUTES.LOBBY);
+      return;
+    }
+    if (isPublic) return;
+    if (!signedIn || !uid) {
+      router.replace(ROUTES.LOGIN);
+      return;
+    }
+    if (pathname === ROUTES.LOBBY) return;
+    if (!useUserStore.getState().isNicknameVerifiedFor(uid)) {
+      router.replace(ROUTES.LOBBY);
+    }
+  }, [authChecked, uid, signedIn, pathname, isPublic, nicknameUid, username]);
 
-  return null;
+  if (!authChecked) {
+    return <View style={{ flex: 1, backgroundColor: GameColors.backgroundPrimary }} />;
+  }
+
+  return <>{children}</>;
 }
 
 /**
@@ -175,6 +193,8 @@ function RootLayoutNav() {
       <Stack.Screen name="category-select" />
       <Stack.Screen name="game" />
       <Stack.Screen name="speed-card" />
+      <Stack.Screen name="count-quick" />
+      <Stack.Screen name="lost-item" />
       <Stack.Screen name="result" />
       <Stack.Screen name="shop" />
       <Stack.Screen name="leaderboard" />
@@ -201,8 +221,9 @@ export default function RootLayout() {
               <AudioProvider />
               <AdsProvider />
               <NotificationProvider />
-              <AuthGuard />
-              <RootLayoutNav />
+              <AuthGuard>
+                <RootLayoutNav />
+              </AuthGuard>
           </GestureHandlerRootView>
         </QueryClientProvider>
       </ErrorBoundary>

@@ -28,7 +28,7 @@ function CircleShape({ color, size }: ShapeProps) {
   const r = size / 2 - 1;
   return (
     <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <Circle cx={size / 2} cy={size / 2} r={r} fill={color} />
+      <Circle cx={size / 2} cy={size / 2} r={r} fill={color} stroke="rgba(13,2,33,0.9)" strokeWidth={1.5} />
     </Svg>
   );
 }
@@ -37,7 +37,7 @@ function SquareShape({ color, size }: ShapeProps) {
   const inset = 3;
   return (
     <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <Rect x={inset} y={inset} width={size - inset * 2} height={size - inset * 2} rx={6} fill={color} />
+      <Rect x={inset} y={inset} width={size - inset * 2} height={size - inset * 2} rx={6} fill={color} stroke="rgba(13,2,33,0.9)" strokeWidth={1.5} />
     </Svg>
   );
 }
@@ -46,7 +46,7 @@ function TriangleShape({ color, size }: ShapeProps) {
   const points = `${size / 2},3 ${size - 3},${size - 3} 3,${size - 3}`;
   return (
     <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <Polygon points={points} fill={color} />
+      <Polygon points={points} fill={color} stroke="rgba(13,2,33,0.9)" strokeWidth={1.5} />
     </Svg>
   );
 }
@@ -63,7 +63,7 @@ function StarShape({ color, size }: ShapeProps) {
   }).join(' ');
   return (
     <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <Polygon points={points} fill={color} />
+      <Polygon points={points} fill={color} stroke="rgba(13,2,33,0.9)" strokeWidth={1.5} />
     </Svg>
   );
 }
@@ -73,7 +73,7 @@ function DiamondShape({ color, size }: ShapeProps) {
   const points = `${c},3 ${size - 3},${c} ${c},${size - 3} 3,${c}`;
   return (
     <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <Polygon points={points} fill={color} />
+      <Polygon points={points} fill={color} stroke="rgba(13,2,33,0.9)" strokeWidth={1.5} />
     </Svg>
   );
 }
@@ -88,7 +88,7 @@ function HexagonShape({ color, size }: ShapeProps) {
   }).join(' ');
   return (
     <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <Polygon points={points} fill={color} />
+      <Polygon points={points} fill={color} stroke="rgba(13,2,33,0.9)" strokeWidth={1.5} />
     </Svg>
   );
 }

@@ -43,6 +43,7 @@ import {
 } from '@/constants/spinConfig';
 import { saveSpinHistory } from '@/services/firestoreService';
 import { getPlayerId } from '@/services/authService';
+import { getTodayUTCString } from '@/utils';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -168,6 +169,7 @@ export default function SpinScreen() {
   const coins         = useUserStore((s) => s.coins);
   const lastSpinDate  = useUserStore((s) => s.lastSpinDate);
   const extraSpinsToday = useUserStore((s) => s.extraSpinsToday);
+  const lastExtraSpinDate = useUserStore((s) => s.lastExtraSpinDate);
   const performSpin   = useUserStore((s) => s.performSpin);
   const canFreeSpin   = useUserStore((s) => s.canFreeSpin);
   const canExtraSpin  = useUserStore((s) => s.canExtraSpin);
@@ -254,7 +256,7 @@ export default function SpinScreen() {
 
   const isFreeAvailable  = canFreeSpin();
   const isExtraAvailable = canExtraSpin() && coins >= SPIN_CONFIG.extraSpinCost;
-  const extraUsed        = extraSpinsToday;
+  const extraUsed        = lastExtraSpinDate === getTodayUTCString() ? extraSpinsToday : 0;
   const extraMax         = SPIN_CONFIG.extraSpinsPerDay;
 
   return (
@@ -376,14 +378,14 @@ export default function SpinScreen() {
               />
             </View>
             <Text style={styles.modalTitle}>
-              {result?.isJackpot ? `${result.amount.toLocaleString()} Coins!` : result?.label ?? ''}
+              {result?.isJackpot ? `${result.amount.toLocaleString()} Gems!` : result?.label ?? ''}
             </Text>
             <Text style={styles.modalDesc}>
               {result?.type === 'coins'      ? `+${result.amount} coins added to your wallet` :
                result?.type === 'gems'       ? `+${result.amount} gems added to your wallet` :
                result?.type === 'consumable' ? `${result.label} added to your inventory` :
                result?.type === 'cosmetic'   ? 'Cosmetic item unlocked in Collections!' :
-               result?.type === 'jackpot'    ? `Jackpot! ${result.amount.toLocaleString()} coins!` :
+               result?.type === 'jackpot'    ? `Jackpot! ${result.amount.toLocaleString()} gems!` :
                ''}
             </Text>
             <TouchableOpacity style={styles.modalBtn} onPress={dismissModal}>
