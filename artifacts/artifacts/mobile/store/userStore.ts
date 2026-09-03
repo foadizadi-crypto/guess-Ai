@@ -259,6 +259,7 @@ interface UserState {
   buyGemPack: (packId: string) => boolean;
   buyCoinGemExchange: (id: CoinGemExchangeId) => boolean;
   purchaseWing: (wingId: string, gemCost: number) => boolean;
+  grantWing: (wingId: string) => boolean;
   equipWing: (wingId: string | null) => void;
   equipPet: (petId: string | null) => void;
   equipStand: (standId: string | null) => void;
@@ -1262,6 +1263,17 @@ export const useUserStore = create<UserState>()(
             gems: state.gems - gemCost,
             ownedWings: [...state.ownedWings, wingId],
           };
+        });
+        return success;
+      },
+
+      grantWing: (wingId) => {
+        let success = false;
+        set((state) => {
+          if (!wingId) return {};
+          success = true;
+          if (state.ownedWings.includes(wingId)) return {};
+          return { ownedWings: [...state.ownedWings, wingId] };
         });
         return success;
       },

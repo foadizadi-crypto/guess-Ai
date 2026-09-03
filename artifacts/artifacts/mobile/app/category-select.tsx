@@ -176,7 +176,10 @@ export default function CategorySelectScreen() {
 
           <GradientButton
           title="Start Game"
-            onPress={() => setConfirmVisible(true)}
+            onPress={() => {
+              if (selectedCategory === 'gold_rush') handlePlay();
+              else setConfirmVisible(true);
+            }}
           testID="start-game-button"
         />
       </View>

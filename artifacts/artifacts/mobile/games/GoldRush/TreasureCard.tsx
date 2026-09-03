@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   interpolate,
+  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -31,15 +32,27 @@ type TreasureCardProps = {
   index: number;
   burst: boolean;
   onPress: () => void;
+  onRevealComplete?: () => void;
 };
 
-export function TreasureCard({ card, width, height, index, burst, onPress }: TreasureCardProps) {
+export function TreasureCard({
+  card,
+  width,
+  height,
+  index,
+  burst,
+  onPress,
+  onRevealComplete,
+}: TreasureCardProps) {
   const flip = useSharedValue(card.isRevealed ? 1 : 0);
   const press = useSharedValue(1);
   const enter = useSharedValue(0);
   const shine = useSharedValue(0);
 
   const revealedRef = useRef(card.isRevealed);
+  const onRevealCompleteRef = useRef(onRevealComplete);
+  const flipGenRef = useRef(0);
+  onRevealCompleteRef.current = onRevealComplete;
 
   useEffect(() => {
     enter.value = withDelay(
@@ -49,9 +62,16 @@ export function TreasureCard({ card, width, height, index, burst, onPress }: Tre
   }, [enter, index]);
 
   useEffect(() => {
-    flip.value = withSpring(card.isRevealed ? 1 : 0, { damping: 13, stiffness: 170, mass: 0.72 });
     const justOpened = card.isRevealed && !revealedRef.current;
     revealedRef.current = card.isRevealed;
+    const token = ++flipGenRef.current;
+    const notifyRevealComplete = () => {
+      if (token !== flipGenRef.current) return;
+      onRevealCompleteRef.current?.();
+    };
+    flip.value = withSpring(card.isRevealed ? 1 : 0, { damping: 13, stiffness: 170, mass: 0.72 }, (finished) => {
+      if (finished && justOpened) runOnJS(notifyRevealComplete)();
+    });
     if (justOpened) {
       shine.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) });
       if (card.type === 'bomb') void hapticsService.notification(0);

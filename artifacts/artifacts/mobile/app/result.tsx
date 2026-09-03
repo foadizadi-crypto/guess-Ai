@@ -24,16 +24,11 @@ import { useAdStore } from '@/store/adStore';
 import { useAudio } from '@/hooks/useAudio';
 import { ROUTES } from '@/navigation/routes';
 import { useRTL } from '@/hooks/useRTL';
-import { GAME_CONFIG } from '@/constants/gameConfig';
-import { toGameplayDifficulty } from '@/shared/difficulty';
-import type { MissionType } from '@/types';
-import { recordGameSession, saveAchievements } from '@/services/firestoreService';
-import { getPlayerId } from '@/services/authService';
+import { grantResultSessionRewards, resultSessionAlreadyGranted } from '@/shared/economy/grantResultSession';
 import { AchievementToast } from '@/components/AchievementToast';
 import type { AchievementDef } from '@/constants/achievements';
 
 const CONFETTI = ['#FFD700', '#00E676', '#FF6B35', '#CE93D8', '#64B5F6', '#FF1744'];
-const grantedResultSessions = new Set<string>();
 
 export default function ResultScreen() {
   const router = useRouter();
@@ -56,20 +51,11 @@ export default function ResultScreen() {
     resetGame,
   } = useGameStore();
   const {
-    updateBestScore,
     addCoins,
     addXP,
-    statistics,
-    updateStatistics,
-    updateMissionProgress,
-    refreshDailyMissions,
-    checkAndUnlockAchievements,
-    claimMissionReward,
-    claimLevelReward,
   } = useUserStore();
   const {
     canShowDoubleReward,
-    incrementSessionCounter,
     resetSessionCounter,
     showRewarded,
     isAdFreePassActive,
@@ -84,9 +70,6 @@ export default function ResultScreen() {
   const contentOpacity = useSharedValue(1);
   const contentY = useSharedValue(0);
 
-  const isPerfect =
-    sessionOutcome === 'perfect' ||
-    (sessionOutcome == null && correctAnswers === totalQuestions);
   const isVictory =
     sessionOutcome === 'perfect' ||
     sessionOutcome === 'win' ||
@@ -101,7 +84,8 @@ export default function ResultScreen() {
   // the threshold before the offer appears (spec §7.3: "counter still functions").
   // Pass status only controls whether an ad is shown (instant vs watched).
   const adFreeActive    = isAdFreePassActive();
-  const doubleAvailable = !doubledByAd && canShowDoubleReward();
+  const doubleAvailable =
+    selectedCategory !== 'gold_rush' && !doubledByAd && canShowDoubleReward();
 
   // ── Record result + entrance animation ────────────────────────────────────
   useEffect(() => {
@@ -110,95 +94,11 @@ export default function ResultScreen() {
     contentY.value = 0;
 
     const sessionId = gameSession?.id;
-    if (!sessionId || grantedResultSessions.has(sessionId)) return;
-
-    // Refresh missions before updating progress (ensures today's missions are loaded)
-    refreshDailyMissions();
-
-    updateBestScore(score);
-    addCoins(totalCoins);
-    addXP(totalXP);
-
-    updateStatistics({
-      totalGamesPlayed: statistics.totalGamesPlayed + 1,
-      totalWins:        statistics.totalWins + (isVictory ? 1 : 0),
-      totalCorrectAnswers: statistics.totalCorrectAnswers + correctAnswers,
-      totalCoinsEarned: statistics.totalCoinsEarned + totalCoins,
-      favoriteCategory:  selectedCategory,
-      longestStreak: Math.max(statistics.longestStreak, maxStreakThisGame),
-      hardGamesPlayed: statistics.hardGamesPlayed + (selectedDifficulty === 'hard' ? 1 : 0),
-    });
-
-    // ── Mission progress ─────────────────────────────────────────────────
-    updateMissionProgress('play_games', 1);
-    updateMissionProgress('correct_answers', correctAnswers);
-    if (selectedDifficulty === 'hard') updateMissionProgress('complete_hard', 1);
-    if (isPerfect && correctAnswers === totalQuestions && totalQuestions > 0) {
-      updateMissionProgress('perfect_game', 1);
-    }
-    if (maxStreakThisGame >= 5)         updateMissionProgress('get_combo', maxStreakThisGame);
-    updateMissionProgress('play_category', 1, selectedCategory);
-
-    // ── Advance session counter (spec §7.2) ──────────────────────────────
-    // Every completed session increments the counter, enabling the double-
-    // reward button once it reaches the threshold.
-    incrementSessionCounter();
-    const rounds = useAdStore.getState().sessionCounter;
-    if (rounds > 0 && rounds % GAME_CONFIG.interstitial_every_n_sessions === 0) {
-      void useAdStore.getState().showInterstitial();
-    }
-
-    // ── Record session to Firestore (Task 6) ─────────────────────────────
-    // Fire-and-forget: errors are logged but never block the UI.
-    const uid = getPlayerId();
-    if (uid && gameSession) {
-      recordGameSession(
-        uid,
-        {
-          difficulty:     toGameplayDifficulty(selectedDifficulty),
-          category:       selectedCategory,
-          correctAnswers,
-          wrongAnswers:   totalWrong,
-          maxCombo:       maxStreakThisGame,
-          xpEarned:       totalXP,   // final amount including bonuses
-          coinsEarned:    totalCoins,
-          score,
-          startTime:      gameSession.startTime,
-          endTime:        gameSession.endTime ?? Date.now(),
-          wasAbandoned:   false,
-        },
-        gameSession.id,
-      );
-    }
-
-    // ── Achievement checking ──────────────────────────────────────────────
-    // Must run AFTER updateStatistics so the store reflects the latest stats.
-    const newlyUnlocked = checkAndUnlockAchievements({
-      isPerfectGame: isPerfect && correctAnswers === totalQuestions && totalQuestions > 0,
-      maxComboThisGame: maxStreakThisGame,
-    });
-    if (newlyUnlocked.length > 0) {
-      setAchievementQueue(newlyUnlocked);
-      // Persist unlock state to Firestore (fire-and-forget)
-      const uidForAchievements = getPlayerId();
-      if (uidForAchievements) {
-        const updatedAchievements = useUserStore.getState().achievements;
-        saveAchievements(uidForAchievements, updatedAchievements).catch(() => {});
-      }
-    }
-
-    // Missions and level packages are paid here so they cannot sit unclaimed forever.
-    const userAfter = useUserStore.getState();
-    for (const mission of userAfter.missions) {
-      if (mission.completed && !mission.rewardClaimed) claimMissionReward(mission.id);
-    }
-    for (const level of [...userAfter.unclaimedLevelRewards]) {
-      claimLevelReward(level);
-    }
-
-    // Marked only once every grant above has actually been applied, so a throw
-    // mid-way leaves the session eligible for a retry instead of losing rewards.
-    grantedResultSessions.add(sessionId);
+    if (!sessionId) return;
+    const firstGrant = !resultSessionAlreadyGranted(sessionId);
+    const newlyUnlocked = grantResultSessionRewards();
+    if (newlyUnlocked.length > 0) setAchievementQueue(newlyUnlocked);
+    if (!firstGrant) return;
 
     hapticsService.notification(isVictory ? 1 : 2);
     trophyScale.value = withSpring(1, { damping: 12, stiffness: 80 });
@@ -261,10 +161,13 @@ export default function ResultScreen() {
     transform: [{ translateY: contentY.value }],
   }));
 
-  const goToLobby = () => { resetGame(); router.replace(ROUTES.LOBBY); };
+  const goToLobby = () => {
+    resetGame();
+    router.replace(selectedCategory === 'gold_rush' ? ROUTES.CATEGORY_SELECT : ROUTES.LOBBY);
+  };
   const playAgain = () => {
     resetGame({ keepSelection: true });
-    router.replace(ROUTES.LEVEL_SELECT);
+    router.replace(selectedCategory === 'gold_rush' ? ROUTES.CATEGORY_SELECT : ROUTES.LEVEL_SELECT);
   };
   const shareResult = async () => {
     const message = `I scored ${score} points in GUESSAi with ${accuracy}% accuracy! 🎮`;
@@ -349,8 +252,12 @@ export default function ResultScreen() {
             <Text style={styles.scoreLabel}>FINAL SCORE</Text>
             <Text style={styles.scoreValue}>{score}</Text>
             <View style={styles.statsGrid}>
-              <Stat icon="checkmark-circle-outline" label="Correct"   value={`${correctAnswers}/${totalQuestions}`}                  color={GameColors.accentGreen}  />
-              <Stat icon="analytics-outline"        label="Accuracy"  value={`${accuracy}%`}                                         color={GameColors.accentGold}   />
+              <Stat icon="checkmark-circle-outline" label="Correct"   value={selectedCategory === 'gold_rush' ? `${correctAnswers}` : `${correctAnswers}/${totalQuestions}`} color={GameColors.accentGreen}  />
+              {selectedCategory === 'gold_rush' ? (
+                <Stat icon="close-circle-outline" label="Wrong" value={`${totalWrong}`} color={GameColors.accentRed} />
+              ) : (
+                <Stat icon="analytics-outline"        label="Accuracy"  value={`${accuracy}%`}                                         color={GameColors.accentGold}   />
+              )}
               <Stat icon="flash-outline"            label="XP Earned" value={doubledByAd ? `+${displayXP} ×2` : `+${displayXP}`}    color="#CE93D8" />
               <Stat
                 icon="cash-outline"
@@ -372,7 +279,7 @@ export default function ResultScreen() {
             )}
             <View style={styles.secondaryRow}>
               <SecondaryButton title="Share"  onPress={shareResult}  style={styles.secondaryButton} />
-              <SecondaryButton title="Home"   onPress={goToLobby}    style={styles.secondaryButton} testID="lobby-button" />
+              <SecondaryButton title={selectedCategory === 'gold_rush' ? 'Category' : 'Home'}   onPress={goToLobby}    style={styles.secondaryButton} testID="lobby-button" />
             </View>
           </View>
         </Animated.View>

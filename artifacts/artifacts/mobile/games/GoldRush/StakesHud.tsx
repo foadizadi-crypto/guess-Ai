@@ -7,13 +7,31 @@ import { GoldTone } from './goldTokens';
 type StakesHudProps = {
   round: number;
   maxRounds: number;
-  savedScore: number;
+  correct: number;
+  wrong: number;
   currentPot: number;
+  timerSeconds: number;
   rowStyle: ViewStyle;
   blur: boolean;
 };
 
-export function StakesHud({ round, maxRounds, savedScore, currentPot, rowStyle, blur }: StakesHudProps) {
+function formatTimer(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(safe / 60);
+  const s = safe % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+export function StakesHud({
+  round,
+  maxRounds,
+  correct,
+  wrong,
+  currentPot,
+  timerSeconds,
+  rowStyle,
+  blur,
+}: StakesHudProps) {
   const potScale = useSharedValue(1);
   useEffect(() => {
     potScale.value = 1.08;
@@ -33,15 +51,28 @@ export function StakesHud({ round, maxRounds, savedScore, currentPot, rowStyle, 
           </Text>
         </HudPlate>
         <HudPlate blur={blur} style={styles.chip} border="rgba(215,232,168,0.28)">
-          <Text style={styles.kicker}>Banked score (locked)</Text>
-          <Text style={[styles.value, { color: GoldTone.bank }]}>{savedScore}</Text>
+          <Text style={styles.kicker}>Time</Text>
+          <Text style={[styles.value, { color: timerSeconds <= 10 ? GoldTone.ember : GoldTone.bank }]}>
+            {formatTimer(timerSeconds)}
+          </Text>
+        </HudPlate>
+      </View>
+
+      <View style={[styles.row, rowStyle]}>
+        <HudPlate blur={blur} style={styles.chip}>
+          <Text style={styles.kicker}>Correct</Text>
+          <Text style={styles.value}>{correct}</Text>
+        </HudPlate>
+        <HudPlate blur={blur} style={styles.chip} border="rgba(181,82,42,0.35)">
+          <Text style={styles.kicker}>Wrong</Text>
+          <Text style={[styles.value, { color: GoldTone.ember }]}>{wrong}</Text>
         </HudPlate>
       </View>
 
       <HudPlate blur={blur} style={styles.potPlate} fill={['rgba(28,16,8,0.78)', 'rgba(12,8,16,0.78)']}>
-        <Text style={styles.kicker}>This round's risk score</Text>
+        <Text style={styles.kicker}>Pot</Text>
         <Animated.Text style={[styles.pot, potStyle]}>{currentPot}</Animated.Text>
-        <Text style={styles.warn}>If you hit a bomb, this score is gone!</Text>
+        <Text style={styles.warn}>A bomb wipes this Pot. Continue keeps it. Cash Out banks it.</Text>
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${Math.round(roundRatio * 100)}%` }]} />
         </View>

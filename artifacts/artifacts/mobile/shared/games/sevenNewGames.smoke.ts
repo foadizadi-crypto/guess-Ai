@@ -1,6 +1,7 @@
 import { MINIGAME_RAW_CONFIGS } from '@/shared/games/registry';
 import { getGameConfig, NEW_GAME_IDS } from '@/shared/economy/gameConfigs';
 import { getFateSettings } from '@/games/GoldRush/config';
+import { applyGoldRushSelection } from '@/games/GoldRush/engine';
 import { getMatchSettings } from '@/games/TwinLink/config';
 import { getClickSettings } from '@/games/TickLock/config';
 import { getReactionSettings } from '@/games/FlipMind/config';
@@ -43,9 +44,32 @@ assert(JSON.stringify(getReactionSettings('easy')) === JSON.stringify({ maxRound
 assert(JSON.stringify(getReactionSettings('medium')) === JSON.stringify({ maxRounds: 20, timeLimit: 3.0 }), 'flip_mind medium');
 assert(JSON.stringify(getReactionSettings('hard')) === JSON.stringify({ maxRounds: 30, timeLimit: 1.5 }), 'flip_mind hard');
 
-assert(JSON.stringify(getFateSettings('easy')) === JSON.stringify({ totalCards: 5, bombCount: 1, multiplierCount: 1 }), 'gold_rush easy');
-assert(JSON.stringify(getFateSettings('medium')) === JSON.stringify({ totalCards: 5, bombCount: 2, multiplierCount: 0 }), 'gold_rush medium');
-assert(JSON.stringify(getFateSettings('hard')) === JSON.stringify({ totalCards: 6, bombCount: 3, multiplierCount: 0 }), 'gold_rush hard');
+assert(JSON.stringify(getFateSettings('easy')) === JSON.stringify({ totalCards: 8, bombCount: 1 }), 'gold_rush easy');
+assert(JSON.stringify(getFateSettings('medium')) === JSON.stringify({ totalCards: 5, bombCount: 1 }), 'gold_rush medium');
+assert(JSON.stringify(getFateSettings('hard')) === JSON.stringify({ totalCards: 3, bombCount: 1 }), 'gold_rush hard');
+
+const sampleDeck = [
+  { id: 0, type: 'gold', value: 5, isRevealed: false },
+  { id: 1, type: 'gold', value: 5, isRevealed: false },
+  { id: 2, type: 'bomb', value: 0, isRevealed: false },
+] as const;
+
+const firstSafe = applyGoldRushSelection([...sampleDeck], 0, 0, 0);
+assert(firstSafe.kind === 'safe' && firstSafe.nextPot === 5 && firstSafe.nextPendingXP === 5, 'gold_rush first safe adds pot and pendingXP');
+
+const secondSafe = applyGoldRushSelection(firstSafe.kind === 'safe' ? firstSafe.deck : [...sampleDeck], 5, 1, 5);
+assert(secondSafe.kind === 'safe' && secondSafe.nextPot === 10 && secondSafe.nextPendingXP === 10, 'gold_rush second safe accumulates');
+
+const firstBomb = applyGoldRushSelection([...sampleDeck], 10, 2, 10);
+assert(firstBomb.kind === 'bomb', 'gold_rush bomb is selected');
+
+const duplicateTap = applyGoldRushSelection(
+  firstSafe.kind === 'safe' ? firstSafe.deck : [...sampleDeck],
+  5,
+  0,
+  5,
+);
+assert(duplicateTap.kind === 'ignored', 'gold_rush ignores revealed duplicate tap');
 
 assert(JSON.stringify(getClickSettings('easy')) === JSON.stringify({ targetTime: 1.00, hideTime: 9.99, tolerance: 0.15 }), 'tick_lock easy');
 assert(JSON.stringify(getClickSettings('medium')) === JSON.stringify({ targetTime: 1.00, hideTime: 0.5, tolerance: 0.08 }), 'tick_lock medium');

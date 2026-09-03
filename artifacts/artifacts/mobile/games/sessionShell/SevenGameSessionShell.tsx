@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GameColors } from '@/theme/colors';
 import { requestContinueReward } from './requestContinueReward';
@@ -65,7 +65,11 @@ export default function SevenGameSessionShell({
   const coverInner = (kind: 'howTo' | 'count') => (
     <>
       {kind === 'howTo' ? (
-        <>
+        <ScrollView
+          style={styles.howToScroller}
+          contentContainerStyle={styles.howToScroll}
+          showsVerticalScrollIndicator={false}
+        >
           <Text style={[styles.howToTitle, treasure && styles.treasureTitle]}>{howToTitle}</Text>
           <Text style={[styles.howToBody, treasure && styles.treasureBody]}>{howToBody}</Text>
           <TouchableOpacity
@@ -75,7 +79,7 @@ export default function SevenGameSessionShell({
           >
             <Text style={[styles.readyText, treasure && styles.treasureReadyText]}>I'M READY</Text>
           </TouchableOpacity>
-        </>
+        </ScrollView>
       ) : (
         <Text style={[styles.countText, treasure && styles.treasureCount]}>{countLabel}</Text>
       )}
@@ -138,6 +142,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 28,
   },
+  howToScroller: {
+    flex: 1,
+    width: '100%',
+  },
+  howToScroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 24,
+    width: '100%',
+  },
   howToTitle: {
     color: GameColors.textWhite,
     fontSize: 26,
@@ -151,6 +166,7 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     textAlign: 'center',
     marginBottom: 36,
+    width: '100%',
   },
   readyBtn: {
     backgroundColor: GameColors.accentGold,

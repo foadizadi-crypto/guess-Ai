@@ -2,12 +2,20 @@ import React from 'react';
 import { WorldButton } from '@/games/visualFoundation';
 import { GoldTone } from './goldTokens';
 
-export function BankVaultButton({ onPress }: { onPress: () => void }) {
+export function BankVaultButton({
+  onPress,
+  label = 'Cash Out',
+  colors = [GoldTone.metalHot, GoldTone.metal],
+}: {
+  onPress: () => void;
+  label?: string;
+  colors?: [string, string];
+}) {
   return (
     <WorldButton
-      label="Bank score and go to next round"
+      label={label}
       onPress={onPress}
-      colors={[GoldTone.metalHot, GoldTone.metal]}
+      colors={colors}
       textColor={GoldTone.void}
     />
   );
