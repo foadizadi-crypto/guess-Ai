@@ -195,6 +195,13 @@ function RootLayoutNav() {
       <Stack.Screen name="speed-card" />
       <Stack.Screen name="count-quick" />
       <Stack.Screen name="lost-item" />
+      <Stack.Screen name="flip-mind" />
+      <Stack.Screen name="gold-rush" />
+      <Stack.Screen name="tick-lock" />
+      <Stack.Screen name="twin-link" />
+      <Stack.Screen name="neon-flash" />
+      <Stack.Screen name="glitch-spy" />
+      <Stack.Screen name="color-trap" />
       <Stack.Screen name="result" />
       <Stack.Screen name="shop" />
       <Stack.Screen name="leaderboard" />

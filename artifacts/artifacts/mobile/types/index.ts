@@ -21,7 +21,14 @@ export type Category =
   | 'science'
   | 'speed_card'
   | 'count_quick'
-  | 'lost_item';
+  | 'lost_item'
+  | 'flip_mind'
+  | 'gold_rush'
+  | 'tick_lock'
+  | 'twin_link'
+  | 'neon_flash'
+  | 'glitch_spy'
+  | 'color_trap';
 
 export type SessionOutcome = 'perfect' | 'win' | 'lose';
 

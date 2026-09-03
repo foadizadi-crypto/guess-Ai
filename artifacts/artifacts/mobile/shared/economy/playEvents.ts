@@ -7,6 +7,13 @@ export function gameIdForCategory(category: Category): string {
   if (category === 'speed_card') return 'speed-card';
   if (category === 'count_quick') return 'count-quick';
   if (category === 'lost_item') return 'lost-item';
+  if (category === 'flip_mind') return 'flip_mind';
+  if (category === 'gold_rush') return 'gold_rush';
+  if (category === 'tick_lock') return 'tick_lock';
+  if (category === 'twin_link') return 'twin_link';
+  if (category === 'neon_flash') return 'neon_flash';
+  if (category === 'glitch_spy') return 'glitch_spy';
+  if (category === 'color_trap') return 'color_trap';
   return 'guess-ai';
 }
 

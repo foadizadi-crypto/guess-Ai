@@ -5,7 +5,7 @@ export {
   NEW_GAME_IDS,
   GUESS_AI_CONFIG,
   SPEED_CARD_CONFIG,
-  SIZE_COMPARE_CONFIG,
+  TICK_LOCK_CONFIG,
 } from './gameConfigs';
 export { ECONOMY_RATES, EVENT_MULTIPLIERS, getProgressionMultiplier } from './constants';
 export {

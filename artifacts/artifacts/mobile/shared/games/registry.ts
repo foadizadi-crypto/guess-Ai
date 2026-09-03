@@ -1,22 +1,22 @@
-import { rawConfig as shadowMatch } from '@/games/shadow-match/config';
-import { rawConfig as oddOneOut } from '@/games/odd-one-out/config';
+import { rawConfig as goldRush } from '@/games/GoldRush/config';
+import { rawConfig as twinLink } from '@/games/TwinLink/config';
 import { rawConfig as countQuick } from '@/games/count-quick/config';
-import { rawConfig as sizeCompare } from '@/games/size-compare/config';
+import { rawConfig as tickLock } from '@/games/TickLock/config';
 import { rawConfig as lostItem } from '@/games/lost-item/config';
-import { rawConfig as fragmentUnify } from '@/games/fragment-unify/config';
-import { rawConfig as emotionMatch } from '@/games/emotion-match/config';
-import { rawConfig as logicChain } from '@/games/logic-chain/config';
-import { rawConfig as timelineBuilder } from '@/games/timeline-builder/config';
+import { rawConfig as flipMind } from '@/games/FlipMind/config';
+import { rawConfig as neonFlash } from '@/games/NeonFlash/config';
+import { rawConfig as glitchSpy } from '@/games/GlitchSpy/config';
+import { rawConfig as colorTrap } from '@/games/ColorTrap/config';
 import type { RawGameConfig } from './rawConfig';
 
 export const MINIGAME_RAW_CONFIGS: readonly RawGameConfig[] = [
-  shadowMatch,
-  oddOneOut,
+  goldRush,
+  twinLink,
   countQuick,
-  sizeCompare,
+  tickLock,
   lostItem,
-  fragmentUnify,
-  emotionMatch,
-  logicChain,
-  timelineBuilder,
+  flipMind,
+  neonFlash,
+  glitchSpy,
+  colorTrap,
 ];

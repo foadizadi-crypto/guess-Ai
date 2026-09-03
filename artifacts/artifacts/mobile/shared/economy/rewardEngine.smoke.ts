@@ -60,10 +60,10 @@ const streak = calculateReward({ gameId: 'speed-card', event: 'STREAK', playerLe
 assert(streak.xp === 44 && streak.coins === 22, `speed-card STREAK expected 44/22 got ${streak.xp}/${streak.coins}`);
 assert(streak.xp > correct.xp && streak.xp < combo.xp, 'STREAK must sit between CORRECT and COMBO');
 
-const blockedSuper = calculateReward({ gameId: 'size-compare', event: 'SUPER_COMBO', playerLevel: 1 });
-const blockedStreak = calculateReward({ gameId: 'size-compare', event: 'STREAK', playerLevel: 1 });
-assert(blockedSuper.xp === 0 && blockedSuper.coins === 0, 'size-compare SUPER_COMBO is disabled');
-assert(blockedStreak.xp === 0 && blockedStreak.coins === 0, 'size-compare STREAK is disabled');
+const blockedSuper = calculateReward({ gameId: 'tick_lock', event: 'SUPER_COMBO', playerLevel: 1 });
+const blockedStreak = calculateReward({ gameId: 'tick_lock', event: 'STREAK', playerLevel: 1 });
+assert(blockedSuper.xp === 0 && blockedSuper.coins === 0, 'tick_lock SUPER_COMBO is disabled');
+assert(blockedStreak.xp === 0 && blockedStreak.coins === 0, 'tick_lock STREAK is disabled');
 
 const guessAi = calculateReward({ gameId: 'guess-ai', event: 'CORRECT', playerLevel: 5 });
 assert(guessAi.xp === 30 && guessAi.coins === 15, `guess-ai CORRECT expected 30/15 got ${guessAi.xp}/${guessAi.coins}`);
@@ -73,7 +73,7 @@ speedCopy.baseReward = 999;
 speedCopy.enabledRewards.combo = false;
 assert(getGameConfig('speed-card').baseReward === 35, 'mutating a returned config must not change speed-card');
 assert(getGameConfig('guess-ai').baseReward === 30, 'speed-card must not affect guess-ai');
-assert(getGameConfig('logic-chain').baseReward === 35, 'logic-chain config isolated');
+assert(getGameConfig('glitch_spy').baseReward === 35, 'glitch_spy config isolated');
 
 const need1 = getXpRequiredForLevel(1);
 assert(need1 > 0, 'level 1 XP required must not be 0');

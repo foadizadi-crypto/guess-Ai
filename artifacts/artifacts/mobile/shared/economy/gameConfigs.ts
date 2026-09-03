@@ -31,8 +31,8 @@ export const SPEED_CARD_CONFIG: GameConfig = freezeConfig({
   enabledRewards: ALL_REWARDS,
 });
 
-export const SIZE_COMPARE_CONFIG: GameConfig = freezeConfig({
-  gameId: 'size-compare',
+export const TICK_LOCK_CONFIG: GameConfig = freezeConfig({
+  gameId: 'tick_lock',
   baseReward: 25,
   rewardWeight: 1,
   enabledRewards: {
@@ -45,15 +45,15 @@ export const SIZE_COMPARE_CONFIG: GameConfig = freezeConfig({
   },
 });
 
-export const SHADOW_MATCH_CONFIG: GameConfig = freezeConfig({
-  gameId: 'shadow-match',
+export const GOLD_RUSH_CONFIG: GameConfig = freezeConfig({
+  gameId: 'gold_rush',
   baseReward: 30,
   rewardWeight: 1,
   enabledRewards: ALL_REWARDS,
 });
 
-export const ODD_ONE_OUT_CONFIG: GameConfig = freezeConfig({
-  gameId: 'odd-one-out',
+export const TWIN_LINK_CONFIG: GameConfig = freezeConfig({
+  gameId: 'twin_link',
   baseReward: 30,
   rewardWeight: 1,
   enabledRewards: ALL_REWARDS,
@@ -73,52 +73,52 @@ export const LOST_ITEM_CONFIG: GameConfig = freezeConfig({
   enabledRewards: ALL_REWARDS,
 });
 
-export const FRAGMENT_UNIFY_CONFIG: GameConfig = freezeConfig({
-  gameId: 'fragment-unify',
+export const FLIP_MIND_CONFIG: GameConfig = freezeConfig({
+  gameId: 'flip_mind',
   baseReward: 35,
   rewardWeight: 1,
   enabledRewards: ALL_REWARDS,
 });
 
-export const EMOTION_MATCH_CONFIG: GameConfig = freezeConfig({
-  gameId: 'emotion-match',
+export const NEON_FLASH_CONFIG: GameConfig = freezeConfig({
+  gameId: 'neon_flash',
   baseReward: 30,
   rewardWeight: 1,
   enabledRewards: ALL_REWARDS,
 });
 
-export const LOGIC_CHAIN_CONFIG: GameConfig = freezeConfig({
-  gameId: 'logic-chain',
+export const GLITCH_SPY_CONFIG: GameConfig = freezeConfig({
+  gameId: 'glitch_spy',
   baseReward: 35,
   rewardWeight: 1,
   enabledRewards: ALL_REWARDS,
 });
 
-export const TIMELINE_BUILDER_CONFIG: GameConfig = freezeConfig({
-  gameId: 'timeline-builder',
+export const COLOR_TRAP_CONFIG: GameConfig = freezeConfig({
+  gameId: 'color_trap',
   baseReward: 35,
   rewardWeight: 1,
   enabledRewards: ALL_REWARDS,
 });
 
 /**
- * Minigame economy config ids — NOT lobby category slots 19–25.
+ * Minigame economy config ids.
  *
  * Playable category order lives in constants/categories.ts:
- * 1–15 blur, 16 speed_card, 17 count_quick, 18 lost_item.
- * A GameConfig here does not make a game playable (no Category, no route).
- * Do not treat this array as games 19–25. Do not implement 19–25 from these stubs.
+ * 1–15 blur, 16 speed_card, 17 count_quick, 18 lost_item,
+ * 19 flip_mind, 20 gold_rush, 21 tick_lock, 22 twin_link,
+ * 23 neon_flash, 24 glitch_spy, 25 color_trap.
  */
 export const NEW_GAME_IDS = [
-  'shadow-match',
-  'odd-one-out',
+  'gold_rush',
+  'twin_link',
   'count-quick',
-  'size-compare',
+  'tick_lock',
   'lost-item',
-  'fragment-unify',
-  'emotion-match',
-  'logic-chain',
-  'timeline-builder',
+  'flip_mind',
+  'neon_flash',
+  'glitch_spy',
+  'color_trap',
 ] as const;
 
 export type NewGameId = (typeof NEW_GAME_IDS)[number];
@@ -126,15 +126,15 @@ export type NewGameId = (typeof NEW_GAME_IDS)[number];
 const GAME_CONFIGS: Record<string, GameConfig> = {
   [GUESS_AI_CONFIG.gameId]: GUESS_AI_CONFIG,
   [SPEED_CARD_CONFIG.gameId]: SPEED_CARD_CONFIG,
-  [SIZE_COMPARE_CONFIG.gameId]: SIZE_COMPARE_CONFIG,
-  [SHADOW_MATCH_CONFIG.gameId]: SHADOW_MATCH_CONFIG,
-  [ODD_ONE_OUT_CONFIG.gameId]: ODD_ONE_OUT_CONFIG,
+  [TICK_LOCK_CONFIG.gameId]: TICK_LOCK_CONFIG,
+  [GOLD_RUSH_CONFIG.gameId]: GOLD_RUSH_CONFIG,
+  [TWIN_LINK_CONFIG.gameId]: TWIN_LINK_CONFIG,
   [COUNT_QUICK_CONFIG.gameId]: COUNT_QUICK_CONFIG,
   [LOST_ITEM_CONFIG.gameId]: LOST_ITEM_CONFIG,
-  [FRAGMENT_UNIFY_CONFIG.gameId]: FRAGMENT_UNIFY_CONFIG,
-  [EMOTION_MATCH_CONFIG.gameId]: EMOTION_MATCH_CONFIG,
-  [LOGIC_CHAIN_CONFIG.gameId]: LOGIC_CHAIN_CONFIG,
-  [TIMELINE_BUILDER_CONFIG.gameId]: TIMELINE_BUILDER_CONFIG,
+  [FLIP_MIND_CONFIG.gameId]: FLIP_MIND_CONFIG,
+  [NEON_FLASH_CONFIG.gameId]: NEON_FLASH_CONFIG,
+  [GLITCH_SPY_CONFIG.gameId]: GLITCH_SPY_CONFIG,
+  [COLOR_TRAP_CONFIG.gameId]: COLOR_TRAP_CONFIG,
 };
 
 export function getGameConfig(gameId: string): GameConfig {

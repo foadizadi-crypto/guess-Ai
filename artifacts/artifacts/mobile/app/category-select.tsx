@@ -44,6 +44,13 @@ const CATEGORY_TILES: Record<Category, Omit<CatItem, 'key'>> = {
   speed_card: { label: 'Speed Card', icon: 'albums-outline', color: '#FFD54F' },
   count_quick: { label: 'Count Quick', icon: 'apps-outline', color: '#FF4D6D' },
   lost_item: { label: 'Lost Item', icon: 'images-outline', color: '#FF7043' },
+  flip_mind: { label: 'Flip Mind', icon: 'swap-horizontal-outline', color: '#7C4DFF' },
+  gold_rush: { label: 'Gold Rush', icon: 'diamond-outline', color: '#FFC107' },
+  tick_lock: { label: 'Tick Lock', icon: 'timer-outline', color: '#4DD0E1' },
+  twin_link: { label: 'Twin Link', icon: 'copy-outline', color: '#81C784' },
+  neon_flash: { label: 'Neon Flash', icon: 'flash-outline', color: '#EA80FC' },
+  glitch_spy: { label: 'Glitch Spy', icon: 'search-outline', color: '#90A4AE' },
+  color_trap: { label: 'Color Trap', icon: 'color-filter-outline', color: '#26A69A' },
 };
 
 const CATEGORIES: CatItem[] = CATEGORY_LAYOUT.map((key) => ({ key, ...CATEGORY_TILES[key] }));
@@ -89,14 +96,19 @@ export default function CategorySelectScreen() {
     }
     startSession(selectedDifficulty, selectedCategory);
     setConfirmVisible(false);
-    const nextRoute =
-      selectedCategory === 'speed_card'
-        ? ROUTES.SPEED_CARD
-        : selectedCategory === 'count_quick'
-          ? ROUTES.COUNT_QUICK
-          : selectedCategory === 'lost_item'
-            ? ROUTES.LOST_ITEM
-            : ROUTES.GAME;
+    const independentRoutes: Partial<Record<Category, string>> = {
+      speed_card: ROUTES.SPEED_CARD,
+      count_quick: ROUTES.COUNT_QUICK,
+      lost_item: ROUTES.LOST_ITEM,
+      flip_mind: ROUTES.FLIP_MIND,
+      gold_rush: ROUTES.GOLD_RUSH,
+      tick_lock: ROUTES.TICK_LOCK,
+      twin_link: ROUTES.TWIN_LINK,
+      neon_flash: ROUTES.NEON_FLASH,
+      glitch_spy: ROUTES.GLITCH_SPY,
+      color_trap: ROUTES.COLOR_TRAP,
+    };
+    const nextRoute = independentRoutes[selectedCategory] ?? ROUTES.GAME;
     router.replace(nextRoute as Href);
   };
 
@@ -146,7 +158,7 @@ export default function CategorySelectScreen() {
           <View style={styles.placeholder} />
         </View>
 
-        <Text style={[styles.sub, { textAlign }]}>Animals, Nature, and Food start unlocked. New games are categories 16–18.</Text>
+        <Text style={[styles.sub, { textAlign }]}>Animals, Nature, and Food start unlocked. Independent games are categories 16–25.</Text>
 
         <FlatList
           data={CATEGORIES}
@@ -177,7 +189,21 @@ export default function CategorySelectScreen() {
                   ? `5 questions • Count Quick\n${selectedDifficulty} mode`
                   : selectedCategory === 'lost_item'
                     ? `5 questions • Lost Item\n${selectedDifficulty} mode`
-                    : `20 questions • 120 seconds\n${selectedCategory} • ${selectedDifficulty} mode`}
+                    : selectedCategory === 'flip_mind'
+                      ? `Flip Mind\n${selectedDifficulty} mode`
+                      : selectedCategory === 'gold_rush'
+                        ? `Gold Rush\n${selectedDifficulty} mode`
+                        : selectedCategory === 'tick_lock'
+                          ? `Tick Lock\n${selectedDifficulty} mode`
+                          : selectedCategory === 'twin_link'
+                            ? `Twin Link\n${selectedDifficulty} mode`
+                            : selectedCategory === 'neon_flash'
+                              ? `Neon Flash\n${selectedDifficulty} mode`
+                              : selectedCategory === 'glitch_spy'
+                                ? `Glitch Spy\n${selectedDifficulty} mode`
+                                : selectedCategory === 'color_trap'
+                                  ? `Color Trap\n${selectedDifficulty} mode`
+                                  : `20 questions • 120 seconds\n${selectedCategory} • ${selectedDifficulty} mode`}
             </Text>
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelButton} onPress={() => setConfirmVisible(false)}>

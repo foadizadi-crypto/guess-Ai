@@ -21,28 +21,29 @@ export const BLUR_CATEGORIES = [
 
 /**
  * Playable independent games on the category grid.
- * Slot 16 = Speed Card, 17 = Count Quick, 18 = Lost Item.
- *
- * Slots 19–25 are reserved and MUST stay empty:
- * they are not in CATEGORY_LAYOUT, not in Category, have no route,
- * and must not become playable from economy stubs.
- * Do not invent unlock levels for 19–25.
- *
- * NEW_GAME_IDS in shared/economy/gameConfigs.ts is a different list
- * (minigame economy config ids). It is NOT this category order.
+ * Slot 16 = Speed Card, 17 = Count Quick, 18 = Lost Item,
+ * 19 = Flip Mind, 20 = Gold Rush, 21 = Tick Lock, 22 = Twin Link,
+ * 23 = Neon Flash, 24 = Glitch Spy, 25 = Color Trap.
  */
 export const NEW_PLAYABLE_CATEGORIES = [
   'speed_card',
   'count_quick',
   'lost_item',
+  'flip_mind',
+  'gold_rush',
+  'tick_lock',
+  'twin_link',
+  'neon_flash',
+  'glitch_spy',
+  'color_trap',
 ] as const satisfies readonly Category[];
 
 export const CATEGORY_LAYOUT: readonly Category[] = [
   ...BLUR_CATEGORIES,
   ...NEW_PLAYABLE_CATEGORIES,
 ];
-// CATEGORY_LAYOUT length is 18. Indices 0–14 = blur 1–15.
-// Index 15/16/17 = games 16/17/18. There is no index for games 19–25.
+// CATEGORY_LAYOUT length is 25. Indices 0–14 = blur 1–15.
+// Index 15/16/17 = games 16/17/18. Index 18–24 = games 19–25.
 
 /**
  * First three blur categories are free. New games are their own slots (16+),
@@ -69,6 +70,13 @@ export const CATEGORY_UNLOCK_LEVEL: Record<Category, number> = {
   speed_card: 1,
   count_quick: 1,
   lost_item: 1,
+  flip_mind: 1,
+  gold_rush: 1,
+  tick_lock: 1,
+  twin_link: 1,
+  neon_flash: 1,
+  glitch_spy: 1,
+  color_trap: 1,
 };
 
 export function categoryUnlockLevel(category: Category): number {
