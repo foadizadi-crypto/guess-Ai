@@ -161,14 +161,17 @@ export default function CategorySelectScreen() {
         <Text style={[styles.sub, { textAlign }]}>Animals, Nature, and Food start unlocked. Independent games are categories 16–25.</Text>
 
         <FlatList
+          style={styles.list}
           data={CATEGORIES}
           keyExtractor={(item) => item.key}
           renderItem={renderItem}
           numColumns={2}
           columnWrapperStyle={styles.row}
           contentContainerStyle={styles.grid}
-          showsVerticalScrollIndicator={false}
-          scrollEnabled
+          showsVerticalScrollIndicator
+          initialNumToRender={CATEGORIES.length}
+          windowSize={12}
+          removeClippedSubviews={false}
         />
 
           <GradientButton
@@ -232,8 +235,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
   },
   sub: { ...Typography.caption, color: GameColors.textSecondary },
-  grid: { gap: 12 },
-  row: { gap: 12 },
+  list: { flex: 1 },
+  grid: { paddingBottom: 28 },
+  row: { gap: 12, marginBottom: 12 },
   catCard: {
     flex: 1,
     aspectRatio: 1,
