@@ -4,10 +4,10 @@ export const COLOR_TRAP_GAME_ID = 'color_trap';
 export const COLOR_TRAP_TITLE = 'Color Trap';
 
 export const COLOR_POOL = [
-  { name: 'قرمز', hex: '#e74c3c' },
-  { name: 'آبی', hex: '#3498db' },
-  { name: 'سبز', hex: '#2ecc71' },
-  { name: 'زرد', hex: '#f1c40f' },
+  { name: 'Red', hex: '#e74c3c' },
+  { name: 'Blue', hex: '#3498db' },
+  { name: 'Green', hex: '#2ecc71' },
+  { name: 'Yellow', hex: '#f1c40f' },
 ];
 
 export const getDifficultySettings = (difficulty: 'easy' | 'medium' | 'hard') => {

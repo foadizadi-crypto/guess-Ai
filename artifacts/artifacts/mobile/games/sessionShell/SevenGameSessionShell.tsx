@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { GameColors } from '@/theme/colors';
 import { requestContinueReward } from './requestContinueReward';
 import type { SevenGameSessionShellProps } from './types';
@@ -19,12 +20,14 @@ export default function SevenGameSessionShell({
   onContinue,
   onExitToCategory,
   onRestart,
+  atmosphere = 'default',
 }: SevenGameSessionShellProps) {
   const [phase, setPhase] = useState<Phase>(skipHowTo ? 'countdown' : 'howTo');
   const [countLabel, setCountLabel] = useState<string>(COUNT_STEPS[0]);
   const playStarted = useRef(false);
   const onPlayStartRef = useRef(onPlayStart);
   onPlayStartRef.current = onPlayStart;
+  const treasure = atmosphere === 'treasure';
 
   useEffect(() => {
     if (phase !== 'countdown') return;
@@ -59,6 +62,26 @@ export default function SevenGameSessionShell({
 
   const playing = phase === 'play' && !wrongOpen;
 
+  const coverInner = (kind: 'howTo' | 'count') => (
+    <>
+      {kind === 'howTo' ? (
+        <>
+          <Text style={[styles.howToTitle, treasure && styles.treasureTitle]}>{howToTitle}</Text>
+          <Text style={[styles.howToBody, treasure && styles.treasureBody]}>{howToBody}</Text>
+          <TouchableOpacity
+            style={[styles.readyBtn, treasure && styles.treasureReady]}
+            onPress={handleReady}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.readyText, treasure && styles.treasureReadyText]}>I'M READY</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <Text style={[styles.countText, treasure && styles.treasureCount]}>{countLabel}</Text>
+      )}
+    </>
+  );
+
   return (
     <View style={styles.root}>
       <View style={styles.playArea} pointerEvents={playing ? 'auto' : 'none'}>
@@ -66,29 +89,33 @@ export default function SevenGameSessionShell({
       </View>
 
       {phase === 'howTo' ? (
-        <View style={styles.cover}>
-          <Text style={styles.howToTitle}>{howToTitle}</Text>
-          <Text style={styles.howToBody}>{howToBody}</Text>
-          <TouchableOpacity style={styles.readyBtn} onPress={handleReady} activeOpacity={0.85}>
-            <Text style={styles.readyText}>I'M READY</Text>
-          </TouchableOpacity>
-        </View>
+        treasure ? (
+          <LinearGradient colors={['rgba(7,4,13,0.92)', 'rgba(20,10,8,0.88)']} style={styles.cover}>
+            {coverInner('howTo')}
+          </LinearGradient>
+        ) : (
+          <View style={styles.cover}>{coverInner('howTo')}</View>
+        )
       ) : null}
 
       {phase === 'countdown' ? (
-        <View style={styles.cover}>
-          <Text style={styles.countText}>{countLabel}</Text>
-        </View>
+        treasure ? (
+          <LinearGradient colors={['rgba(7,4,13,0.9)', 'rgba(20,10,8,0.86)']} style={styles.cover}>
+            {coverInner('count')}
+          </LinearGradient>
+        ) : (
+          <View style={styles.cover}>{coverInner('count')}</View>
+        )
       ) : null}
 
       <Modal visible={wrongOpen} transparent animationType="fade" onRequestClose={onExitToCategory}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.popup}>
-            <Text style={styles.popupTitle}>Wrong</Text>
-            <TouchableOpacity style={styles.popupBtn} onPress={handleContinue} activeOpacity={0.85}>
+          <View style={[styles.popup, treasure && styles.treasurePopup]}>
+            <Text style={[styles.popupTitle, treasure && styles.treasureTitle]}>Wrong</Text>
+            <TouchableOpacity style={[styles.popupBtn, treasure && styles.treasurePopupBtn]} onPress={handleContinue} activeOpacity={0.85}>
               <Text style={styles.popupBtnText}>DEV / NO-AD CONTINUE</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.popupBtn} onPress={onRestart} activeOpacity={0.85}>
+            <TouchableOpacity style={[styles.popupBtn, treasure && styles.treasurePopupBtn]} onPress={onRestart} activeOpacity={0.85}>
               <Text style={styles.popupBtnText}>RESTART</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.popupBtn, styles.exitBtn]} onPress={onExitToCategory} activeOpacity={0.85}>
@@ -181,5 +208,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',
+  },
+  treasureTitle: { color: '#F4D78A' },
+  treasureBody: { color: 'rgba(247,241,227,0.78)' },
+  treasureReady: {
+    backgroundColor: '#F4D78A',
+    borderWidth: 1,
+    borderColor: 'rgba(201,162,74,0.7)',
+  },
+  treasureReadyText: { color: '#1A1004' },
+  treasureCount: { color: '#F4D78A' },
+  treasurePopup: {
+    backgroundColor: '#14081F',
+    borderColor: 'rgba(201,162,74,0.4)',
+  },
+  treasurePopupBtn: {
+    backgroundColor: 'rgba(18,10,28,0.9)',
+    borderColor: 'rgba(244,215,138,0.22)',
   },
 });

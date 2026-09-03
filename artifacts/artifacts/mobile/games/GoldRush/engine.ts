@@ -13,23 +13,23 @@ export const generateFateDeck = (
   const { totalCards, bombCount, multiplierCount } = settings ?? getFateSettings(difficulty);
   const deck: CardState[] = [];
 
-  // اضافه کردن بمب‌ها
+  // Add the bombs
   for (let i = 0; i < bombCount; i++) {
     deck.push({ id: deck.length, type: 'bomb', value: 0, isRevealed: false });
   }
 
-  // اضافه کردن ضریب‌ها (اگر وجود داشته باشد)
+  // Add multipliers (if any)
   for (let i = 0; i < multiplierCount; i++) {
     deck.push({ id: deck.length, type: 'multiplier', value: 2, isRevealed: false });
   }
 
-  // پر کردن بقیه دک با کارت‌های طلا (امتیاز مثبت)
+  // Fill the rest of the deck with gold cards (positive score)
   const remaining = totalCards - deck.length;
   for (let i = 0; i < remaining; i++) {
-    const goldValue = Math.floor(Math.random() * 20) + 10; // بین ۱۰ تا ۳۰ امتیاز
+    const goldValue = Math.floor(Math.random() * 20) + 10; // between 10 and 30 points
     deck.push({ id: deck.length, type: 'gold', value: goldValue, isRevealed: false });
   }
 
-  // مخلوط کردن تصادفی کارت‌ها
+  // Shuffle the cards at random
   return deck.sort(() => 0.5 - Math.random()).map((card, idx) => ({ ...card, id: idx }));
 };

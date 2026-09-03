@@ -1,8 +1,15 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFateFlow } from './flow';
 import { SevenGameSessionShell } from '@/games/sessionShell';
 import type { SevenGameScreenProps } from '@/games/sessionShell';
+import { allowBlurFor, allowBurstFor, useVisualQuality } from '@/games/visualFoundation';
+import { useRTL } from '@/hooks/useRTL';
+import { GoldRushWorld } from './GoldRushWorld';
+import { TreasureCard } from './TreasureCard';
+import { StakesHud } from './StakesHud';
+import { BankVaultButton } from './BankVaultButton';
 
 export default function FateGameScreen({
   difficulty,
@@ -24,10 +31,26 @@ export default function FateGameScreen({
     onComplete,
   );
 
+  const insets = useSafeAreaInsets();
+  const { flexDirection } = useRTL();
+  const { width } = useWindowDimensions();
+  const quality = useVisualQuality();
+  const topPad = Platform.OS === 'web' ? 54 : insets.top + 10;
+  const botPad = Platform.OS === 'web' ? 24 : insets.bottom + 14;
+  const threat = deck.some((card) => card.isRevealed && card.type === 'bomb');
+
+  const { cardW, cardH } = useMemo(() => {
+    const columns = 3;
+    const gutter = 12;
+    const side = 40;
+    const w = Math.min(118, Math.floor((width - side - gutter * (columns - 1)) / columns));
+    return { cardW: Math.max(88, w), cardH: Math.round(Math.max(88, w) * 1.38) };
+  }, [width]);
+
   return (
     <SevenGameSessionShell
       howToTitle="Gold Rush"
-      howToBody="کارت‌ها را باز کن، طلا جمع کن، و قبل از بمب امتیاز را ذخیره کن."
+      howToBody="Flip the cards, collect gold, and bank your score before the bomb."
       skipHowTo={skipHowTo}
       wrongOpen={wrongOpen}
       onHowToFinished={onHowToFinished}
@@ -38,56 +61,71 @@ export default function FateGameScreen({
       }}
       onExitToCategory={onExitToCategory}
       onRestart={onRestart}
+      atmosphere="treasure"
     >
-      <View style={styles.container}>
-        <Text style={styles.headerText}>راند: {round} از {maxRounds}</Text>
-        <Text style={styles.savedScoreText}>امتیاز بانکی (قطعی): {savedScore}</Text>
-        <View style={styles.potContainer}>
-          <Text style={styles.potText}>امتیاز ریسک این راند: {currentPot}</Text>
-          <Text style={styles.warningText}>اگه به بمب بخوری، این امتیاز می‌سوزه!</Text>
+      <GoldRushWorld quality={quality} threat={threat}>
+        <View style={[styles.play, { paddingTop: topPad, paddingBottom: botPad }]}>
+          <StakesHud
+            round={round}
+            maxRounds={maxRounds}
+            savedScore={savedScore}
+            currentPot={currentPot}
+            rowStyle={{ flexDirection }}
+            blur={allowBlurFor(quality)}
+          />
+
+          <View style={styles.table}>
+            {deck.length === 0 ? (
+              <View style={styles.sealing} />
+            ) : (
+              deck.map((card, idx) => (
+                <TreasureCard
+                  key={card.id}
+                  card={card}
+                  width={cardW}
+                  height={cardH}
+                  index={idx}
+                  burst={allowBurstFor(quality) && card.isRevealed}
+                  onPress={() => selectCard(idx)}
+                />
+              ))
+            )}
+          </View>
+
+          <View style={styles.bankSlot}>
+            {currentPot > 0 ? <BankVaultButton onPress={bankScore} /> : <View style={styles.bankSpacer} />}
+          </View>
         </View>
-        <View style={styles.cardGrid}>
-          {deck.map((card, idx) => (
-            <TouchableOpacity
-              key={card.id}
-              activeOpacity={0.7}
-              onPress={() => selectCard(idx)}
-              style={[
-                styles.card,
-                { backgroundColor: card.isRevealed ? (card.type === 'bomb' ? '#e74c3c' : '#f1c40f') : '#2c3e50' },
-              ]}
-            >
-              {card.isRevealed ? (
-                <Text style={styles.cardContent}>
-                  {card.type === 'bomb' ? '💣' : card.type === 'multiplier' ? 'X2' : `+${card.value}`}
-                </Text>
-              ) : (
-                <Text style={styles.cardBack}>?</Text>
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
-        {currentPot > 0 && (
-          <TouchableOpacity style={styles.btnBank} onPress={bankScore}>
-            <Text style={styles.btnText}>💰 ذخیره امتیاز و رفتن به راند بعد</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      </GoldRushWorld>
     </SevenGameSessionShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1a1a2e', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  headerText: { fontSize: 18, color: '#bdc3c7', marginBottom: 5 },
-  savedScoreText: { fontSize: 22, color: '#2ecc71', fontWeight: 'bold', marginBottom: 20 },
-  potContainer: { backgroundColor: '#16a085', padding: 15, borderRadius: 10, alignItems: 'center', marginBottom: 30, width: '90%' },
-  potText: { fontSize: 18, color: '#fff', fontWeight: 'bold' },
-  warningText: { fontSize: 12, color: '#fff', opacity: 0.8, marginTop: 5 },
-  cardGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', maxWidth: 320 },
-  card: { width: 80, height: 110, margin: 10, borderRadius: 8, justifyContent: 'center', alignItems: 'center', elevation: 3 },
-  cardBack: { color: '#fff', fontSize: 24, fontWeight: 'bold' },
-  cardContent: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
-  btnBank: { marginTop: 30, backgroundColor: '#2ecc71', paddingVertical: 12, paddingHorizontal: 25, borderRadius: 25 },
-  btnText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+  play: {
+    flex: 1,
+    paddingHorizontal: 16,
+    gap: 16,
+  },
+  table: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignContent: 'center',
+    gap: 12,
+  },
+  bankSlot: {
+    minHeight: 58,
+    justifyContent: 'flex-end',
+  },
+  bankSpacer: { height: 58 },
+  sealing: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(201,162,74,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(244,215,138,0.22)',
+  },
 });

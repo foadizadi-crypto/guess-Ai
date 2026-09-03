@@ -22,4 +22,5 @@ export type SevenGameSessionShellProps = {
   onContinue: () => void;
   onExitToCategory: () => void;
   onRestart: () => void;
+  atmosphere?: 'default' | 'treasure';
 };
