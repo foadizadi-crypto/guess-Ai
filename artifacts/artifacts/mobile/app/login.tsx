@@ -25,6 +25,7 @@ import { GlassCard } from '@/components/GlassCard';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
 import { useUserStore } from '@/store/userStore';
+import { preloadLobbyChrome } from '@/constants/lobbyAssets';
 import { routeFromLaunchUrl } from '@/navigation/routes';
 import { signInAsGuest, connectOrSignInWithGoogle, GoogleSignInError, getPlayerId, GOOGLE_SAVE_IN_USE_MESSAGE, isGuestUser, isGoogleUser, completeRedirectSignIn, isSignedInPlayer } from '@/services/authService';
 import { fetchRegisteredNickname } from '@/services/nicknameService';
@@ -73,6 +74,7 @@ export default function LoginScreen() {
   }, [setVerifiedNickname, router]);
 
   useEffect(() => {
+    void preloadLobbyChrome();
     logoOpacity.value = withTiming(1, { duration: 400 });
     logoScale.value = withSpring(1, { damping: 12, stiffness: 100 });
     cardOpacity.value = withDelay(250, withTiming(1, { duration: 500 }));

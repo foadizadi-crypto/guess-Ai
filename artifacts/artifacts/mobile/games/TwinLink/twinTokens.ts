@@ -1,0 +1,16 @@
+export const TwinTone = {
+  void: '#080614',
+  velvet: '#140C28',
+  cyan: '#5EEAD4',
+  cyanHot: '#A7F3D0',
+  cyanDeep: '#0F766E',
+  rose: '#F0ABFC',
+  roseHot: '#F5D0FE',
+  roseDeep: '#A21CAF',
+  link: '#E9D5FF',
+  ink: '#F8F4FF',
+  mute: 'rgba(248,244,255,0.64)',
+  porcelain: '#F4F0FF',
+  porcelainDeep: '#D6CCF0',
+  enamel: '#1A1233',
+} as const;

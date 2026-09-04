@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, View, Dimensions, ImageSourcePropType } from 'react-native';
+import { StyleSheet, View, Dimensions, ImageSourcePropType, Platform } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import Animated, {
   useSharedValue,
@@ -109,7 +109,7 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
           source={backgroundImage}
           style={styles.fill}
           contentFit="cover"
-          transition={300}
+          transition={0}
           cachePolicy="memory-disk"
         />
         <View
@@ -119,9 +119,10 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
     ) : (
       <View style={styles.fill} />
     )}
-    {ORBS.map((orb, i) => (
-      <AnimatedOrb key={i} orb={orb} />
-    ))}
+    {Platform.OS === "ios" &&
+      ORBS.map((orb, i) => (
+        <AnimatedOrb key={i} orb={orb} />
+      ))}
     <View style={styles.content}>{children}</View>
   </View>
 );

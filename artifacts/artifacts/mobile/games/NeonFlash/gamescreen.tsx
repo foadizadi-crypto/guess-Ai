@@ -1,86 +1,20 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Dimensions, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  Easing,
-  interpolate,
-  interpolateColor,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useMemo, useState } from 'react';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSimonFlow } from './flow';
 import { TILES } from './config';
 import { SevenGameSessionShell } from '@/games/sessionShell';
 import type { SevenGameScreenProps } from '@/games/sessionShell';
-import { AnimatedBackground } from '@/components/AnimatedBackground';
-import { GameColors } from '@/theme/colors';
-import { Typography } from '@/theme/typography';
+import { HudPlate, allowBlurFor, allowBurstFor, useVisualQuality } from '@/games/visualFoundation';
 import { useRTL } from '@/hooks/useRTL';
+import { NeonFlashWorld } from './NeonFlashWorld';
+import { NeonFlashHud } from './NeonFlashHud';
+import { NeonCabinet, NeonPad } from './NeonPad';
+import { FlashTone } from './neonTokens';
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-const GRID_GAP = 14;
-const SCREEN_W = Dimensions.get('window').width;
-
-function NeonTile({
-  color,
-  light,
-  lit,
-  size,
-  onPress,
-}: {
-  color: string;
-  light: string;
-  lit: boolean;
-  size: number;
-  onPress: () => void;
-}) {
-  const glow = useSharedValue(0);
-  const press = useSharedValue(1);
-
-  useEffect(() => {
-    glow.value = withTiming(lit ? 1 : 0, { duration: 80, easing: Easing.out(Easing.cubic) });
-  }, [lit, glow]);
-
-  const tileStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: press.value * interpolate(glow.value, [0, 1], [1, 1.045]) }],
-    backgroundColor: interpolateColor(glow.value, [0, 1], [color, light]),
-    shadowOpacity: interpolate(glow.value, [0, 1], [0.22, 0.9]),
-    shadowRadius: interpolate(glow.value, [0, 1], [8, 22]),
-  }));
-
-  const sheenStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(glow.value, [0, 1], [0.08, 0.38]),
-  }));
-
-  return (
-    <AnimatedPressable
-      onPress={onPress}
-      onPressIn={() => {
-        press.value = withTiming(0.96, { duration: 70 });
-      }}
-      onPressOut={() => {
-        press.value = withSpring(1, { damping: 16, stiffness: 280 });
-      }}
-      style={[
-        styles.tile,
-        {
-          width: size,
-          height: size,
-          borderRadius: Math.max(22, size * 0.22),
-          borderColor: light,
-          shadowColor: color,
-        },
-        tileStyle,
-      ]}
-    >
-      <Animated.View pointerEvents="none" style={[styles.tileSheen, sheenStyle]} />
-    </AnimatedPressable>
-  );
-}
+const GRID_GAP = 12;
+const HOW_TO_TITLE = 'Neon Flash';
+const HOW_TO_BODY = 'Watch the pattern and repeat the same order.';
 
 export default function SimonSaysScreen({
   difficulty,
@@ -104,42 +38,24 @@ export default function SimonSaysScreen({
 
   const insets = useSafeAreaInsets();
   const { flexDirection } = useRTL();
-  const topPad = Platform.OS === 'web' ? 54 : insets.top + 12;
-  const botPad = Platform.OS === 'web' ? 24 : insets.bottom + 16;
-  const gridSize = Math.min(SCREEN_W - 40, 340);
-  const tileSize = (gridSize - GRID_GAP) / 2;
+  const quality = useVisualQuality();
+  const { width: screenW } = useWindowDimensions();
+  const topPad = Platform.OS === 'web' ? 54 : insets.top + 10;
+  const botPad = Platform.OS === 'web' ? 24 : insets.bottom + 14;
+  const cabinetSize = Math.min(screenW - 36, 352);
+  const inner = cabinetSize - 30;
+  const tileSize = (inner - GRID_GAP) / 2;
   const roundRatio = maxRounds > 0 ? Math.min(1, round / maxRounds) : 0;
-
-  const roundFill = useSharedValue(roundRatio);
-  const pulse = useSharedValue(0.35);
-
-  useEffect(() => {
-    roundFill.value = withTiming(roundRatio, { duration: 220, easing: Easing.out(Easing.cubic) });
-  }, [roundRatio, roundFill]);
-
-  useEffect(() => {
-    pulse.value = isShowingSeq
-      ? withRepeat(withTiming(1, { duration: 520, easing: Easing.inOut(Easing.sin) }), -1, true)
-      : withTiming(0.35, { duration: 180 });
-  }, [isShowingSeq, pulse]);
-
-  const roundBarStyle = useAnimatedStyle(() => ({
-    width: `${(roundFill.value * 100).toFixed(2)}%` as `${number}%`,
-  }));
-
-  const arenaPulseStyle = useAnimatedStyle(() => ({
-    opacity: pulse.value,
-  }));
-
-  const statusColor = useMemo(
-    () => (isShowingSeq ? GameColors.accentGold : GameColors.accentGreen),
-    [isShowingSeq],
+  const burst = allowBurstFor(quality);
+  const activeLight = useMemo(
+    () => TILES.find((tile) => tile.id === activeTile)?.light ?? null,
+    [activeTile],
   );
 
   return (
     <SevenGameSessionShell
-      howToTitle="Neon Flash"
-      howToBody="Watch the pattern and repeat the same order."
+      howToTitle={HOW_TO_TITLE}
+      howToBody={HOW_TO_BODY}
       skipHowTo={skipHowTo}
       wrongOpen={wrongOpen}
       onHowToFinished={onHowToFinished}
@@ -151,137 +67,75 @@ export default function SimonSaysScreen({
       onExitToCategory={onExitToCategory}
       onRestart={onRestart}
     >
-      <AnimatedBackground>
-        <View style={[styles.container, { paddingTop: topPad, paddingBottom: botPad }]}>
-          <View style={[styles.hudRow, { flexDirection }]}>
-            <View style={styles.hudCard}>
-              <Text style={styles.hudLabel}>Round</Text>
-              <Text style={styles.hudValue}>
-                {round} of {maxRounds}
-              </Text>
-            </View>
-          </View>
+      <NeonFlashWorld quality={quality} watching={isShowingSeq} activeLight={activeLight}>
+        <View style={[styles.play, { paddingTop: topPad, paddingBottom: botPad }]}>
+          <NeonFlashHud
+            round={round}
+            maxRounds={maxRounds}
+            watching={isShowingSeq}
+            roundRatio={roundRatio}
+            rowStyle={{ flexDirection }}
+            glow={allowBlurFor(quality)}
+          />
 
-          <View style={styles.progressCard}>
-            <View style={styles.progressTrack}>
-              <Animated.View style={[styles.progressFill, roundBarStyle]} />
-            </View>
-          </View>
-
-          <View style={styles.hintChip}>
-            <Text style={[styles.instruction, { color: statusColor }]}>
+          <HudPlate
+            blur={allowBlurFor(quality)}
+            border={isShowingSeq ? 'rgba(255,224,138,0.42)' : 'rgba(94,242,194,0.38)'}
+            fill={['rgba(18,8,42,0.88)', 'rgba(8,4,22,0.78)']}
+            style={styles.hintPlate}
+          >
+            <Text
+              style={[
+                styles.hint,
+                { color: isShowingSeq ? FlashTone.watch : FlashTone.play },
+              ]}
+            >
               {isShowingSeq ? 'Watch the pattern...' : 'Now you repeat!'}
             </Text>
-          </View>
+          </HudPlate>
 
           <View style={styles.stage}>
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.arenaGlow,
-                arenaPulseStyle,
-                { width: gridSize + 36, height: gridSize + 36, borderRadius: (gridSize + 36) / 5 },
-              ]}
-            />
-            <LinearGradient
-              colors={[GameColors.backgroundSecondary, GameColors.backgroundPrimary]}
-              style={[styles.arena, { width: gridSize + 28, height: gridSize + 28 }]}
-            >
-              <View style={[styles.simonGrid, { width: gridSize, height: gridSize }]}>
+            <NeonCabinet size={cabinetSize} watching={isShowingSeq}>
+              <View style={[styles.simonGrid, { width: inner, height: inner }]}>
                 {TILES.map((tile) => (
-                  <NeonTile
+                  <NeonPad
                     key={tile.id}
                     color={tile.color}
                     light={tile.light}
                     lit={activeTile === tile.id}
                     size={tileSize}
+                    burst={burst}
+                    armed={!isShowingSeq}
                     onPress={() => submitChoice(tile.id)}
                   />
                 ))}
               </View>
-            </LinearGradient>
+            </NeonCabinet>
           </View>
         </View>
-      </AnimatedBackground>
+      </NeonFlashWorld>
     </SevenGameSessionShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  play: {
     flex: 1,
-    paddingHorizontal: 20,
-    gap: 14,
-  },
-  hudRow: {
-    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     gap: 12,
   },
-  hudCard: {
-    flex: 1,
-    backgroundColor: GameColors.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: GameColors.cardBorder,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+  hintPlate: {
+    alignSelf: 'stretch',
   },
-  hudLabel: {
-    ...Typography.small,
-    color: GameColors.textSecondary,
-    letterSpacing: 0.6,
-    marginBottom: 2,
-  },
-  hudValue: {
-    ...Typography.semibold,
-    color: GameColors.textWhite,
-    fontFamily: 'Inter_700Bold',
-  },
-  progressCard: {
-    backgroundColor: GameColors.backgroundSecondary,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: GameColors.border,
-    padding: 10,
-  },
-  progressTrack: {
-    height: 8,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.10)',
-  },
-  progressFill: {
-    height: 8,
-    borderRadius: 8,
-    backgroundColor: GameColors.accentGold,
-  },
-  hintChip: {
-    alignSelf: 'center',
-    backgroundColor: GameColors.coinBg,
-    borderWidth: 1,
-    borderColor: GameColors.coinBorder,
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  instruction: {
-    ...Typography.bodyMedium,
+  hint: {
+    fontSize: 14,
+    lineHeight: 20,
     textAlign: 'center',
     fontFamily: 'Inter_600SemiBold',
   },
   stage: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  arenaGlow: {
-    position: 'absolute',
-    backgroundColor: GameColors.glow,
-  },
-  arena: {
-    borderRadius: 32,
-    borderWidth: 1,
-    borderColor: GameColors.border,
+    minHeight: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -290,15 +144,5 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignContent: 'space-between',
-  },
-  tile: {
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    elevation: 10,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  tileSheen: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: GameColors.textWhite,
   },
 });

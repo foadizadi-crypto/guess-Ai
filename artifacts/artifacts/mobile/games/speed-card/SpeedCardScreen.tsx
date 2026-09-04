@@ -5,7 +5,7 @@ import {
   LayoutChangeEvent,
   Modal,
   Platform,
-  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -14,14 +14,13 @@ import {
 import { useRouter, useNavigation } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { hapticsService } from '@/services/HapticsService';
-import { AnimatedBackground } from '@/components/AnimatedBackground';
 import { BackButton } from '@/components/BackButton';
-import { GlassCard } from '@/components/GlassCard';
 import { GradientButton } from '@/components/GradientButton';
 import { PauseMenu } from '@/components/PauseMenu';
-import { GameColors } from '@/theme/colors';
-import { Typography } from '@/theme/typography';
+import { POPUP_PADDING, layoutStyles, usePopupChromeSize } from '@/theme/webLayout';
+import { allowBlurFor, allowBurstFor, useVisualQuality } from '@/games/visualFoundation';
 import { useGameStore } from '@/store/gameStore';
 import { useUserStore } from '@/store/userStore';
 import { useAdStore } from '@/store/adStore';
@@ -52,6 +51,11 @@ import {
   speedCardQuestionText,
   type SpeedCardPlayPhase,
 } from '@/games/speed-card/flow';
+import { SpeedCardWorld } from '@/games/speed-card/SpeedCardWorld';
+import { SpeedCardHud } from '@/games/speed-card/SpeedCardHud';
+import { MemoryCard } from '@/games/speed-card/MemoryCard';
+import { SpeedPrompt } from '@/games/speed-card/SpeedPrompt';
+import { SpeedTone } from '@/games/speed-card/speedTokens';
 
 interface PlacedCard extends SpeedCardColor {
   x: number;
@@ -67,6 +71,8 @@ const SpeedCardScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const popupH = usePopupChromeSize();
+  const quality = useVisualQuality();
   const difficulty = useGameStore((s) => s.selectedDifficulty);
   const category = useGameStore((s) => s.selectedCategory);
   const timer = useGameStore((s) => s.timer);
@@ -99,6 +105,7 @@ const SpeedCardScreen = () => {
   const [wrongOpen, setWrongOpen] = useState(false);
   const [continueLoading, setContinueLoading] = useState(false);
   const [faceUp, setFaceUp] = useState(true);
+  const [timeCap, setTimeCap] = useState(() => Math.max(timer, 1));
 
   const endedRef = useRef(false);
   const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -308,6 +315,10 @@ const SpeedCardScreen = () => {
     }
     setWrongOpen(true);
   };
+
+  useEffect(() => {
+    if (timer > timeCap) setTimeCap(timer);
+  }, [timer, timeCap]);
 
   useEffect(() => {
     if (isDifficultyOpen(difficulty)) return;
@@ -522,107 +533,121 @@ const SpeedCardScreen = () => {
   ]);
 
   const showAsk = phase === 'question' || phase === 'feedback';
-  const remaining = Math.max(0, roundCap - roundIndex - 1);
+  const playing = phase === 'reveal' || phase === 'question';
+  const urgency = playing && !timersFrozen && timer < 30;
+  const timeRatio = timeCap > 0 ? Math.min(1, Math.max(0, timer / timeCap)) : 0;
+  const timerLabel = `${Math.floor(timer / 60)}:${String(timer % 60).padStart(2, '0')}`;
 
   return (
-    <AnimatedBackground>
+    <SpeedCardWorld quality={quality} urgency={urgency} flash={feedback}>
       <View style={[styles.container, { paddingTop: topPad, paddingBottom: botPad }]}>
         <View style={styles.topBar}>
           <BackButton onPress={() => setPaused(true)} />
-          <View style={styles.topCenter}>
-            <Text style={styles.mode}>{config?.label ? config.label.toUpperCase() : 'MODE'} • SPEED CARD</Text>
-            <Text style={[styles.timer, { color: getTimerColor(timer) }]}>
-              {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, '0')}
-            </Text>
-          </View>
           <TouchableOpacity style={styles.pauseButton} onPress={() => setPaused(true)}>
-            <Ionicons name="pause" size={20} color={GameColors.textWhite} />
+            <LinearGradient
+              colors={[SpeedTone.snapHot, SpeedTone.ice, SpeedTone.crimsonDeep, SpeedTone.snapHot]}
+              locations={[0, 0.28, 0.72, 1]}
+              start={{ x: 0.15, y: 0 }}
+              end={{ x: 0.85, y: 1 }}
+              style={styles.pauseBezel}
+            >
+              <LinearGradient colors={['rgba(22,10,20,0.96)', 'rgba(8,4,14,0.98)']} style={styles.pauseWell}>
+                <Ionicons name="pause" size={20} color={SpeedTone.ink} />
+              </LinearGradient>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
+        <SpeedCardHud
+          modeLabel={`${config?.label ? config.label.toUpperCase() : 'MODE'} • SPEED CARD`}
+          round={roundIndex + 1}
+          maxRounds={roundCap}
+          score={score}
+          timerLabel={timerLabel}
+          timerColor={getTimerColor(timer)}
+          timeRatio={timeRatio}
+          glow={allowBlurFor(quality)}
+        />
 
-        <View style={styles.progressRow}>
-          <Text style={styles.counter}>{roundIndex + 1} / {roundCap}</Text>
-          <View style={styles.segmentTrack}>
-            <View style={[styles.segmentNow, { flex: roundIndex + 1 }]} />
-            {remaining > 0 ? <View style={[styles.segment, { flex: remaining }]} /> : null}
-          </View>
-          <Text style={styles.score}>+{score}</Text>
-        </View>
-
-        <View
-          style={styles.imageWrap}
-          onLayout={onBoardLayout}
-          pointerEvents="box-none"
-          collapsable={false}
-        >
-          {phase === 'loading' ? (
-            <View style={styles.boardStatus} pointerEvents="auto">
-              <Text style={styles.boardStatusText}>Loading colors…</Text>
-            </View>
-          ) : null}
-          {phase === 'error' ? (
-            <View style={styles.boardStatus} pointerEvents="auto">
-              <Text style={styles.boardStatusText}>{loadError ?? 'Online round failed'}</Text>
-              <GradientButton title="Try Again" onPress={() => { void fetchRound(); }} style={styles.retryBtn} />
-            </View>
-          ) : null}
-          {cards.map((card) => {
-            const showFace =
-              faceUp
-              || (phase === 'feedback' && feedback === 'correct' && ask?.id === card.id);
-            return (
-              <View
-                key={card.id}
-                collapsable={false}
-                pointerEvents="auto"
-                style={[
-                  styles.cardSlot,
-                  {
-                    left: card.x,
-                    top: card.y,
-                    width: card.width,
-                    height: card.height,
-                  },
-                ]}
-              >
-                <Pressable
-                  disabled={phase !== 'question' || Boolean(feedback)}
-                  onPress={() => handleCardPress(card)}
-                  style={styles.cardHit}
-                >
+        <View style={styles.tableWrap}>
+          <View pointerEvents="none" style={styles.tableHalo} />
+          <LinearGradient
+            colors={[SpeedTone.snapHot, SpeedTone.ice, SpeedTone.crimsonDeep, SpeedTone.ice, SpeedTone.snapHot]}
+            locations={[0, 0.16, 0.5, 0.84, 1]}
+            start={{ x: 0.08, y: 0 }}
+            end={{ x: 0.92, y: 1 }}
+            style={styles.tableBezel}
+          >
+            <LinearGradient
+              colors={['#2A121C', SpeedTone.feltHot, SpeedTone.felt, '#14080E']}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={styles.imageWrap}
+              onLayout={onBoardLayout}
+              pointerEvents="box-none"
+              collapsable={false}
+            >
+              <View pointerEvents="none" style={styles.tableRail} />
+              {phase === 'loading' ? (
+                <View style={styles.boardStatus} pointerEvents="auto">
+                  <Text style={styles.boardStatusText}>Loading colors…</Text>
+                </View>
+              ) : null}
+              {phase === 'error' ? (
+                <View style={styles.boardStatus} pointerEvents="auto">
+                  <Text style={styles.boardStatusText}>{loadError ?? 'Online round failed'}</Text>
+                  <GradientButton title="Try Again" onPress={() => { void fetchRound(); }} style={styles.retryBtn} />
+                </View>
+              ) : null}
+              {cards.map((card) => {
+                const showFace =
+                  faceUp
+                  || (phase === 'feedback' && feedback === 'correct' && ask?.id === card.id);
+                const isHit = phase === 'feedback' && feedback === 'correct' && ask?.id === card.id;
+                return (
                   <View
+                    key={card.id}
+                    collapsable={false}
+                    pointerEvents="auto"
                     style={[
-                      styles.cardFace,
+                      styles.cardSlot,
                       {
-                        backgroundColor: showFace ? card.hex : '#1B0F33',
-                        borderColor: showFace && (card.id === 'white' || card.id === 'yellow' || card.id === 'gold')
-                          ? 'rgba(13,2,33,0.45)'
-                          : showFace
-                            ? 'rgba(255,255,255,0.35)'
-                            : GameColors.cardBorder,
+                        left: card.x,
+                        top: card.y,
+                        width: card.width,
+                        height: card.height,
                       },
                     ]}
-                  />
-                </Pressable>
-              </View>
-            );
-          })}
+                  >
+                    <MemoryCard
+                      hex={card.hex}
+                      width={card.width}
+                      height={card.height}
+                      faceUp={showFace}
+                      disabled={phase !== 'question' || Boolean(feedback)}
+                      highlight={isHit ? 'correct' : null}
+                      burst={allowBurstFor(quality) && isHit}
+                      onPress={() => handleCardPress(card)}
+                    />
+                  </View>
+                );
+              })}
+            </LinearGradient>
+          </LinearGradient>
         </View>
 
-        <GlassCard style={styles.questionCard}>
-          <Text style={styles.questionLabel}>
-            {phase === 'reveal' ? 'MEMORIZE' : showAsk ? 'QUESTION' : 'SPEED CARD'}
-          </Text>
-          <Text style={styles.questionText} numberOfLines={2}>
-            {ask && showAsk
+        <SpeedPrompt
+          label={phase === 'reveal' ? 'MEMORIZE' : showAsk ? 'QUESTION' : 'SPEED CARD'}
+          text={
+            ask && showAsk
               ? speedCardQuestionText(ask.name)
               : phase === 'loading'
                 ? 'Loading colors…'
                 : phase === 'error'
                   ? 'Could not deal cards'
-                  : 'Watch the cards'}
-          </Text>
-        </GlassCard>
+                  : 'Watch the cards'
+          }
+          swatch={ask && showAsk ? ask.hex : null}
+        />
 
         {feedback === 'correct' ? (
           <Text style={styles.correctFeedback}>{SPEED_CARD_CORRECT_LABEL}</Text>
@@ -633,28 +658,41 @@ const SpeedCardScreen = () => {
 
       {phase === 'howto' && (
         <View style={styles.howtoOverlay}>
-          <GlassCard style={styles.howtoCard}>
-            <Text style={styles.howtoTitle}>{SPEED_CARD_HOW_TO_TITLE}</Text>
-            <Text style={styles.howtoBody}>{SPEED_CARD_HOW_TO_BODY}</Text>
-            <GradientButton
-              title={SPEED_CARD_READY_LABEL}
-              onPress={() => {
-                hapticsService.impact(0);
-                playEffect('button_click');
-                beginCountdown();
-              }}
-              testID="speed-card-im-ready"
-            />
-          </GlassCard>
+          <LinearGradient
+            colors={[SpeedTone.snapHot, SpeedTone.ice, SpeedTone.crimsonDeep]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[layoutStyles.popupFrame, styles.howtoBezel, { height: popupH }]}
+          >
+            <LinearGradient colors={['rgba(22,10,20,0.98)', 'rgba(8,4,14,0.98)']} style={styles.howtoCard}>
+              <Text style={[layoutStyles.popupTitle, styles.howtoTitle]}>{SPEED_CARD_HOW_TO_TITLE}</Text>
+              <ScrollView style={layoutStyles.popupScroller} contentContainerStyle={layoutStyles.popupScrollContent}>
+                <Text style={[layoutStyles.popupBody, styles.howtoBody]}>{SPEED_CARD_HOW_TO_BODY}</Text>
+              </ScrollView>
+              <GradientButton
+                title={SPEED_CARD_READY_LABEL}
+                onPress={() => {
+                  hapticsService.impact(0);
+                  playEffect('button_click');
+                  beginCountdown();
+                }}
+                testID="speed-card-im-ready"
+              />
+            </LinearGradient>
+          </LinearGradient>
         </View>
       )}
 
       {phase === 'countdown' || phase === 'start' ? (
-        <View style={styles.countdownOverlay} pointerEvents="none">
+        <LinearGradient
+          colors={['rgba(8,4,15,0.9)', 'rgba(22,8,16,0.86)']}
+          style={styles.countdownOverlay}
+          pointerEvents="none"
+        >
           <Text style={[styles.countdownNumber, phase === 'start' && styles.countdownStart]}>
             {phase === 'start' ? SPEED_CARD_START_LABEL : String(countdown)}
           </Text>
-        </View>
+        </LinearGradient>
       ) : null}
 
       <PauseMenu
@@ -665,85 +703,132 @@ const SpeedCardScreen = () => {
       />
 
       <Modal visible={wrongOpen} transparent animationType="fade" onRequestClose={handleExitWrong}>
-        <View style={styles.wrongBackdrop}>
-          <View style={styles.wrongCard}>
-            <Text style={styles.wrongTitle}>{SPEED_CARD_WRONG_TITLE}</Text>
-            <GradientButton
-              title={
-                continueLoading
-                  ? 'Loading ad…'
-                  : isAdFreePassActive()
-                    ? 'Continue (Ad-Free)'
-                    : SPEED_CARD_CONTINUE_LABEL
-              }
-              onPress={handleContinueAd}
-              disabled={continueLoading}
-              style={styles.wrongPrimary}
-            />
-            <TouchableOpacity style={styles.wrongSkip} onPress={handleExitWrong} disabled={continueLoading}>
-              <Text style={styles.wrongSkipText}>{SPEED_CARD_EXIT_LABEL}</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={layoutStyles.popupBackdrop}>
+          <LinearGradient
+            colors={[SpeedTone.crimson, SpeedTone.crimsonDeep, '#2A0810']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[layoutStyles.popupFrame, styles.wrongBezel, { height: popupH }]}
+          >
+            <LinearGradient colors={['rgba(28,8,14,0.98)', 'rgba(10,4,10,0.98)']} style={styles.wrongCard}>
+              <Text style={[layoutStyles.popupTitle, styles.wrongTitle]}>{SPEED_CARD_WRONG_TITLE}</Text>
+              <ScrollView style={layoutStyles.popupScroller} contentContainerStyle={layoutStyles.popupScrollContent}>
+                <GradientButton
+                  title={
+                    continueLoading
+                      ? 'Loading ad…'
+                      : isAdFreePassActive()
+                        ? 'Continue (Ad-Free)'
+                        : SPEED_CARD_CONTINUE_LABEL
+                  }
+                  onPress={handleContinueAd}
+                  disabled={continueLoading}
+                  style={styles.wrongPrimary}
+                />
+                <TouchableOpacity style={styles.wrongSkip} onPress={handleExitWrong} disabled={continueLoading}>
+                  <Text style={styles.wrongSkipText}>{SPEED_CARD_EXIT_LABEL}</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </LinearGradient>
+          </LinearGradient>
         </View>
       </Modal>
-    </AnimatedBackground>
+    </SpeedCardWorld>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 18, gap: 12 },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  topCenter: { alignItems: 'center', gap: 2 },
-  mode: { ...Typography.small, color: GameColors.textSecondary, letterSpacing: 1 },
-  timer: { fontSize: 30, fontFamily: 'Inter_700Bold', fontWeight: '700' },
-  pauseButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: GameColors.border },
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  counter: { ...Typography.small, color: GameColors.textSecondary, width: 56 },
-  score: { ...Typography.small, color: GameColors.accentGold, width: 48, textAlign: 'right', fontFamily: 'Inter_700Bold' },
-  segmentTrack: { flex: 1, flexDirection: 'row', gap: 3 },
-  segment: { height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)' },
-  segmentNow: { height: 5, borderRadius: 3, backgroundColor: GameColors.accentGold },
-  imageWrap: { flex: 1, minHeight: 240, maxHeight: 330, borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: GameColors.cardBorder, backgroundColor: GameColors.backgroundSecondary },
+  pauseButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  pauseBezel: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 1.5,
+  },
+  pauseWell: {
+    flex: 1,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tableWrap: {
+    flex: 1,
+    minHeight: 240,
+    maxHeight: 330,
+    position: 'relative',
+  },
+  tableHalo: {
+    position: 'absolute',
+    top: -4,
+    right: -3,
+    bottom: -4,
+    left: -3,
+    borderRadius: 26,
+    backgroundColor: 'rgba(125,211,252,0.14)',
+  },
+  tableBezel: {
+    flex: 1,
+    borderRadius: 24,
+    padding: 3,
+    overflow: 'hidden',
+  },
+  imageWrap: {
+    flex: 1,
+    borderRadius: 21,
+    overflow: 'hidden',
+  },
+  tableRail: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: 6,
+    borderColor: 'rgba(90,40,48,0.55)',
+    borderRadius: 24,
+  },
   boardStatus: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, gap: 14, zIndex: 4 },
-  boardStatusText: { ...Typography.caption, color: GameColors.textSecondary, textAlign: 'center' },
+  boardStatusText: { color: SpeedTone.mute, fontSize: 16, fontFamily: 'Inter_400Regular', textAlign: 'center' },
   retryBtn: { width: '80%' },
   cardSlot: { position: 'absolute', zIndex: 2, elevation: 4 },
-  cardHit: { flex: 1 },
-  cardFace: { flex: 1, borderRadius: 12, borderWidth: 2 },
-  questionCard: { padding: 14, gap: 4 },
-  questionLabel: { ...Typography.small, color: GameColors.accentGold, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
-  questionText: { ...Typography.semibold, color: GameColors.textWhite, textAlign: 'left' },
-  correctFeedback: { ...Typography.semibold, color: GameColors.accentGreen, textAlign: 'center', minHeight: 28 },
+  correctFeedback: {
+    color: SpeedTone.greenHot,
+    fontSize: 18,
+    fontFamily: 'Inter_600SemiBold',
+    textAlign: 'center',
+    minHeight: 28,
+  },
   feedbackSpacer: { minHeight: 28 },
   howtoOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 22,
-    backgroundColor: 'rgba(13,2,33,0.78)',
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(8,4,15,0.82)',
     zIndex: 80,
   },
-  howtoCard: { width: '100%', padding: 22, gap: 14 },
-  howtoTitle: { ...Typography.header, color: GameColors.textWhite, fontSize: 28, textAlign: 'center' },
-  howtoBody: { ...Typography.semibold, color: GameColors.textSecondary, textAlign: 'center', lineHeight: 22 },
-  countdownOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(13,2,33,0.82)', zIndex: 100 },
-  countdownNumber: { fontSize: 96, fontFamily: 'Inter_700Bold', color: GameColors.textWhite, lineHeight: 110, textAlign: 'center' },
-  countdownStart: { fontSize: 64, lineHeight: 72, color: GameColors.accentGreen },
-  wrongBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.82)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  howtoBezel: { borderRadius: 22, padding: 1.5 },
+  howtoCard: { flex: 1, width: '100%', padding: POPUP_PADDING, gap: 12, borderRadius: 20 },
+  howtoTitle: { color: SpeedTone.ink },
+  howtoBody: { color: SpeedTone.mute, fontFamily: 'Inter_600SemiBold' },
+  countdownOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', zIndex: 100 },
+  countdownNumber: { fontSize: 96, fontFamily: 'Inter_700Bold', color: SpeedTone.ink, lineHeight: 110, textAlign: 'center' },
+  countdownStart: { fontSize: 64, lineHeight: 72, color: SpeedTone.greenHot },
+  wrongBezel: { borderRadius: 24, padding: 1.5 },
   wrongCard: {
+    flex: 1,
     width: '100%',
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 22,
+    padding: POPUP_PADDING,
     alignItems: 'center',
-    backgroundColor: GameColors.card,
-    borderWidth: 1,
-    borderColor: GameColors.cardBorder,
     gap: 12,
   },
-  wrongTitle: { ...Typography.header, color: GameColors.accentRed, fontSize: 28 },
+  wrongTitle: { color: SpeedTone.crimson },
   wrongPrimary: { width: '100%' },
   wrongSkip: { paddingVertical: 10 },
-  wrongSkipText: { color: GameColors.textSecondary, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  wrongSkipText: { color: SpeedTone.mute, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
 });
 
 export default SpeedCardScreen;

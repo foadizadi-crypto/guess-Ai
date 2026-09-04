@@ -18,8 +18,9 @@ export const GlassCard: React.FC<GlassCardProps> = ({
 }) => {
   const inner = [styles.inner, { padding }, style];
 
-  // BlurView works on iOS/Android natively; on web fall back to a plain card
-  if (Platform.OS === 'web') {
+  // BlurView on Android is a screen-capture blur and hitchs the UI thread.
+  // iOS blur is cheap; everywhere else use the same solid card.
+  if (Platform.OS !== 'ios') {
     return (
       <View style={[styles.webFallback, { padding }, style]}>
         {children}

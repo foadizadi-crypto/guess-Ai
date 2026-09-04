@@ -1,0 +1,16 @@
+export const FindTone = {
+  void: '#0A0604',
+  velvet: '#1A0E08',
+  brass: '#C4843A',
+  brassHot: '#F0C078',
+  brassDeep: '#6A3A12',
+  lantern: '#FF7043',
+  lanternHot: '#FFB088',
+  navy: '#1C2438',
+  ink: '#F8F0E6',
+  mute: 'rgba(248,240,230,0.64)',
+  found: '#3DDC97',
+  foundDeep: '#0B5F3A',
+  lost: '#FF4D6D',
+  lostDeep: '#7A1830',
+} as const;

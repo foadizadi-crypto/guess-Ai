@@ -1,5 +1,6 @@
 import React from 'react';
-import { Image, ImageSourcePropType, StyleSheet, View, Text, ViewStyle } from 'react-native';
+import { ImageSourcePropType, StyleSheet, View, Text, ViewStyle } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { AVATAR_SOURCES } from '@/constants/characterSources';
 import { GameColors } from '@/theme/colors';
@@ -89,10 +90,13 @@ export const AvatarFrame: React.FC<AvatarFrameProps> = ({
         {locked ? (
           <Ionicons name="lock-closed" size={size * 0.45} color={GameColors.textSecondary} />
         ) : avatarSource ? (
-          <Image
+          <ExpoImage
             source={avatarSource}
             style={{ width: size, height: size, borderRadius: size / 2 }}
-            resizeMode="cover"
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={0}
+            priority="high"
           />
         ) : (
           <Ionicons name="person" size={size * 0.55} color={GameColors.accentGold} />
@@ -118,7 +122,7 @@ export const AvatarFrame: React.FC<AvatarFrameProps> = ({
 
       {/* ── Frame image overlay ──────────────────────────────────────── */}
       {frameSource && !locked && (
-        <Image
+        <ExpoImage
           source={frameSource}
           style={{
             position: 'absolute',
@@ -127,8 +131,9 @@ export const AvatarFrame: React.FC<AvatarFrameProps> = ({
             top:  0,
             left: 0,
           }}
-          // 'contain' in heroMode keeps the full decoration visible without cropping
-          resizeMode={useHero ? 'contain' : 'cover'}
+          contentFit={useHero ? 'contain' : 'cover'}
+          cachePolicy="memory-disk"
+          transition={0}
         />
       )}
 

@@ -14,6 +14,9 @@ import { useUserStore } from '@/store/userStore';
 import { ROUTES } from '@/navigation/routes';
 import { adService } from '@/services/AdService';
 import { useAudio } from '@/hooks/useAudio';
+import { preloadLobbyChrome } from '@/constants/lobbyAssets';
+
+void preloadLobbyChrome();
 
 const queryClient = new QueryClient();
 

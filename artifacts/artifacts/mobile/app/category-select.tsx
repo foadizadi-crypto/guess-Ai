@@ -1,5 +1,16 @@
-import React, { useState } from 'react';
-import { Alert, StyleSheet, View, Text, TouchableOpacity, FlatList, Platform, ListRenderItem, Modal } from 'react-native';
+import React, { memo, useState } from 'react';
+import {
+  Alert,
+  LayoutChangeEvent,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +20,18 @@ import { BackButton } from '@/components/BackButton';
 import { GradientButton } from '@/components/GradientButton';
 import { GameColors } from '@/theme/colors';
 import { Typography } from '@/theme/typography';
+import {
+  PlayColumn,
+  TILE_GAP,
+  TILE_PAD_H,
+  TILE_PAD_V,
+  TILE_TITLE_LINES,
+  categoryColumnCount,
+  categoryTileSize,
+  layoutStyles,
+  playColumnMaxWidth,
+  usePopupChromeSize,
+} from '@/theme/webLayout';
 import { useGameStore } from '@/store/gameStore';
 import { useUserStore } from '@/store/userStore';
 import { ROUTES } from '@/navigation/routes';
@@ -54,6 +77,79 @@ const CATEGORY_TILES: Record<Category, Omit<CatItem, 'key'>> = {
 };
 
 const CATEGORIES: CatItem[] = CATEGORY_LAYOUT.map((key) => ({ key, ...CATEGORY_TILES[key] }));
+
+function startCopy(category: Category, difficulty: string): string {
+  if (category === 'speed_card') return `5 cards • Speed Card\n${difficulty} mode`;
+  if (category === 'count_quick') return `5 questions • Count Quick\n${difficulty} mode`;
+  if (category === 'lost_item') return `5 questions • Lost Item\n${difficulty} mode`;
+  if (category === 'flip_mind') return `Flip Mind\n${difficulty} mode`;
+  if (category === 'gold_rush') return `Gold Rush\n${difficulty} mode`;
+  if (category === 'tick_lock') return `Tick Lock\n${difficulty} mode`;
+  if (category === 'twin_link') return `Twin Link\n${difficulty} mode`;
+  if (category === 'neon_flash') return `Neon Flash\n${difficulty} mode`;
+  if (category === 'glitch_spy') return `Glitch Spy\n${difficulty} mode`;
+  if (category === 'color_trap') return `Color Trap\n${difficulty} mode`;
+  return `20 questions • 120 seconds\n${category} • ${difficulty} mode`;
+}
+
+const CategoryTile = memo(function CategoryTile({
+  item,
+  index,
+  size,
+  columns,
+  selected,
+  locked,
+  onPress,
+}: {
+  item: CatItem;
+  index: number;
+  size: number;
+  columns: number;
+  selected: boolean;
+  locked: boolean;
+  onPress: () => void;
+}) {
+  const lastInRow = (index + 1) % columns === 0;
+  const color = locked ? GameColors.textSecondary : selected ? item.color : GameColors.textSecondary;
+  return (
+    <TouchableOpacity
+      style={[
+        styles.catCard,
+        {
+          width: size,
+          height: size,
+          marginRight: lastInRow ? 0 : TILE_GAP,
+          marginBottom: TILE_GAP,
+          borderColor: selected && !locked ? item.color : GameColors.border,
+        },
+        selected && !locked && { backgroundColor: `${item.color}18` },
+        locked && styles.catLocked,
+      ]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <Text style={[styles.slot, { color }]}>{index + 1}</Text>
+      <Ionicons name={item.icon} size={32} color={color} />
+      <Text
+        style={[layoutStyles.tileTitle, { color }]}
+        numberOfLines={TILE_TITLE_LINES}
+        ellipsizeMode="tail"
+      >
+        {item.label}
+      </Text>
+      {locked ? (
+        <View style={styles.lockBadge}>
+          <Ionicons name="lock-closed" size={12} color={GameColors.textWhite} />
+          <Text style={styles.lockText}>Lv {categoryUnlockLevel(item.key)}</Text>
+        </View>
+      ) : selected ? (
+        <View style={[styles.badge, { backgroundColor: item.color }]}>
+          <Ionicons name="checkmark" size={10} color={GameColors.backgroundPrimary} />
+        </View>
+      ) : null}
+    </TouchableOpacity>
+  );
+});
 
 export default function CategorySelectScreen() {
   const router = useRouter();
@@ -114,103 +210,74 @@ export default function CategorySelectScreen() {
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
   const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
+  const popupH = usePopupChromeSize();
+  const { width: windowWidth } = useWindowDimensions();
+  const [gridW, setGridW] = useState(0);
 
-  const renderItem: ListRenderItem<CatItem> = ({ item, index }) => {
-    const selected = selectedCategory === item.key;
-    const locked = !isCategoryUnlocked(item.key, playerLevel);
-    const slot = index + 1;
-    return (
-      <TouchableOpacity
-        style={[
-          styles.catCard,
-          { borderColor: selected && !locked ? item.color : GameColors.border },
-          selected && !locked && { backgroundColor: `${item.color}18` },
-          locked && styles.catLocked,
-        ]}
-        onPress={() => handleSelect(item.key)}
-        activeOpacity={0.8}
-      >
-        <Text style={[styles.slot, { color: locked ? GameColors.textSecondary : item.color }]}>{slot}</Text>
-        <Ionicons name={item.icon} size={32} color={locked ? GameColors.textSecondary : selected ? item.color : GameColors.textSecondary} />
-        <Text style={[styles.catLabel, { color: locked ? GameColors.textSecondary : selected ? item.color : GameColors.textSecondary }]}>
-          {item.label}
-        </Text>
-        {locked ? (
-          <View style={styles.lockBadge}>
-            <Ionicons name="lock-closed" size={12} color={GameColors.textWhite} />
-            <Text style={styles.lockText}>Lv {categoryUnlockLevel(item.key)}</Text>
-          </View>
-        ) : selected ? (
-          <View style={[styles.badge, { backgroundColor: item.color }]}>
-            <Ionicons name="checkmark" size={10} color={GameColors.backgroundPrimary} />
-          </View>
-        ) : null}
-      </TouchableOpacity>
-    );
+  const onGridLayout = (event: LayoutChangeEvent) => {
+    const next = Math.round(event.nativeEvent.layout.width);
+    setGridW((prev) => (prev === next ? prev : next));
   };
+
+  const innerWidth = gridW > 0 ? gridW : Math.max(0, playColumnMaxWidth(windowWidth) - 40);
+  const columns = categoryColumnCount(innerWidth);
+  const tileSize = categoryTileSize(innerWidth, columns);
 
   return (
     <AnimatedBackground>
-      <View style={[styles.container, { paddingTop: topPad + 16, paddingBottom: botPad + 24 }]}>
-        <View style={styles.header}>
-          <BackButton />
-          <Text style={[styles.title, { textAlign }]}>Pick a Category</Text>
-          <View style={styles.placeholder} />
-        </View>
+      <PlayColumn>
+        <View style={[styles.container, { paddingTop: topPad + 16, paddingBottom: botPad + 24 }]}>
+          <View style={styles.header}>
+            <BackButton />
+            <Text style={[styles.title, { textAlign }]}>Pick a Category</Text>
+            <View style={styles.placeholder} />
+          </View>
 
-        <Text style={[styles.sub, { textAlign }]}>Animals, Nature, and Food start unlocked. Independent games are categories 16–25.</Text>
+          <Text style={[styles.sub, { textAlign }]}>
+            Animals, Nature, and Food start unlocked. Independent games are categories 16–25.
+          </Text>
 
-        <FlatList
-          style={styles.list}
-          data={CATEGORIES}
-          keyExtractor={(item) => item.key}
-          renderItem={renderItem}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
-          contentContainerStyle={styles.grid}
-          showsVerticalScrollIndicator
-          initialNumToRender={CATEGORIES.length}
-          windowSize={12}
-          removeClippedSubviews={false}
-        />
+          <ScrollView
+            style={styles.list}
+            contentContainerStyle={[styles.grid, Platform.OS === 'web' && styles.gridWeb]}
+            showsVerticalScrollIndicator
+          >
+            <View style={styles.gridWrap} onLayout={onGridLayout}>
+              {tileSize > 0
+                ? CATEGORIES.map((item, index) => (
+                    <CategoryTile
+                      key={item.key}
+                      item={item}
+                      index={index}
+                      size={tileSize}
+                      columns={columns}
+                      selected={selectedCategory === item.key}
+                      locked={!isCategoryUnlocked(item.key, playerLevel)}
+                      onPress={() => handleSelect(item.key)}
+                    />
+                  ))
+                : null}
+            </View>
+          </ScrollView>
 
           <GradientButton
-          title="Start Game"
+            title="Start Game"
             onPress={() => {
               if (selectedCategory === 'gold_rush') handlePlay();
               else setConfirmVisible(true);
             }}
-          testID="start-game-button"
-        />
-      </View>
+            testID="start-game-button"
+          />
+        </View>
+      </PlayColumn>
       <Modal visible={confirmVisible} transparent animationType="fade" onRequestClose={() => setConfirmVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+        <View style={layoutStyles.popupBackdrop}>
+          <View style={[layoutStyles.popupCard, { height: popupH }]}>
             <Ionicons name="eye-outline" size={42} color={GameColors.accentGold} />
-            <Text style={styles.modalTitle}>Start Game?</Text>
-            <Text style={styles.modalCopy}>
-              {selectedCategory === 'speed_card'
-                ? `5 cards • Speed Card\n${selectedDifficulty} mode`
-                : selectedCategory === 'count_quick'
-                  ? `5 questions • Count Quick\n${selectedDifficulty} mode`
-                  : selectedCategory === 'lost_item'
-                    ? `5 questions • Lost Item\n${selectedDifficulty} mode`
-                    : selectedCategory === 'flip_mind'
-                      ? `Flip Mind\n${selectedDifficulty} mode`
-                      : selectedCategory === 'gold_rush'
-                        ? `Gold Rush\n${selectedDifficulty} mode`
-                        : selectedCategory === 'tick_lock'
-                          ? `Tick Lock\n${selectedDifficulty} mode`
-                          : selectedCategory === 'twin_link'
-                            ? `Twin Link\n${selectedDifficulty} mode`
-                            : selectedCategory === 'neon_flash'
-                              ? `Neon Flash\n${selectedDifficulty} mode`
-                              : selectedCategory === 'glitch_spy'
-                                ? `Glitch Spy\n${selectedDifficulty} mode`
-                                : selectedCategory === 'color_trap'
-                                  ? `Color Trap\n${selectedDifficulty} mode`
-                                  : `20 questions • 120 seconds\n${selectedCategory} • ${selectedDifficulty} mode`}
-            </Text>
+            <Text style={layoutStyles.popupTitle}>Start Game?</Text>
+            <ScrollView style={layoutStyles.popupScroller} contentContainerStyle={layoutStyles.popupScrollContent}>
+              <Text style={[layoutStyles.popupBody, styles.modalCopy]}>{startCopy(selectedCategory, selectedDifficulty)}</Text>
+            </ScrollView>
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelButton} onPress={() => setConfirmVisible(false)}>
                 <Text style={styles.cancelText}>Not yet</Text>
@@ -240,28 +307,32 @@ const styles = StyleSheet.create({
   sub: { ...Typography.caption, color: GameColors.textSecondary },
   list: { flex: 1 },
   grid: { paddingBottom: 28 },
-  row: { gap: 12, marginBottom: 12 },
+  gridWeb: { paddingRight: 14 },
+  gridWrap: {
+    width: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
   catCard: {
-    flex: 1,
-    aspectRatio: 1,
     borderRadius: 16,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    gap: 8,
+    paddingHorizontal: TILE_PAD_H,
+    paddingVertical: TILE_PAD_V,
     backgroundColor: 'rgba(255,255,255,0.04)',
     position: 'relative',
-  },
-  catLabel: {
-    ...Typography.caption,
-    fontFamily: 'Inter_600SemiBold',
-    fontWeight: '600',
+    overflow: 'hidden',
+    flexGrow: 0,
+    flexShrink: 0,
   },
   slot: {
     position: 'absolute',
     top: 8,
     left: 8,
     fontSize: 11,
+    lineHeight: 14,
     fontFamily: 'Inter_700Bold',
     fontWeight: '700',
   },
@@ -288,12 +359,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  modalCard: { width: '100%', borderRadius: 24, padding: 24, alignItems: 'center', backgroundColor: GameColors.card, borderWidth: 1, borderColor: GameColors.cardBorder, gap: 14 },
-  modalTitle: { ...Typography.header, color: GameColors.textWhite, fontSize: 28 },
-  modalCopy: { ...Typography.caption, color: GameColors.textSecondary, textAlign: 'center', textTransform: 'capitalize' },
-  modalActions: { flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%', marginTop: 6 },
-  cancelButton: { flex: 1, paddingVertical: 16, borderRadius: 14, borderWidth: 1, borderColor: GameColors.border, alignItems: 'center' },
+  modalCopy: { textTransform: 'capitalize' },
+  modalActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+    marginTop: 6,
+    flexShrink: 0,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: GameColors.border,
+    alignItems: 'center',
+  },
   cancelText: { ...Typography.small, color: GameColors.textWhite, fontFamily: 'Inter_600SemiBold' },
   confirmButton: { flex: 1 },
 });

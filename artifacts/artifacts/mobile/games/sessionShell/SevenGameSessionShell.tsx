@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GameColors } from '@/theme/colors';
+import { layoutStyles, usePopupChromeSize } from '@/theme/webLayout';
 import { requestContinueReward } from './requestContinueReward';
 import type { SevenGameSessionShellProps } from './types';
 
@@ -61,29 +62,26 @@ export default function SevenGameSessionShell({
   };
 
   const playing = phase === 'play' && !wrongOpen;
+  const popupH = usePopupChromeSize();
 
-  const coverInner = (kind: 'howTo' | 'count') => (
-    <>
-      {kind === 'howTo' ? (
-        <ScrollView
-          style={styles.howToScroller}
-          contentContainerStyle={styles.howToScroll}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={[styles.howToTitle, treasure && styles.treasureTitle]}>{howToTitle}</Text>
-          <Text style={[styles.howToBody, treasure && styles.treasureBody]}>{howToBody}</Text>
-          <TouchableOpacity
-            style={[styles.readyBtn, treasure && styles.treasureReady]}
-            onPress={handleReady}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.readyText, treasure && styles.treasureReadyText]}>I'M READY</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      ) : (
-        <Text style={[styles.countText, treasure && styles.treasureCount]}>{countLabel}</Text>
-      )}
-    </>
+  const howToCard = (
+    <View style={[layoutStyles.popupCard, treasure && styles.treasurePopup, { height: popupH }]}>
+      <Text style={[layoutStyles.popupTitle, treasure && styles.treasureTitle]}>{howToTitle}</Text>
+      <ScrollView
+        style={layoutStyles.popupScroller}
+        contentContainerStyle={layoutStyles.popupScrollContent}
+        showsVerticalScrollIndicator
+      >
+        <Text style={[layoutStyles.popupBody, treasure && styles.treasureBody]}>{howToBody}</Text>
+      </ScrollView>
+      <TouchableOpacity
+        style={[styles.readyBtn, treasure && styles.treasureReady]}
+        onPress={handleReady}
+        activeOpacity={0.85}
+      >
+        <Text style={[styles.readyText, treasure && styles.treasureReadyText]}>I'M READY</Text>
+      </TouchableOpacity>
+    </View>
   );
 
   return (
@@ -94,37 +92,43 @@ export default function SevenGameSessionShell({
 
       {phase === 'howTo' ? (
         treasure ? (
-          <LinearGradient colors={['rgba(7,4,13,0.92)', 'rgba(20,10,8,0.88)']} style={styles.cover}>
-            {coverInner('howTo')}
+          <LinearGradient colors={['rgba(7,4,13,0.92)', 'rgba(20,10,8,0.88)']} style={layoutStyles.popupCover}>
+            {howToCard}
           </LinearGradient>
         ) : (
-          <View style={styles.cover}>{coverInner('howTo')}</View>
+          <View style={layoutStyles.popupCover}>{howToCard}</View>
         )
       ) : null}
 
       {phase === 'countdown' ? (
         treasure ? (
-          <LinearGradient colors={['rgba(7,4,13,0.9)', 'rgba(20,10,8,0.86)']} style={styles.cover}>
-            {coverInner('count')}
+          <LinearGradient colors={['rgba(7,4,13,0.9)', 'rgba(20,10,8,0.86)']} style={styles.countCover}>
+            <Text style={[styles.countText, treasure && styles.treasureCount]}>{countLabel}</Text>
           </LinearGradient>
         ) : (
-          <View style={styles.cover}>{coverInner('count')}</View>
+          <View style={styles.countCover}>
+            <Text style={styles.countText}>{countLabel}</Text>
+          </View>
         )
       ) : null}
 
       <Modal visible={wrongOpen} transparent animationType="fade" onRequestClose={onExitToCategory}>
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.popup, treasure && styles.treasurePopup]}>
-            <Text style={[styles.popupTitle, treasure && styles.treasureTitle]}>Wrong</Text>
-            <TouchableOpacity style={[styles.popupBtn, treasure && styles.treasurePopupBtn]} onPress={handleContinue} activeOpacity={0.85}>
-              <Text style={styles.popupBtnText}>DEV / NO-AD CONTINUE</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.popupBtn, treasure && styles.treasurePopupBtn]} onPress={onRestart} activeOpacity={0.85}>
-              <Text style={styles.popupBtnText}>RESTART</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.popupBtn, styles.exitBtn]} onPress={onExitToCategory} activeOpacity={0.85}>
-              <Text style={styles.popupBtnText}>EXIT TO CATEGORY</Text>
-            </TouchableOpacity>
+        <View style={layoutStyles.popupBackdrop}>
+          <View style={[layoutStyles.popupCard, treasure && styles.treasurePopup, { height: popupH }]}>
+            <Text style={[layoutStyles.popupTitle, treasure && styles.treasureTitle]}>Wrong</Text>
+            <ScrollView style={layoutStyles.popupScroller} contentContainerStyle={layoutStyles.popupScrollContent}>
+              <View style={styles.wrongActions}>
+                <TouchableOpacity style={[styles.popupBtn, treasure && styles.treasurePopupBtn]} onPress={handleContinue} activeOpacity={0.85}>
+                  <Text style={styles.popupBtnText}>DEV / NO-AD CONTINUE</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.popupBtn, treasure && styles.treasurePopupBtn]} onPress={onRestart} activeOpacity={0.85}>
+                  <Text style={styles.popupBtnText}>RESTART</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.popupBtn, styles.exitBtn]} onPress={onExitToCategory} activeOpacity={0.85}>
+                  <Text style={styles.popupBtnText}>EXIT TO CATEGORY</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -135,45 +139,23 @@ export default function SevenGameSessionShell({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: GameColors.backgroundPrimary },
   playArea: { flex: 1 },
-  cover: {
+  countCover: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: GameColors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 28,
   },
-  howToScroller: {
-    flex: 1,
-    width: '100%',
-  },
-  howToScroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 24,
-    width: '100%',
-  },
-  howToTitle: {
-    color: GameColors.textWhite,
-    fontSize: 26,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  howToBody: {
-    color: GameColors.textSecondary,
-    fontSize: 18,
-    lineHeight: 26,
-    textAlign: 'center',
-    marginBottom: 36,
-    width: '100%',
-  },
   readyBtn: {
     backgroundColor: GameColors.accentGold,
     minWidth: 240,
+    maxWidth: '100%',
+    width: '100%',
+    alignSelf: 'stretch',
     paddingVertical: 18,
     paddingHorizontal: 28,
     borderRadius: 16,
+    flexShrink: 0,
   },
   readyText: {
     color: GameColors.backgroundPrimary,
@@ -187,29 +169,9 @@ const styles = StyleSheet.create({
     fontSize: 72,
     fontWeight: '800',
   },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: GameColors.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  popup: {
+  wrongActions: {
     width: '100%',
-    maxWidth: 360,
-    backgroundColor: GameColors.card,
-    borderRadius: 20,
-    padding: 22,
     gap: 12,
-    borderWidth: 1,
-    borderColor: GameColors.border,
-  },
-  popupTitle: {
-    color: GameColors.textWhite,
-    fontSize: 22,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 8,
   },
   popupBtn: {
     backgroundColor: GameColors.backgroundSecondary,

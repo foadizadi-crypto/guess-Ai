@@ -1,0 +1,17 @@
+export const SpyTone = {
+  void: '#03080C',
+  velvet: '#07141A',
+  phosphor: '#34F5C5',
+  phosphorHot: '#9AFFE6',
+  phosphorDeep: '#0B5C4A',
+  cyan: '#22D3EE',
+  cyanHot: '#67E8F9',
+  cyanDeep: '#0E7490',
+  steel: '#94A3B8',
+  steelDeep: '#1E293B',
+  ink: '#E8FBFF',
+  mute: 'rgba(232,251,255,0.62)',
+  alert: '#FB7185',
+  alertHot: '#FDA4AF',
+  alertDeep: '#9F1239',
+} as const;

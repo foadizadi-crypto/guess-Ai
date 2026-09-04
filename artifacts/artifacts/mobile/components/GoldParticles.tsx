@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, View, Dimensions } from 'react-native';
+import { StyleSheet, View, Dimensions, Platform } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -115,9 +115,12 @@ const SingleParticle: React.FC<{ p: Particle }> = ({ p }) => {
   return <Animated.View style={style} />;
 };
 
+const VISIBLE_PARTICLES =
+  Platform.OS === "android" ? PARTICLES.slice(0, 6) : PARTICLES;
+
 export const GoldParticles: React.FC = () => (
   <View style={StyleSheet.absoluteFill} pointerEvents="none">
-    {PARTICLES.map((p) => (
+    {VISIBLE_PARTICLES.map((p) => (
       <SingleParticle key={p.id} p={p} />
     ))}
   </View>

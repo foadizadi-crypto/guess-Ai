@@ -1,0 +1,18 @@
+export const TrapTone = {
+  void: '#07040F',
+  velvet: '#16081C',
+  magenta: '#FF2D95',
+  magentaHot: '#FF7AC3',
+  magentaDeep: '#6B1048',
+  cyan: '#22D3EE',
+  cyanHot: '#A5F3FC',
+  cyanDeep: '#0E4A5C',
+  violet: '#8B5CF6',
+  chrome: '#C5CEE0',
+  chromeHot: '#F2F5FF',
+  chromeDeep: '#1C2436',
+  ink: '#F4F7FF',
+  mute: 'rgba(244,247,255,0.62)',
+  good: '#22D3EE',
+  bad: '#FF2D95',
+} as const;

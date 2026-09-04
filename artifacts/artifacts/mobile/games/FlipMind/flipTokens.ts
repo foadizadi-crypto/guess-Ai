@@ -1,0 +1,17 @@
+export const MindTone = {
+  void: '#070414',
+  velvet: '#120628',
+  violet: '#7C4DFF',
+  metal: '#A78BFA',
+  metalHot: '#E9D5FF',
+  metalDeep: '#4C1D95',
+  cyan: '#22D3EE',
+  ink: '#F5F3FF',
+  mute: 'rgba(245,243,255,0.64)',
+  green: '#34D399',
+  greenHot: '#6EE7B7',
+  greenDeep: '#065F46',
+  red: '#F43F5E',
+  redHot: '#FB7185',
+  redDeep: '#881337',
+} as const;

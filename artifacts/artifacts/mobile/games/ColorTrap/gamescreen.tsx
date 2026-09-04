@@ -1,53 +1,22 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, {
-  Easing,
-  interpolateColor,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useEffect, useState } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStroopFlow } from './flow';
 import { SevenGameSessionShell } from '@/games/sessionShell';
 import type { SevenGameScreenProps } from '@/games/sessionShell';
-import { AnimatedBackground } from '@/components/AnimatedBackground';
-import { GameColors } from '@/theme/colors';
-import { Typography } from '@/theme/typography';
+import { HudPlate, allowBlurFor, allowBurstFor, useVisualQuality } from '@/games/visualFoundation';
 import { useRTL } from '@/hooks/useRTL';
+import { ColorTrapWorld } from './ColorTrapWorld';
+import { ColorTrapHud } from './ColorTrapHud';
+import { WordStage } from './WordStage';
+import { TrapOption } from './TrapOption';
+import { TrapTone } from './trapTokens';
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+const HOW_TO_TITLE = 'Color Trap';
+const HOW_TO_BODY = 'Choose the color of the text, not the word itself.';
 
-function ColorTrapOption({ label, onPress }: { label: string; onPress: () => void }) {
-  const scale = useSharedValue(1);
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  return (
-    <AnimatedPressable
-      onPress={onPress}
-      onPressIn={() => {
-        scale.value = withTiming(0.96, { duration: 80 });
-      }}
-      onPressOut={() => {
-        scale.value = withSpring(1, { damping: 16, stiffness: 280 });
-      }}
-      style={[styles.optionBtn, animatedStyle]}
-    >
-      <LinearGradient
-        colors={['rgba(255,255,255,0.10)', 'rgba(255,255,255,0.03)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.optionFill}
-      >
-        <Text style={styles.optionText}>{label}</Text>
-      </LinearGradient>
-    </AnimatedPressable>
-  );
-}
+type Flash = 'correct' | 'wrong' | null;
+type PickMark = { opt: string; ok: boolean };
 
 export default function StroopGameScreen({
   difficulty,
@@ -71,8 +40,9 @@ export default function StroopGameScreen({
 
   const insets = useSafeAreaInsets();
   const { flexDirection } = useRTL();
-  const topPad = Platform.OS === 'web' ? 54 : insets.top + 12;
-  const botPad = Platform.OS === 'web' ? 24 : insets.bottom + 16;
+  const quality = useVisualQuality();
+  const topPad = Platform.OS === 'web' ? 54 : insets.top + 10;
+  const botPad = Platform.OS === 'web' ? 24 : insets.bottom + 14;
 
   const questionKey = currentQuestion
     ? `${round}:${currentQuestion.word.name}:${currentQuestion.textColor.hex}:${currentQuestion.options.join('|')}`
@@ -85,44 +55,44 @@ export default function StroopGameScreen({
     setRoundCap(Math.max(timeLeft, 0.1));
   }
 
+  const [flash, setFlash] = useState<Flash>(null);
+  const [pickMark, setPickMark] = useState<PickMark | null>(null);
+
+  useEffect(() => {
+    setPickMark(null);
+  }, [questionKey]);
+
+  useEffect(() => {
+    if (wrongOpen) setFlash('wrong');
+  }, [wrongOpen]);
+
+  useEffect(() => {
+    if (!flash) return;
+    const id = setTimeout(() => setFlash(null), 280);
+    return () => clearTimeout(id);
+  }, [flash, questionKey]);
+
   const timerRatio = Math.min(1, Math.max(0, timeLeft / roundCap));
-  const ink = currentQuestion?.textColor.hex ?? GameColors.accentGold;
+  const ink = currentQuestion?.textColor.hex ?? TrapTone.cyan;
+  const urgency = playing && !wrongOpen && timeLeft <= 1;
 
-  const wordScale = useSharedValue(1);
-  const timerFill = useSharedValue(1);
+  const onPick = (opt: string) => {
+    if (!playing || wrongOpen || !currentQuestion) return;
+    const ok = opt === currentQuestion.textColor.name;
+    setPickMark({ opt, ok });
+    setFlash(ok ? 'correct' : 'wrong');
+    submitAnswer(opt);
+  };
 
-  useEffect(() => {
-    wordScale.value = 0.86;
-    wordScale.value = withSpring(1, { damping: 13, stiffness: 210 });
-  }, [questionKey, wordScale]);
-
-  useEffect(() => {
-    timerFill.value = withTiming(timerRatio, { duration: 90, easing: Easing.linear });
-  }, [timerRatio, timerFill]);
-
-  const wordStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: wordScale.value }],
-  }));
-
-  const timerBarStyle = useAnimatedStyle(() => ({
-    width: `${(timerFill.value * 100).toFixed(2)}%` as `${number}%`,
-    backgroundColor: interpolateColor(
-      timerFill.value,
-      [0, 0.28, 1],
-      [GameColors.accentRed, GameColors.accentGold, GameColors.accentGreen],
-    ),
-  }));
-
-  const timerColor = useMemo(() => {
-    if (timerRatio <= 0.28) return GameColors.accentRed;
-    if (timerRatio <= 0.55) return GameColors.accentGold;
-    return GameColors.accentGreen;
-  }, [timerRatio]);
+  const optionState = (opt: string) => {
+    if (!pickMark || pickMark.opt !== opt) return 'idle' as const;
+    return pickMark.ok ? ('correct' as const) : ('wrong' as const);
+  };
 
   return (
     <SevenGameSessionShell
-      howToTitle="Color Trap"
-      howToBody="Choose the color of the text, not the word itself."
+      howToTitle={HOW_TO_TITLE}
+      howToBody={HOW_TO_BODY}
       skipHowTo={skipHowTo}
       wrongOpen={wrongOpen}
       onHowToFinished={onHowToFinished}
@@ -130,214 +100,81 @@ export default function StroopGameScreen({
       onContinue={() => {
         retryRound();
         setWrongOpen(false);
+        setFlash(null);
+        setPickMark(null);
       }}
       onExitToCategory={onExitToCategory}
       onRestart={onRestart}
     >
-      <AnimatedBackground>
-        <View style={[styles.container, { paddingTop: topPad, paddingBottom: botPad }]}>
-          <View style={[styles.hudRow, { flexDirection }]}>
-            <View style={styles.hudCard}>
-              <Text style={styles.hudLabel}>Round</Text>
-              <Text style={styles.hudValue}>
-                {round} of {maxQuestions}
-              </Text>
-            </View>
-            <View style={styles.hudCard}>
-              <Text style={styles.hudLabel}>Score</Text>
-              <Text style={[styles.hudValue, styles.hudScore]}>{score}</Text>
-            </View>
-          </View>
+      <ColorTrapWorld quality={quality} urgency={urgency} flash={allowBurstFor(quality) ? flash : null} ink={ink}>
+        <View style={[styles.play, { paddingTop: topPad, paddingBottom: botPad }]}>
+          <ColorTrapHud
+            round={round}
+            maxRounds={maxQuestions}
+            score={score}
+            timeLeft={timeLeft}
+            timeRatio={timerRatio}
+            rowStyle={{ flexDirection }}
+            glow={allowBlurFor(quality)}
+          />
 
-          <View style={styles.timerCard}>
-            <View style={[styles.timerMeta, { flexDirection }]}>
-              <Text style={styles.hudLabel}>Time</Text>
-              <Text style={[styles.timerValue, { color: timerColor }]}>{timeLeft.toFixed(1)}s</Text>
-            </View>
-            <View style={styles.timerTrack}>
-              <Animated.View style={[styles.timerFill, timerBarStyle]} />
-            </View>
-          </View>
-
-          <View style={styles.hintChip}>
-            <Text style={styles.instruction}>Choose the text color (not the word itself!)</Text>
-          </View>
+          <HudPlate
+            blur={allowBlurFor(quality)}
+            border="rgba(34,211,238,0.38)"
+            fill={['rgba(18,8,32,0.9)', 'rgba(8,4,18,0.8)']}
+            style={styles.hintPlate}
+          >
+            <Text style={styles.hint}>Name the ink color. Ignore the written word.</Text>
+          </HudPlate>
 
           {!currentQuestion ? null : (
             <>
-              <Animated.View
-                style={[
-                  styles.wordStage,
-                  wordStyle,
-                  {
-                    borderColor: ink,
-                    shadowColor: ink,
-                  },
-                ]}
-              >
-                <LinearGradient
-                  colors={['rgba(255,255,255,0.08)', GameColors.backgroundPrimary]}
-                  style={styles.wordStageInner}
-                >
-                  <Text
-                    style={[
-                      styles.mainWord,
-                      {
-                        color: ink,
-                        textShadowColor: ink,
-                      },
-                    ]}
-                  >
-                    {currentQuestion.word.name}
-                  </Text>
-                </LinearGradient>
-              </Animated.View>
-
-              <View style={styles.optionsGrid}>
+              <WordStage
+                word={currentQuestion.word.name}
+                ink={ink}
+                questionKey={questionKey}
+                flash={allowBurstFor(quality) ? flash : null}
+                burst={allowBurstFor(quality)}
+              />
+              <View style={styles.options}>
                 {currentQuestion.options.map((opt, i) => (
-                  <ColorTrapOption key={`${questionKey}-${i}`} label={opt} onPress={() => submitAnswer(opt)} />
+                  <TrapOption
+                    key={`${questionKey}-${i}`}
+                    label={opt}
+                    onPress={() => onPick(opt)}
+                    state={optionState(opt)}
+                    index={i}
+                  />
                 ))}
               </View>
             </>
           )}
         </View>
-      </AnimatedBackground>
+      </ColorTrapWorld>
     </SevenGameSessionShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  play: {
     flex: 1,
-    paddingHorizontal: 20,
-    gap: 14,
-  },
-  hudRow: {
-    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     gap: 12,
   },
-  hudCard: {
-    flex: 1,
-    backgroundColor: GameColors.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: GameColors.cardBorder,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+  hintPlate: {
+    alignSelf: 'stretch',
   },
-  hudLabel: {
-    ...Typography.small,
-    color: GameColors.textSecondary,
-    letterSpacing: 0.6,
-    marginBottom: 2,
-  },
-  hudValue: {
-    ...Typography.semibold,
-    color: GameColors.textWhite,
-    fontFamily: 'Inter_700Bold',
-  },
-  hudScore: {
-    color: GameColors.accentGold,
-  },
-  timerCard: {
-    backgroundColor: GameColors.backgroundSecondary,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: GameColors.border,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    gap: 10,
-  },
-  timerMeta: {
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  timerValue: {
-    fontSize: 28,
-    lineHeight: 34,
-    fontFamily: 'Inter_700Bold',
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
-  timerTrack: {
-    height: 8,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.10)',
-  },
-  timerFill: {
-    height: 8,
-    borderRadius: 8,
-  },
-  hintChip: {
-    alignSelf: 'center',
-    backgroundColor: GameColors.coinBg,
-    borderWidth: 1,
-    borderColor: GameColors.coinBorder,
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  instruction: {
-    ...Typography.bodyMedium,
-    color: GameColors.accentGold,
+  hint: {
+    color: TrapTone.ink,
+    fontSize: 14,
+    lineHeight: 20,
     textAlign: 'center',
     fontFamily: 'Inter_600SemiBold',
   },
-  wordStage: {
-    flexGrow: 1,
-    minHeight: 168,
-    borderRadius: 28,
-    borderWidth: 1.5,
-    overflow: 'hidden',
-    shadowOpacity: 0.55,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 12,
-  },
-  wordStageInner: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-  },
-  mainWord: {
-    fontSize: 56,
-    lineHeight: 68,
-    fontWeight: '800',
-    fontFamily: 'Inter_700Bold',
-    textAlign: 'center',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 22,
-  },
-  optionsGrid: {
+  options: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    marginTop: 4,
-  },
-  optionBtn: {
-    width: '47%',
-    flexGrow: 1,
-    minHeight: 72,
-    borderRadius: 18,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: GameColors.border,
-    backgroundColor: GameColors.card,
-  },
-  optionFill: {
-    flex: 1,
-    minHeight: 72,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 12,
-  },
-  optionText: {
-    ...Typography.semibold,
-    color: GameColors.textWhite,
-    fontFamily: 'Inter_700Bold',
-    textAlign: 'center',
+    marginTop: 2,
   },
 });

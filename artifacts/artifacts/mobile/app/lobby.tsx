@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState, useRef } from "react";
+import React, { useEffect, useCallback, useState, useRef, useMemo } from "react";
 import {
   StyleSheet,
   View,
@@ -7,7 +7,6 @@ import {
   Platform,
   Alert,
   Switch,
-  Image,
   Animated as RNAnimated,
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
@@ -15,6 +14,12 @@ import LottieView from "lottie-react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { hapticsService } from '@/services/HapticsService';
+import {
+  getLobbyBackground,
+  getLobbyIcon,
+  isLobbyChromeReady,
+  preloadLobbyChrome,
+} from "@/constants/lobbyAssets";
 
 import { AvatarFrame } from "@/components/AvatarFrame";
 import { AnimatedIcon } from "@/components/AnimatedIcon";
@@ -44,6 +49,10 @@ const HITBOX_Z_BASE = 10000;
 
 const ICON_SCALE = 1.2;
 const HITBOX_SCALE = 1;
+/** Android (and web) hitch when many Reanimated loops + Lottie run during decode. */
+const REDUCE_LOBBY_MOTION = Platform.OS !== "ios";
+const SHOW_ENTRY_FLOURISH = Platform.OS === "ios";
+const CHROME_PAINT_TIMEOUT_MS = 800;
 
 function lobbyAlert(title: string, body: string) {
   if (Platform.OS === "web" && typeof globalThis.alert === "function") {
@@ -69,33 +78,10 @@ interface HitboxItem {
   iconScale?: number; // ← جدید: برای تنظیم scale جداگانه
 }
 
-// =====================================================
-// ICON ASSETS
-// =====================================================
-
-const buttonIcons: Record<string, any> = {
-  coin: require("../assets/icon/coin.webp"),
-  gem: require("../assets/icon/gem.webp"),
-  stamina: require("../assets/icon/stamina.webp"),
-  spinwheel: require("../assets/icon/spinwheel.webp"),
-  settings: require("../assets/icon/settings.webp"),
-  play: require("../assets/icon/play.webp"),
-  legendary_pack: require("../assets/icon/legendary_pack.webp"),
-  gem_pack: require("../assets/icon/gem_pack.webp"),
-  admob: require("../assets/icon/AdMob_BG.webp"),
-  leaderboard: require("../assets/icon/leaderboard.webp"),
-  dailyreward: require("../assets/icon/daily-reward.webp"),
-  shop: require("../assets/icon/shop.webp"),
-  friends: require("../assets/icon/friends.webp"),
-  achievement: require("../assets/icon/achievement.webp"),
-  stand_avatar: require("../assets/icon/avatar_pedestal.webp"),
-};
-
-// =====================================================
-// ICON ANIMATION MAP
-// =====================================================
-
 const getIconAnimation = (id: string): "float" | "pulse" | "spin" | "none" => {
+  if (REDUCE_LOBBY_MOTION) {
+    return id === "play" ? "pulse" : "none";
+  }
   switch (id) {
     case "play":
       return "pulse";
@@ -120,6 +106,21 @@ const getIconAnimation = (id: string): "float" | "pulse" | "spin" | "none" => {
       return "float";
   }
 };
+
+function LobbyChromeIcon({ id, scale }: { id: string; scale: number }) {
+  const source = getLobbyIcon(id);
+  return (
+    <ExpoImage
+      source={source}
+      style={[styles.buttonImageGraphic, { transform: [{ scale }] }]}
+      contentFit="contain"
+      cachePolicy="memory-disk"
+      priority="high"
+      recyclingKey={`lobby-${id}`}
+      transition={0}
+    />
+  );
+}
 
 // =====================================================
 // LOBBY
@@ -150,8 +151,10 @@ export default function LobbyScreen() {
   const pendingActionRef = useRef<string | null>(null);
   // Plays the one-shot entry flourish (splash.json) each time the lobby mounts;
   // onAnimationFinish flips this back to false so it does not linger.
-  const [showSplash, setShowSplash] = useState<boolean>(true);
+  // Skipped on Android: Lottie + huge HUD decode on the same frame is the hitch.
+  const [showSplash, setShowSplash] = useState<boolean>(SHOW_ENTRY_FLOURISH);
   const [staminaUpgradeVisible, setStaminaUpgradeVisible] = useState(false);
+  const [chromeReady, setChromeReady] = useState(() => isLobbyChromeReady());
 
   // ===================================================
   // USER STORE
@@ -195,6 +198,28 @@ export default function LobbyScreen() {
 
   const { playEffect } = useAudio();
   const isNicknameVerifiedFor = useUserStore((s) => s.isNicknameVerifiedFor);
+
+  // Decode BG + icons together, then paint both. Never leave a finished
+  // background sitting over empty HUD slots on a phone.
+  useEffect(() => {
+    if (isLobbyChromeReady()) {
+      setChromeReady(true);
+      return;
+    }
+    let cancelled = false;
+    const failOpen = setTimeout(() => {
+      if (!cancelled) setChromeReady(true);
+    }, CHROME_PAINT_TIMEOUT_MS);
+    void preloadLobbyChrome().finally(() => {
+      if (cancelled) return;
+      clearTimeout(failOpen);
+      setChromeReady(true);
+    });
+    return () => {
+      cancelled = true;
+      clearTimeout(failOpen);
+    };
+  }, []);
 
   // A signed-in player must register a name before they can continue. Show
   // the existing blocking modal on lobby entry, not only after a gated tap.
@@ -349,7 +374,10 @@ export default function LobbyScreen() {
   const performAction = async (actionName: string) => {
     console.log(`[Lobby Icon UI Engine] Action executed: ${actionName}`);
 
-    if (["play", "spinwheel", "shop", "dailyreward"].includes(actionName)) {
+    if (
+      SHOW_ENTRY_FLOURISH &&
+      ["play", "spinwheel", "shop", "dailyreward"].includes(actionName)
+    ) {
       setShowSplash(true);
       setTimeout(() => setShowSplash(false), 1000);
     }
@@ -476,7 +504,7 @@ export default function LobbyScreen() {
   // HITBOXES
   // ===================================================
 
-  const hitboxes: HitboxItem[] = [
+  const hitboxes: HitboxItem[] = useMemo(() => [
     {
       id: "profile_lvl_playername",
       left: "4.53%",
@@ -635,7 +663,7 @@ export default function LobbyScreen() {
       label: "Leaderboard",
       iconScale: 1.5,
     },
-  ];
+  ], [coins, energy, gems, staminaSourceLevel]);
 
   // ===================================================
   // RENDER ICON
@@ -678,16 +706,14 @@ export default function LobbyScreen() {
           <View style={styles.fullSizeContainer}>
             <AnimatedIcon
               animation={getIconAnimation(box.id)}
-              delay={animationDelay}
+              delay={REDUCE_LOBBY_MOTION ? 0 : animationDelay}
               style={styles.fullSizeContainer}
             >
-              <Image
-                source={buttonIcons[box.id]}
-                style={[
-                  styles.buttonImageGraphic,
-                  { transform: [{ scale }] }, // ← scale سفارشی
-                ]}
-              />
+              {chromeReady ? (
+                <LobbyChromeIcon id={box.id} scale={scale} />
+              ) : (
+                <View style={styles.buttonImageGraphic} />
+              )}
             </AnimatedIcon>
             <View
               style={[
@@ -703,22 +729,20 @@ export default function LobbyScreen() {
         );
 
       default:
-        const hasIconAsset = buttonIcons[box.id] !== undefined;
+        const hasIconAsset = getLobbyIcon(box.id) !== undefined;
         return (
           <View style={styles.fullSizeContainer}>
             {hasIconAsset && (
               <AnimatedIcon
                 animation={getIconAnimation(box.id)}
-                delay={animationDelay}
+                delay={REDUCE_LOBBY_MOTION ? 0 : animationDelay}
                 style={styles.fullSizeContainer}
               >
-                <Image
-                  source={buttonIcons[box.id]}
-                  style={[
-                    styles.buttonImageGraphic,
-                    { transform: [{ scale }] }, // ← scale سفارشی
-                  ]}
-                />
+                {chromeReady ? (
+                  <LobbyChromeIcon id={box.id} scale={scale} />
+                ) : (
+                  <View style={styles.buttonImageGraphic} />
+                )}
               </AnimatedIcon>
             )}
           </View>
@@ -733,13 +757,17 @@ export default function LobbyScreen() {
   return (
     <PhoneStage>
     <View style={styles.viewViewportContainer}>
+      {chromeReady && (
       <ExpoImage
-        source={require("../assets/background/lobby_BG.webp")}
+        source={getLobbyBackground()}
         style={styles.responsiveImageContainerBg}
         contentFit="cover"
-        transition={300}
+        priority="high"
+        recyclingKey="lobby-bg"
+        transition={0}
         cachePolicy="memory-disk"
       />
+      )}
 
       {/*
         Each Lottie layer is wrapped in its own absolutely-positioned View.
@@ -790,7 +818,11 @@ export default function LobbyScreen() {
       <View style={styles.contentOverlay}>
         {hitboxes.map((box, index) => {
           const isPremium = box.premium;
-          const PressableComponent = isPremium ? GlowWrapper : WaveWrapper;
+          const PressableComponent = isPremium
+            ? GlowWrapper
+            : REDUCE_LOBBY_MOTION
+              ? StaticPressable
+              : WaveWrapper;
 
           const width = parseFloat(box.width);
           const height = parseFloat(box.height);
@@ -905,13 +937,15 @@ export default function LobbyScreen() {
               ]}
             >
               <View style={styles.centerHeroStageWrapperFrame}>
-                <FullBodyAvatarStage
-                  avatarId={currentAvatar?.id ?? selectedAvatarId}
-                  wingId={equippedWing}
-                  petId={equippedPet}
-                  standId={equippedStand}
-                  level={level}
-                />
+                {chromeReady ? (
+                  <FullBodyAvatarStage
+                    avatarId={currentAvatar?.id ?? selectedAvatarId}
+                    wingId={equippedWing}
+                    petId={equippedPet}
+                    standId={equippedStand}
+                    level={level}
+                  />
+                ) : null}
               </View>
             </View>
           );
@@ -970,10 +1004,11 @@ export default function LobbyScreen() {
 // PREMIUM GLOW WRAPPER
 // =====================================================
 
-function GlowWrapper({ style, onPress, children }: any) {
-  const glowAnim = useRef(new RNAnimated.Value(0.15)).current;
+function GlowWrapper({ style, onPress, children, accessibilityLabel }: any) {
+  const glowAnim = useRef(new RNAnimated.Value(0.35)).current;
 
   useEffect(() => {
+    if (REDUCE_LOBBY_MOTION) return;
     RNAnimated.loop(
       RNAnimated.sequence([
         RNAnimated.timing(glowAnim, {
@@ -991,7 +1026,11 @@ function GlowWrapper({ style, onPress, children }: any) {
   }, [glowAnim]);
 
   return (
-    <Pressable onPress={onPress} style={[style, { overflow: "hidden" }]}>
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      style={[style, { overflow: "hidden" }]}
+    >
       <RNAnimated.View
         pointerEvents="none"
         style={[
@@ -1005,6 +1044,14 @@ function GlowWrapper({ style, onPress, children }: any) {
           },
         ]}
       />
+      {children}
+    </Pressable>
+  );
+}
+
+function StaticPressable({ style, onPress, children, accessibilityLabel }: any) {
+  return (
+    <Pressable accessibilityLabel={accessibilityLabel} onPress={onPress} style={style}>
       {children}
     </Pressable>
   );
@@ -1106,8 +1153,6 @@ const styles = StyleSheet.create({
   buttonImageGraphic: {
     width: "100%",
     height: "100%",
-    resizeMode: "contain",
-    // transform از خود کامپوننت می‌آید
   },
   profileDynamicComponentCard: {
     flexDirection: "row",

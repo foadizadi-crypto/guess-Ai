@@ -59,8 +59,17 @@ function AmbientGlow({ size, color, style, delay = 0 }: GlowProps) {
 // ------------------------------------------------------------------
 // Main component
 // ------------------------------------------------------------------
-export function MineEnvironment() {
+type MineEnvironmentProps = {
+  depth?: number;
+  warmth?: number;
+  threat?: boolean;
+};
+
+export function MineEnvironment({ depth = 0, warmth = 0, threat = false }: MineEnvironmentProps) {
   const { width, height } = useWindowDimensions();
+  const tunnel = 0.5 + depth * 0.28;
+  const glowGold = threat ? 0.06 : 0.12 + warmth * 0.1;
+  const glowEmber = threat ? 0.16 : 0.0;
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -73,7 +82,7 @@ export function MineEnvironment() {
           width: width * 0.55,
           height: height * 0.32,
           borderRadius: (width * 0.55) / 2,
-          backgroundColor: 'rgba(4,2,8,0.55)',
+          backgroundColor: `rgba(4,2,8,${tunnel})`,
         }}
       />
 
@@ -172,7 +181,7 @@ export function MineEnvironment() {
       {/* ── Ambient glow — top-left corner ── */}
       <AmbientGlow
         size={180}
-        color="rgba(220,160,40,0.13)"
+        color={threat ? `rgba(181,82,42,${glowEmber})` : `rgba(220,160,40,${glowGold})`}
         style={{ top: -40, left: -30 }}
         delay={0}
       />
@@ -180,7 +189,7 @@ export function MineEnvironment() {
       {/* ── Ambient glow — top-right corner ── */}
       <AmbientGlow
         size={160}
-        color="rgba(200,140,30,0.12)"
+        color={threat ? `rgba(181,82,42,${glowEmber})` : `rgba(200,140,30,${glowGold})`}
         style={{ top: -30, right: -20 }}
         delay={1200}
       />
@@ -188,7 +197,7 @@ export function MineEnvironment() {
       {/* ── Ambient glow — mid-center ── */}
       <AmbientGlow
         size={220}
-        color="rgba(201,162,74,0.10)"
+        color={threat ? `rgba(140,18,28,0.12)` : `rgba(201,162,74,${0.08 + warmth * 0.08})`}
         style={{ top: height * 0.3, alignSelf: 'center', left: width / 2 - 110 }}
         delay={600}
       />

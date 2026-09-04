@@ -8,6 +8,7 @@ import {
   type ImageSourcePropType,
   type ViewStyle,
 } from "react-native";
+import { Image as ExpoImage } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 
 import { ASSET_CONTENT_BOUNDS } from "@/constants/assetContentBounds";
@@ -133,9 +134,11 @@ export function CharacterStage({
         </View>
       )}
       {layout.wing && wingSource && (
-        <Image
+        <ExpoImage
           source={wingSource}
-          resizeMode="contain"
+          contentFit="contain"
+          cachePolicy="memory-disk"
+          transition={0}
           style={[
             styles.layer,
             {
@@ -152,9 +155,11 @@ export function CharacterStage({
           <Text style={styles.unavailableWingText}>Wing art coming soon</Text>
         </View>
       )}
-      <Image
+      <ExpoImage
         source={avatarSource}
-        resizeMode="contain"
+        contentFit="contain"
+        cachePolicy="memory-disk"
+        transition={0}
         style={[
           styles.layer,
           {

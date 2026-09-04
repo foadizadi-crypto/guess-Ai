@@ -2,6 +2,7 @@ import { buildRawGameConfig } from '@/shared/games/rawConfig';
 
 export const FLIP_MIND_GAME_ID = 'flip_mind';
 export const FLIP_MIND_TITLE = 'Flip Mind';
+// Presentation copy lives in gamescreen.tsx (English). Gameplay numbers below are unchanged.
 
 export type TargetColor = 'green' | 'red';
 

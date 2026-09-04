@@ -1,4 +1,10 @@
-import { GOLD_RUSH_HOW_TO_BODY, GOLD_RUSH_HOW_TO_TITLE, GOLD_RUSH_TUNING, getFateSettings } from './config';
+import {
+  GOLD_RUSH_GAME_ID,
+  GOLD_RUSH_HOW_TO_BODY,
+  GOLD_RUSH_HOW_TO_TITLE,
+  GOLD_RUSH_TUNING,
+  getFateSettings,
+} from './config';
 import {
   allSafesRevealed,
   applyGoldRushSelection,
@@ -16,14 +22,24 @@ function assert(ok: boolean, msg: string): void {
   if (!ok) throw new Error(msg);
 }
 
+assert(GOLD_RUSH_GAME_ID === 'gold_rush', 'live id stays gold_rush');
 assert(SESSION_ROUNDS === 20, 'session is 20 rounds');
+assert(GOLD_RUSH_TUNING.sessionRounds === 20, 'config rounds 20');
+assert(GOLD_RUSH_TUNING.sessionStaminaCost === 10, 'documented session stamina 10');
 assert(GOLD_RUSH_TUNING.sessionTimerSeconds === 120, '2 minute timer');
 assert(GOLD_RUSH_TUNING.bombCount === 1, 'exactly one bomb');
 assert(GOLD_RUSH_TUNING.packageGems === 20, 'package gems 20');
 assert(GOLD_RUSH_TUNING.packageWingId === 'wing_l01', 'legendary wing id');
 assert(GOLD_RUSH_TUNING.detonatorSeconds === 10, 'detonator 10s');
 assert(GOLD_RUSH_TUNING.completionRewardCoins === 500, 'completion 500');
+assert(GOLD_RUSH_TUNING.completionWrongCap === 10, 'completion wrong cap 10');
 assert(GOLD_RUSH_TUNING.hardWrongLimit === 3, 'hard 3rd wrong');
+assert(GOLD_RUSH_TUNING.safeReward.easy.n === 5 && GOLD_RUSH_TUNING.safeReward.easy.d === 2, 'easy n/d');
+assert(GOLD_RUSH_TUNING.safeReward.medium.n === 20 && GOLD_RUSH_TUNING.safeReward.medium.d === 4, 'medium n/d');
+assert(GOLD_RUSH_TUNING.safeReward.hard.n === 20 && GOLD_RUSH_TUNING.safeReward.hard.d === 10, 'hard n/d');
+assert(GOLD_RUSH_TUNING.continueEnabled === true, 'continue enabled');
+assert(GOLD_RUSH_TUNING.cashOutGoesToCategory === true, 'approved cash-out goes to category');
+assert(GOLD_RUSH_TUNING.doubleRewards === false, 'double rewards disabled');
 
 assert(getFateSettings('easy').totalCards === 8 && getFateSettings('easy').bombCount === 1, 'easy 8/1');
 assert(getFateSettings('medium').totalCards === 5 && getFateSettings('medium').bombCount === 1, 'medium 5/1');

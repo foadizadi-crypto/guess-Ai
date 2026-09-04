@@ -4,6 +4,7 @@ import {
   BackHandler,
   Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -12,14 +13,11 @@ import {
 import { useRouter, useNavigation } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { hapticsService } from '@/services/HapticsService';
-import { AnimatedBackground } from '@/components/AnimatedBackground';
 import { BackButton } from '@/components/BackButton';
-import { GlassCard } from '@/components/GlassCard';
-import { GradientButton } from '@/components/GradientButton';
 import { PauseMenu } from '@/components/PauseMenu';
-import { GameColors } from '@/theme/colors';
-import { Typography } from '@/theme/typography';
+import { layoutStyles, usePopupChromeSize } from '@/theme/webLayout';
 import { useGameStore } from '@/store/gameStore';
 import { useUserStore } from '@/store/userStore';
 import { useAdStore } from '@/store/adStore';
@@ -27,6 +25,7 @@ import { useAudio } from '@/hooks/useAudio';
 import { STAMINA_AD_REWARD, STAMINA_PER_GAME, IN_GAME_RETRY_ADS_PER_DAY } from '@/constants/economy';
 import { ROUTES } from '@/navigation/routes';
 import { isDifficultyOpen } from '@/shared/difficulty';
+import { allowBlurFor, useVisualQuality } from '@/games/visualFoundation';
 import {
   COUNT_QUICK_QUESTIONS,
   COUNT_QUICK_SCORE_CORRECT,
@@ -45,12 +44,20 @@ import {
   countQuickQuestionText,
   type CountQuickPlayPhase,
 } from '@/games/count-quick/flow';
-import { CountQuickShape } from '@/games/count-quick/shapes';
+import { CountAskStage, CountBoard } from '@/games/count-quick/CountBoard';
+import { CountPlate } from '@/games/count-quick/CountPlate';
+import { CountQuickHud } from '@/games/count-quick/CountQuickHud';
+import { CountQuickWorld } from '@/games/count-quick/CountQuickWorld';
+import { CountTone, chipTone } from '@/games/count-quick/countTokens';
+import { SnapButton } from '@/games/count-quick/SnapButton';
+import { TallyKey } from '@/games/count-quick/TallyKey';
 
 const CountQuickScreen = () => {
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const popupH = usePopupChromeSize();
+  const quality = useVisualQuality();
   const difficulty = useGameStore((s) => s.selectedDifficulty);
   const category = useGameStore((s) => s.selectedCategory);
   const score = useGameStore((s) => s.score);
@@ -368,106 +375,112 @@ const CountQuickScreen = () => {
     restartSession,
   ]);
 
-  if (!current) {
-    return (
-      <AnimatedBackground>
-        <View style={[styles.container, { paddingTop: topPad }]}>
-          <Text style={styles.loading}>Count Quick</Text>
-        </View>
-      </AnimatedBackground>
-    );
-  }
-
   const showCards = phase === 'memorize';
   const showAsk = phase === 'ask' || phase === 'feedback';
   const showTimer = phase === 'memorize';
+  const lookCap = secondsForDifficulty(difficulty);
+  const timeRatio = lookCap > 0 ? Math.min(1, Math.max(0, secondsLeft / lookCap)) : 0;
+  const urgency = showTimer && secondsLeft <= 1;
+  const worldFlash = phase === 'feedback' ? feedback : null;
+  const glow = allowBlurFor(quality);
+
+  if (!current) {
+    return (
+      <CountQuickWorld quality={quality}>
+        <View style={[styles.container, { paddingTop: topPad }]}>
+          <Text style={styles.loading}>Count Quick</Text>
+        </View>
+      </CountQuickWorld>
+    );
+  }
+
+  const swatch = chipTone(current.targetColor);
 
   return (
-    <AnimatedBackground>
+    <CountQuickWorld quality={quality} urgency={urgency} flash={worldFlash}>
       <View style={[styles.container, { paddingTop: topPad, paddingBottom: botPad }]}>
         <View style={styles.topBar}>
-          <BackButton onPress={() => setPaused(true)} />
-          <View style={styles.topCenter}>
-            <Text style={styles.mode}>COUNT QUICK</Text>
-            {showTimer ? (
-              <Text style={[styles.timer, { color: secondsLeft <= 1 ? GameColors.accentRed : GameColors.textWhite }]}>
-                {secondsLeft}s
-              </Text>
-            ) : (
-              <Text style={styles.timerHint}>
-                {phase === 'ask' || phase === 'feedback' ? 'Your answer' : ' '}
-              </Text>
-            )}
-          </View>
+          <BackButton onPress={() => setPaused(true)} iconColor={CountTone.ink} />
+          <Text style={styles.mode}>COUNT QUICK</Text>
           <TouchableOpacity style={styles.pauseButton} onPress={() => setPaused(true)}>
-            <Ionicons name="pause" size={20} color={GameColors.textWhite} />
+            <LinearGradient
+              colors={[CountTone.tallyHot, CountTone.tallyDeep]}
+              start={{ x: 0.2, y: 0 }}
+              end={{ x: 0.8, y: 1 }}
+              style={styles.pauseBezel}
+            >
+              <View style={styles.pauseWell}>
+                <Ionicons name="pause" size={18} color={CountTone.ink} />
+              </View>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.progressRow}>
-          <Text style={styles.counter}>{index + 1} / {COUNT_QUICK_QUESTIONS}</Text>
-          <View style={styles.segmentTrack}>
-            {Array.from({ length: COUNT_QUICK_QUESTIONS }, (_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.segment,
-                  i < index && styles.segmentDone,
-                  i === index && styles.segmentNow,
-                ]}
-              />
-            ))}
-          </View>
-          <Text style={styles.score}>{score}</Text>
-        </View>
+        <CountQuickHud
+          round={index + 1}
+          maxRounds={COUNT_QUICK_QUESTIONS}
+          score={score}
+          secondsLeft={secondsLeft}
+          timeRatio={timeRatio}
+          showTimer={showTimer}
+          glow={glow}
+        />
 
         {showCards ? (
-          <View style={styles.board}>
-            {current.items.map((item, itemIndex) => (
-              <View key={`${item.shape}-${item.color}-${itemIndex}`} style={styles.itemSlot}>
-                <CountQuickShape shape={item.shape} color={item.color} size={44} />
-              </View>
-            ))}
-          </View>
+          <CountBoard items={current.items} />
         ) : showAsk ? (
-          <View style={styles.askBlock}>
-            <GlassCard style={styles.targetCard}>
-              <Text style={styles.targetLabel}>QUESTION</Text>
+          <CountAskStage>
+            <CountPlate glow={glow} accent={CountTone.flash} style={styles.targetPlate}>
+              <Text style={styles.targetLabel}>COUNT THIS COLOR</Text>
               <View style={styles.targetRow}>
-                <View style={[styles.targetSwatch, { backgroundColor: current.targetColor }]} />
+                <View style={styles.swatchSeat}>
+                  <LinearGradient
+                    colors={[swatch.hot, swatch.fill, swatch.deep]}
+                    start={{ x: 0.2, y: 0 }}
+                    end={{ x: 0.85, y: 1 }}
+                    style={styles.swatch}
+                  />
+                </View>
                 <Text style={styles.targetName}>{countQuickQuestionText(current.targetColorName)}</Text>
               </View>
-            </GlassCard>
+            </CountPlate>
 
             <View style={styles.answers}>
               {current.options.map((option) => {
                 const selected = picked === option;
-                const showCorrect = phase === 'feedback' && option === current.correctCount;
-                const showWrong = phase === 'feedback' && selected && option !== current.correctCount;
+                const keyState =
+                  phase === 'feedback' && selected && option === current.correctCount
+                    ? 'correct'
+                    : phase === 'feedback' && selected && option !== current.correctCount
+                      ? 'wrong'
+                      : 'idle';
                 return (
-                  <TouchableOpacity
+                  <TallyKey
                     key={option}
-                    style={[
-                      styles.answer,
-                      showCorrect && styles.answerCorrect,
-                      showWrong && styles.answerWrong,
-                    ]}
+                    label={option}
                     disabled={phase !== 'ask'}
+                    state={keyState}
                     onPress={() => submit(option === current.correctCount, option)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.answerText}>{option}</Text>
-                  </TouchableOpacity>
+                  />
                 );
               })}
             </View>
-          </View>
+          </CountAskStage>
         ) : (
-          <View style={styles.boardPlaceholder} />
+          <CountBoard items={[]} />
         )}
 
         {feedback === 'correct' ? (
-          <Text style={[styles.feedback, { color: GameColors.accentGreen }]}>Correct</Text>
+          <View style={styles.stampWrap}>
+            <LinearGradient
+              colors={[CountTone.greenHot, CountTone.green, CountTone.greenDeep]}
+              start={{ x: 0.15, y: 0 }}
+              end={{ x: 0.85, y: 1 }}
+              style={styles.stamp}
+            >
+              <Text style={styles.stampText}>Correct</Text>
+            </LinearGradient>
+          </View>
         ) : (
           <View style={styles.feedbackSpacer} />
         )}
@@ -475,25 +488,36 @@ const CountQuickScreen = () => {
 
       {phase === 'howto' && (
         <View style={styles.howtoOverlay}>
-          <GlassCard style={styles.howtoCard}>
-            <Text style={styles.howtoTitle}>{COUNT_QUICK_HOW_TO_TITLE}</Text>
-            <Text style={styles.howtoBody}>{COUNT_QUICK_HOW_TO_BODY}</Text>
-            <GradientButton
-              title={COUNT_QUICK_READY_LABEL}
+          <CountPlate glow fill style={[layoutStyles.popupFrame, styles.howtoCard, { height: popupH }]} accent={CountTone.flash}>
+            <Text style={[layoutStyles.popupTitle, styles.howtoTitle]}>{COUNT_QUICK_HOW_TO_TITLE}</Text>
+            <ScrollView style={layoutStyles.popupScroller} contentContainerStyle={layoutStyles.popupScrollContent}>
+              <Text style={[layoutStyles.popupBody, styles.howtoBody]}>{COUNT_QUICK_HOW_TO_BODY}</Text>
+            </ScrollView>
+            <SnapButton
+              label={COUNT_QUICK_READY_LABEL}
+              testID="count-quick-im-ready"
               onPress={() => {
                 hapticsService.impact(0);
                 playEffect('button_click');
                 beginCountdown();
               }}
-              testID="count-quick-im-ready"
             />
-          </GlassCard>
+          </CountPlate>
         </View>
       )}
 
       {phase === 'countdown' && (
         <View style={styles.countdownOverlay} pointerEvents="none">
-          <Text style={styles.countdownNumber}>{countdown}</Text>
+          <LinearGradient
+            colors={[CountTone.tallyHot, CountTone.tally, CountTone.flash, CountTone.tallyDeep]}
+            start={{ x: 0.15, y: 0 }}
+            end={{ x: 0.85, y: 1 }}
+            style={styles.countRing}
+          >
+            <LinearGradient colors={['rgba(7,20,30,0.94)', 'rgba(6,16,24,0.98)']} style={styles.countWell}>
+              <Text style={styles.countdownNumber}>{countdown}</Text>
+            </LinearGradient>
+          </LinearGradient>
           <Text style={styles.countdownSub}>Get ready</Text>
         </View>
       )}
@@ -506,157 +530,182 @@ const CountQuickScreen = () => {
       />
 
       <Modal visible={wrongOpen} transparent animationType="fade" onRequestClose={handleExitWrong}>
-        <View style={styles.wrongBackdrop}>
-          <View style={styles.wrongCard}>
-            <Text style={styles.wrongTitle}>Wrong</Text>
-            <Text style={styles.wrongCopy}>
-              Watch an ad to restore {STAMINA_AD_REWARD} stamina and retry this round, or exit to category.
-            </Text>
-            <GradientButton
-              title={
-                continueLoading
-                  ? 'Loading ad…'
-                  : isAdFreePassActive()
-                    ? 'Continue (Ad-Free)'
-                    : 'Continue AdMob'
-              }
-              onPress={handleContinueAd}
-              disabled={continueLoading}
-              style={styles.wrongPrimary}
-            />
-            <TouchableOpacity style={styles.wrongSkip} onPress={handleExitWrong} disabled={continueLoading}>
-              <Text style={styles.wrongSkipText}>Exit to category</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={layoutStyles.popupBackdrop}>
+          <CountPlate glow fill accent={CountTone.flash} style={[layoutStyles.popupFrame, styles.wrongCard, { height: popupH }]}>
+            <Text style={[layoutStyles.popupTitle, styles.wrongTitle]}>Wrong</Text>
+            <ScrollView style={layoutStyles.popupScroller} contentContainerStyle={layoutStyles.popupScrollContent}>
+              <Text style={[layoutStyles.popupBody, styles.wrongCopy]}>
+                Watch an ad to restore {STAMINA_AD_REWARD} stamina and retry this round, or exit to category.
+              </Text>
+              <SnapButton
+                label={
+                  continueLoading
+                    ? 'Loading ad…'
+                    : isAdFreePassActive()
+                      ? 'Continue (Ad-Free)'
+                      : 'Continue AdMob'
+                }
+                onPress={handleContinueAd}
+                disabled={continueLoading}
+              />
+              <TouchableOpacity style={styles.wrongSkip} onPress={handleExitWrong} disabled={continueLoading}>
+                <Text style={styles.wrongSkipText}>Exit to category</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </CountPlate>
         </View>
       </Modal>
-    </AnimatedBackground>
+    </CountQuickWorld>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 18, gap: 10 },
-  loading: { ...Typography.semibold, color: GameColors.textWhite, textAlign: 'center', marginTop: 48 },
+  container: { flex: 1, paddingHorizontal: 16, gap: 10 },
+  loading: {
+    color: CountTone.ink,
+    textAlign: 'center',
+    marginTop: 48,
+    fontSize: 22,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 1.4,
+  },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  topCenter: { alignItems: 'center' },
-  mode: { ...Typography.small, color: GameColors.textSecondary, letterSpacing: 1 },
-  timer: { fontSize: 30, fontFamily: 'Inter_700Bold', fontWeight: '700' },
-  timerHint: { fontSize: 16, fontFamily: 'Inter_600SemiBold', color: GameColors.textSecondary, minHeight: 30, lineHeight: 30 },
+  mode: {
+    color: CountTone.mute,
+    fontSize: 11,
+    letterSpacing: 2.2,
+    fontFamily: 'Inter_700Bold',
+  },
   pauseButton: {
     width: 44,
     height: 44,
+  },
+  pauseBezel: {
+    flex: 1,
     borderRadius: 14,
+    padding: 1.5,
+  },
+  pauseWell: {
+    flex: 1,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: GameColors.border,
+    backgroundColor: 'rgba(6,16,24,0.92)',
   },
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  counter: { ...Typography.small, color: GameColors.textSecondary, width: 42 },
-  score: { ...Typography.small, color: GameColors.accentGold, width: 48, textAlign: 'right', fontFamily: 'Inter_700Bold' },
-  segmentTrack: { flex: 1, flexDirection: 'row', gap: 3 },
-  segment: { flex: 1, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)' },
-  segmentDone: { backgroundColor: GameColors.accentGreen },
-  segmentNow: { backgroundColor: GameColors.accentGold },
-  targetCard: { padding: 12, gap: 8 },
-  targetLabel: { ...Typography.small, color: GameColors.accentGold, fontFamily: 'Inter_700Bold', letterSpacing: 1 },
+  targetPlate: { width: '100%' },
+  targetLabel: {
+    color: CountTone.flashHot,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    fontFamily: 'Inter_700Bold',
+    marginBottom: 8,
+  },
   targetRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  targetSwatch: { width: 36, height: 36, borderRadius: 10, borderWidth: 2, borderColor: GameColors.textWhite },
-  targetName: { ...Typography.semibold, color: GameColors.textWhite, flex: 1 },
-  board: {
-    flex: 1,
-    minHeight: 180,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignContent: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: GameColors.cardBorder,
-    backgroundColor: GameColors.backgroundSecondary,
+  swatchSeat: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    padding: 2,
+    backgroundColor: 'rgba(244,251,255,0.2)',
   },
-  boardPlaceholder: {
+  swatch: {
     flex: 1,
-    minHeight: 180,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: 'rgba(6,16,24,0.45)',
   },
-  askBlock: {
+  targetName: {
+    color: CountTone.ink,
     flex: 1,
-    gap: 12,
-    justifyContent: 'center',
+    fontSize: 18,
+    lineHeight: 24,
+    fontFamily: 'Inter_700Bold',
   },
-  itemSlot: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
   answers: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  answer: {
-    width: '47%',
-    flexGrow: 1,
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+  stampWrap: { minHeight: 36, alignItems: 'center', justifyContent: 'center' },
+  stamp: {
+    paddingHorizontal: 18,
+    paddingVertical: 6,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: GameColors.border,
+    borderColor: 'rgba(110,231,183,0.55)',
   },
-  answerCorrect: { backgroundColor: 'rgba(0,230,118,0.18)', borderColor: GameColors.accentGreen },
-  answerWrong: { backgroundColor: 'rgba(255,23,68,0.18)', borderColor: GameColors.accentRed },
-  answerText: { ...Typography.header, color: GameColors.textWhite, fontSize: 28, lineHeight: 34 },
-  feedback: { ...Typography.semibold, textAlign: 'center', minHeight: 28 },
-  feedbackSpacer: { minHeight: 28 },
+  stampText: {
+    color: CountTone.void,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 2.4,
+    fontSize: 13,
+  },
+  feedbackSpacer: { minHeight: 36 },
   howtoOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 22,
-    backgroundColor: 'rgba(13,2,33,0.78)',
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(6,16,24,0.78)',
     zIndex: 80,
   },
-  howtoCard: { width: '100%', padding: 22, gap: 14 },
-  howtoTitle: { ...Typography.header, color: GameColors.textWhite, fontSize: 28, textAlign: 'center' },
-  howtoBody: { ...Typography.semibold, color: GameColors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  howtoCard: { alignSelf: 'center' },
+  howtoTitle: {
+    color: CountTone.ink,
+    marginBottom: 4,
+  },
+  howtoBody: {
+    color: CountTone.mute,
+    fontFamily: 'Inter_600SemiBold',
+  },
   countdownOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(13,2,33,0.82)',
+    backgroundColor: 'rgba(6,16,24,0.82)',
     zIndex: 100,
   },
-  countdownNumber: {
-    fontSize: 96,
-    fontFamily: 'Inter_700Bold',
-    color: GameColors.textWhite,
-    lineHeight: 110,
+  countRing: {
+    width: 148,
+    height: 148,
+    borderRadius: 74,
+    padding: 3,
+    overflow: 'hidden',
+    shadowColor: CountTone.tally,
+    shadowOpacity: 0.55,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 },
   },
-  countdownSub: {
-    ...Typography.small,
-    color: GameColors.textSecondary,
-    marginTop: 8,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-  },
-  wrongBackdrop: {
+  countWell: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.82)',
+    borderRadius: 71,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
   },
-  wrongCard: {
-    width: '100%',
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
-    backgroundColor: GameColors.card,
-    borderWidth: 1,
-    borderColor: GameColors.cardBorder,
-    gap: 12,
+  countdownNumber: {
+    fontSize: 88,
+    fontFamily: 'Inter_700Bold',
+    color: CountTone.ink,
+    lineHeight: 100,
+    textShadowColor: 'rgba(45,212,191,0.55)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 16,
   },
-  wrongTitle: { ...Typography.header, color: GameColors.accentRed, fontSize: 28 },
-  wrongCopy: { ...Typography.small, color: GameColors.textSecondary, textAlign: 'center' },
-  wrongPrimary: { width: '100%' },
-  wrongSkip: { paddingVertical: 10 },
-  wrongSkipText: { color: GameColors.textSecondary, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  countdownSub: {
+    color: CountTone.mute,
+    marginTop: 14,
+    letterSpacing: 2.4,
+    textTransform: 'uppercase',
+    fontSize: 12,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  wrongCard: { alignSelf: 'center' },
+  wrongTitle: {
+    color: CountTone.flashHot,
+  },
+  wrongCopy: {
+    color: CountTone.mute,
+    fontFamily: 'Inter_600SemiBold',
+    marginBottom: 16,
+  },
+  wrongSkip: { paddingVertical: 12, alignItems: 'center' },
+  wrongSkipText: { color: CountTone.mute, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
 });
 
 export default CountQuickScreen;

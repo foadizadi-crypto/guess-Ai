@@ -1,0 +1,18 @@
+export const SpeedTone = {
+  void: '#08040F',
+  velvet: '#16081C',
+  felt: '#1C0C18',
+  feltHot: '#2C1222',
+  ice: '#7DD3FC',
+  iceHot: '#E0F2FE',
+  crimson: '#FB7185',
+  crimsonDeep: '#9F1239',
+  snap: '#FBBF24',
+  snapHot: '#FDE68A',
+  ink: '#F8FAFC',
+  mute: 'rgba(248,250,252,0.64)',
+  paper: '#F3E6D4',
+  paperDeep: '#C9B496',
+  green: '#34D399',
+  greenHot: '#6EE7B7',
+} as const;

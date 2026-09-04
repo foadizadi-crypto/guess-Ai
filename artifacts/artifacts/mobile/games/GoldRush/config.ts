@@ -1,6 +1,7 @@
 import { buildRawGameConfig } from '@/shared/games/rawConfig';
 import { SESSION_ROUNDS } from '@/games/sessionShell/constants';
 
+/** Live route/economy/category id. Requested `goldrush` is not applied. */
 export const GOLD_RUSH_GAME_ID = 'gold_rush';
 export const GOLD_RUSH_TITLE = 'Gold Rush';
 
@@ -21,6 +22,7 @@ export const GOLD_RUSH_TUNING = {
     hard: { n: 20, d: 10 },
   } as const,
   sessionRounds: SESSION_ROUNDS,
+  sessionStaminaCost: 10,
   sessionTimerSeconds: 120,
   hardWrongLimit: 3,
   completionRewardCoins: 500,
@@ -28,6 +30,9 @@ export const GOLD_RUSH_TUNING = {
   packageGems: 20,
   packageWingId: 'wing_l01',
   detonatorSeconds: 10,
+  continueEnabled: true,
+  cashOutGoesToCategory: true,
+  doubleRewards: false,
 } as const;
 
 export const GOLD_RUSH_HOW_TO_TITLE = "YOU'RE WELCOME — GOLDRUSH";

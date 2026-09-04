@@ -1,8 +1,25 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReactionFlow } from './flow';
+import { verifyReverseAction } from './engine';
 import { SevenGameSessionShell } from '@/games/sessionShell';
 import type { SevenGameScreenProps } from '@/games/sessionShell';
+import { HudPlate, allowBlurFor, allowBurstFor, useVisualQuality } from '@/games/visualFoundation';
+import { useRTL } from '@/hooks/useRTL';
+import type { TargetColor } from './config';
+import { FlipMindWorld } from './FlipMindWorld';
+import { FlipMindHud } from './FlipMindHud';
+import { FlipCard } from './FlipCard';
+import { PolarPad } from './PolarPad';
+import { MindTone } from './flipTokens';
+
+const HOW_TO_TITLE = 'Flip Mind';
+const HOW_TO_BODY =
+  'Watch the color. Tap the opposite pad before time runs out. Green means tap Red. Red means tap Green.';
+
+type Flash = 'correct' | 'wrong' | null;
+type PadState = 'idle' | 'selected' | 'correct' | 'wrong';
 
 export default function ReverseReactionScreen({
   difficulty,
@@ -24,10 +41,52 @@ export default function ReverseReactionScreen({
     onComplete,
   );
 
+  const insets = useSafeAreaInsets();
+  const { flexDirection } = useRTL();
+  const quality = useVisualQuality();
+  const topPad = Platform.OS === 'web' ? 54 : insets.top + 10;
+  const botPad = Platform.OS === 'web' ? 24 : insets.bottom + 14;
+
+  const [flash, setFlash] = useState<Flash>(null);
+  const [padMark, setPadMark] = useState<{ color: TargetColor; ok: boolean } | null>(null);
+  const lastTime = useRef(timeLeft);
+  const [timeCap, setTimeCap] = useState(Math.max(timeLeft, 0.05));
+
+  useEffect(() => {
+    if (timeLeft > lastTime.current + 0.04) setTimeCap(timeLeft);
+    lastTime.current = timeLeft;
+  }, [timeLeft]);
+
+  useEffect(() => {
+    if (!flash && !padMark) return;
+    const id = setTimeout(() => {
+      setFlash(null);
+      setPadMark(null);
+    }, 280);
+    return () => clearTimeout(id);
+  }, [flash, padMark, round, score, wrongOpen]);
+
+  const onPad = (color: TargetColor) => {
+    if (!playing || wrongOpen) return;
+    const ok = verifyReverseAction(currentCircle, color);
+    setPadMark({ color, ok });
+    setFlash(ok ? 'correct' : 'wrong');
+    handleButtonPress(color);
+  };
+
+  const padState = (color: TargetColor): PadState => {
+    if (!padMark || padMark.color !== color) return 'idle';
+    if (padMark.ok) return 'correct';
+    return 'wrong';
+  };
+
+  const timeRatio = timeCap > 0 ? Math.min(1, Math.max(0, timeLeft / timeCap)) : 0;
+  const urgency = playing && !wrongOpen && timeLeft <= 1;
+
   return (
     <SevenGameSessionShell
-      howToTitle="Flip Mind"
-      howToBody="رنگ دایره را ببین و دکمه رنگ مخالف را فشار بده."
+      howToTitle={HOW_TO_TITLE}
+      howToBody={HOW_TO_BODY}
       skipHowTo={skipHowTo}
       wrongOpen={wrongOpen}
       onHowToFinished={onHowToFinished}
@@ -35,51 +94,79 @@ export default function ReverseReactionScreen({
       onContinue={() => {
         retryRound();
         setWrongOpen(false);
+        setFlash(null);
+        setPadMark(null);
       }}
       onExitToCategory={onExitToCategory}
       onRestart={onRestart}
     >
-      <View style={styles.container}>
-        <View style={styles.topInfo}>
-          <Text style={styles.headerText}>مرحله: {round} از {maxRounds}</Text>
-          <Text style={styles.scoreText}>امتیاز: {score}</Text>
-        </View>
-        <Text style={styles.instruction}>❌ برعکس عمل کن! اگه دایره سبزه، دکمه قرمز رو بزن!</Text>
-        <View style={styles.centerArea}>
-          <View style={[styles.targetCircle, { backgroundColor: currentCircle === 'green' ? '#2ecc71' : '#e74c3c' }]} />
-          <Text style={styles.timerText}>{timeLeft.toFixed(2)}s</Text>
-        </View>
-        <View style={styles.bottomButtonsContainer}>
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: '#2ecc71' }]}
-            activeOpacity={0.7}
-            onPress={() => handleButtonPress('green')}
+      <FlipMindWorld quality={quality} urgency={urgency} flash={flash}>
+        <View style={[styles.play, { paddingTop: topPad, paddingBottom: botPad }]}>
+          <FlipMindHud
+            round={round}
+            maxRounds={maxRounds}
+            score={score}
+            timeLeft={timeLeft}
+            timeRatio={timeRatio}
+            rowStyle={{ flexDirection }}
+            glow={allowBlurFor(quality)}
+          />
+
+          <HudPlate
+            blur={allowBlurFor(quality)}
+            border="rgba(167,139,250,0.38)"
+            fill={['rgba(18,8,42,0.88)', 'rgba(8,4,22,0.78)']}
+            style={styles.hintPlate}
           >
-            <Text style={styles.btnText}>سبز</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: '#e74c3c' }]}
-            activeOpacity={0.7}
-            onPress={() => handleButtonPress('red')}
-          >
-            <Text style={styles.btnText}>قرمز</Text>
-          </TouchableOpacity>
+            <Text style={styles.hint}>Do the opposite. If the card is green, tap Red.</Text>
+          </HudPlate>
+
+          <View style={styles.stage}>
+            <FlipCard
+              color={currentCircle}
+              round={round}
+              flash={allowBurstFor(quality) ? flash : null}
+            />
+          </View>
+
+          <View style={[styles.pads, { flexDirection }]}>
+            <PolarPad color="green" onPress={() => onPad('green')} state={padState('green')} />
+            <PolarPad color="red" onPress={() => onPad('red')} state={padState('red')} />
+          </View>
         </View>
-      </View>
+      </FlipMindWorld>
     </SevenGameSessionShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#141423', justifyContent: 'space-between', paddingVertical: 40, paddingHorizontal: 20 },
-  topInfo: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 20 },
-  headerText: { fontSize: 16, color: '#bdc3c7' },
-  scoreText: { fontSize: 18, color: '#2ecc71', fontWeight: 'bold' },
-  instruction: { fontSize: 15, color: '#f1c40f', fontWeight: 'bold', textAlign: 'center', marginVertical: 10 },
-  centerArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  targetCircle: { width: 140, height: 140, borderRadius: 70, marginBottom: 20, elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5 },
-  timerText: { fontSize: 32, fontWeight: 'bold', color: '#fff', fontVariant: ['tabular-nums'] },
-  bottomButtonsContainer: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 20, paddingHorizontal: 10 },
-  actionButton: { width: 110, height: 110, borderRadius: 55, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 4 },
-  btnText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  play: {
+    flex: 1,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  hintPlate: {
+    alignSelf: 'stretch',
+  },
+  hint: {
+    color: MindTone.ink,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  stage: {
+    flex: 1,
+    minHeight: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pads: {
+    width: '100%',
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    flexShrink: 0,
+  },
 });

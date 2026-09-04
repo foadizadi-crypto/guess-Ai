@@ -34,6 +34,27 @@ export function AnimatedIcon({
   delay = 0,
   style,
 }: AnimatedIconProps) {
+  if (animation === "none") {
+    return (
+      <View pointerEvents="none" style={style}>
+        {children}
+      </View>
+    );
+  }
+
+  return (
+    <AnimatedIconMotion delay={delay} animation={animation} style={style}>
+      {children}
+    </AnimatedIconMotion>
+  );
+}
+
+function AnimatedIconMotion({
+  children,
+  animation,
+  delay = 0,
+  style,
+}: AnimatedIconProps & { animation: Exclude<IconAnimation, "none"> }) {
   const progress = useSharedValue(0);
   const isMounted = useSharedValue(true);
 
@@ -47,10 +68,6 @@ export function AnimatedIcon({
   }, []);
 
   useEffect(() => {
-    if (animation === "none") {
-      return;
-    }
-
     cancelAnimation(progress);
     progress.value = 0;
 
@@ -128,10 +145,6 @@ export function AnimatedIcon({
   // --------------------------------------------------
 
   const animatedStyle = useAnimatedStyle(() => {
-    if (animation === "none") {
-      return {};
-    }
-
     if (animation === "spin") {
       return {
         transform: [

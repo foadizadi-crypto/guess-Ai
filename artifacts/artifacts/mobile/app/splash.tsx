@@ -21,6 +21,7 @@ import { ROUTES, routeFromLaunchUrl } from '@/navigation/routes';
 import { completeRedirectSignIn, isSignedInPlayer, signOutIfUnsupportedAuth, waitForAuthReady } from '@/services/authService';
 import { fetchRegisteredNickname } from '@/services/nicknameService';
 import { useUserStore } from '@/store/userStore';
+import { preloadLobbyChrome } from '@/constants/lobbyAssets';
 
 // ─── Single loading dot ────────────────────────────────────────────────────
 
@@ -117,6 +118,10 @@ export default function SplashScreen() {
         false,
       ),
     );
+
+    // Warm lobby BG + HUD icons during the splash so the first lobby frame
+    // can paint chrome together (Android otherwise shows BG, then icons).
+    void preloadLobbyChrome();
 
     // Show the mark briefly, then route. Do not wait on the nickname API —
     // that call can stall for seconds while Render wakes up.

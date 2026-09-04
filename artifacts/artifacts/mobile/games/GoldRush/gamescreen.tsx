@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -98,21 +99,37 @@ export default function FateGameScreen({
     overlay.kind === 'detonator' ||
     overlay.kind === 'boom' ||
     deck.some((card) => card.isRevealed && card.type === 'bomb');
+  const cardCount = Math.max(deck.length, GOLD_RUSH_TUNING.cardsPerRound[difficulty]);
+  const compactLayout = cardCount >= GOLD_RUSH_TUNING.cardsPerRound.easy;
+  const [tableBox, setTableBox] = useState({ w: Math.max(1, width - 32), h: 280 });
 
-  const { cardW, cardH } = useMemo(() => {
-    const columns = 3;
-    const gutter = 12;
-    const side = 40;
-    const w = Math.min(118, Math.floor((width - side - gutter * (columns - 1)) / columns));
-    return { cardW: Math.max(88, w), cardH: Math.round(Math.max(88, w) * 1.38) };
-  }, [width]);
+  const { cardW, cardH, tableGap } = useMemo(() => {
+    if (!compactLayout) {
+      const columns = 3;
+      const gutter = 12;
+      const side = 40;
+      const w = Math.min(118, Math.floor((width - side - gutter * (columns - 1)) / columns));
+      return { cardW: Math.max(88, w), cardH: Math.round(Math.max(88, w) * 1.38), tableGap: 12 };
+    }
+    const columns = 4;
+    const rows = 2;
+    const gap = 7;
+    const aspect = 1.26;
+    const minW = 60;
+    const maxW = 88;
+    const byWidth = Math.floor((tableBox.w - gap * (columns - 1) - 2) / columns);
+    const byHeight = Math.floor(((Math.max(1, tableBox.h) - gap * (rows - 1)) / rows) / aspect);
+    const w = Math.max(minW, Math.min(maxW, byWidth, byHeight));
+    return { cardW: w, cardH: Math.round(w * aspect), tableGap: gap };
+  }, [compactLayout, tableBox.h, tableBox.w, width]);
+
+  const onTableLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width: w, height: h } = e.nativeEvent.layout;
+    setTableBox((prev) => (Math.abs(prev.w - w) < 1 && Math.abs(prev.h - h) < 1 ? prev : { w, h }));
+  }, []);
 
   const goResult = useCallback(() => {
     router.replace(ROUTES.RESULT);
-  }, [router]);
-
-  const goCategory = useCallback(() => {
-    router.replace(ROUTES.CATEGORY_SELECT);
   }, [router]);
 
   const finishZero = useCallback(() => {
@@ -129,8 +146,8 @@ export default function FateGameScreen({
     if (!snap) return;
     settledRef.current = true;
     settleGoldRushCashOut(snap.pot, snap.pendingXP, snap.correct, snap.wrong);
-    goCategory();
-  }, [cashOut, goCategory]);
+    goResult();
+  }, [cashOut, goResult]);
 
   const finishComplete = useCallback(() => {
     if (settledRef.current) return;
@@ -138,8 +155,8 @@ export default function FateGameScreen({
     settledRef.current = true;
     forceEnd(false);
     settleGoldRushCompletion(snap.pot, snap.pendingXP, snap.correct, snap.wrong);
-    goCategory();
-  }, [forceEnd, goCategory, snapshot]);
+    goResult();
+  }, [forceEnd, goResult, snapshot]);
 
   const boom = useCallback(() => {
     if (settledRef.current || overlayRef.current.kind === 'boom') return;
@@ -357,6 +374,7 @@ export default function FateGameScreen({
 
   const bombShowing = deck.some((card) => card.isRevealed && card.type === 'bomb');
   const showContinue =
+    GOLD_RUSH_TUNING.continueEnabled &&
     playing &&
     safesThisRound > 0 &&
     safeFlipReady &&
@@ -381,8 +399,23 @@ export default function FateGameScreen({
       onRestart={() => {}}
       atmosphere="treasure"
     >
-      <GoldRushWorld quality={quality} threat={threat}>
-        <View style={[styles.play, { paddingTop: topPad, paddingBottom: botPad }]}>
+      <GoldRushWorld
+        quality={quality}
+        threat={threat}
+        round={round}
+        maxRounds={maxRounds}
+        pot={currentPot}
+      >
+        <View
+          style={[
+            styles.play,
+            {
+              paddingTop: topPad,
+              paddingBottom: botPad,
+              gap: compactLayout ? 8 : 14,
+            },
+          ]}
+        >
           <StakesHud
             round={round}
             maxRounds={maxRounds}
@@ -392,9 +425,13 @@ export default function FateGameScreen({
             timerSeconds={timerSeconds}
             rowStyle={{ flexDirection }}
             blur={allowBlurFor(quality)}
+            compact={compactLayout}
           />
 
-          <View style={styles.table}>
+          <View
+            style={[styles.table, { gap: tableGap }]}
+            onLayout={onTableLayout}
+          >
             {deck.length === 0 ? (
               <View style={styles.sealing} />
             ) : (
@@ -489,12 +526,14 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'center',
     alignContent: 'center',
-    gap: 12,
+    alignItems: 'center',
+    minHeight: 0,
   },
   bankSlot: {
     minHeight: 58,
     justifyContent: 'flex-end',
     gap: 10,
+    flexShrink: 0,
   },
   bankRow: {
     width: '100%',
